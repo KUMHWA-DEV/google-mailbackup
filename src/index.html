@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mail Backup</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --ink: #1c2330; --muted: #6b7280; --line: #e3e6eb;
+    --accent: #1a5cff; --accent-ink: #ffffff; --ok: #12805c; --warn: #b45309; --err: #b91c1c;
+    --chip: #eef2ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 20px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 16px; margin-bottom: 16px; }
+  header h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .status { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; margin-bottom: 14px; font-size: 13px; }
+  .status .k { color: var(--muted); margin-right: 4px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: middle; }
+  .dot.running, .dot.queued { background: var(--warn); }
+  .dot.idle { background: var(--ok); }
+  .status .spacer { flex: 1; }
+  button { font: inherit; border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  form.filters { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto; gap: 8px; align-items: end; margin-bottom: 12px; }
+  form.filters label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  form.filters input, form.filters select { font: inherit; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); min-width: 0; }
+  .meta { display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 13px; margin: 8px 0; }
+  .tablewrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; white-space: nowrap; background: #fafbfc; position: sticky; top: 0; }
+  td.date { white-space: nowrap; color: var(--muted); }
+  td.subject { min-width: 240px; }
+  td.subject .snippet { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; max-width: 520px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip { display: inline-block; background: var(--chip); color: #3730a3; border-radius: 999px; padding: 1px 8px; font-size: 12px; white-space: nowrap; }
+  td.att { color: var(--muted); font-size: 12px; max-width: 200px; }
+  .pager { display: flex; gap: 8px; align-items: center; justify-content: center; margin-top: 14px; }
+  .empty { padding: 40px; text-align: center; color: var(--muted); }
+  .err { color: var(--err); }
+  @media (max-width: 800px) { form.filters { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>📮 Mail Backup</h1>
+    <span class="sub" id="user"></span>
+  </header>
+
+  <div class="panel status" id="status">
+    <span><span class="dot" id="dot"></span><span id="statusMsg">상태 불러오는 중…</span></span>
+    <span><span class="k">마지막 동기화</span><span id="lastSync">-</span></span>
+    <span><span class="k">주간 트리거</span><span id="trigger">-</span></span>
+    <span id="links"></span>
+    <span class="spacer"></span>
+    <button id="btnTrigger" title="매주 월요일 새벽 자동 백업">주간 트리거 설치</button>
+    <button id="btnRun" class="primary">지금 백업 실행</button>
+  </div>
+
+  <div class="panel">
+    <form class="filters" id="filters">
+      <label>검색어<input name="q" placeholder="제목, 보낸사람, 받는사람, 본문 요약, 라벨, 첨부"></label>
+      <label>카테고리<select name="category"><option value="">전체</option></select></label>
+      <label>보낸사람<input name="from" placeholder="이메일 또는 이름"></label>
+      <label>시작일<input name="dateFrom" type="date"></label>
+      <label>종료일<input name="dateTo" type="date"></label>
+      <button type="submit" class="primary">검색</button>
+    </form>
+    <div class="meta"><span id="count"></span><span id="loading"></span></div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>날짜</th><th>카테고리</th><th>보낸사람</th><th>제목</th><th>첨부</th><th>Drive</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="empty" hidden>결과가 없습니다.</div>
+    <div class="pager">
+      <button id="prev">이전</button><span id="pageInfo"></span><button id="next">다음</button>
+    </div>
+  </div>
+</div>
+
+<!-- DEV_SHIM -->
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var state = { page: 1, pageSize: 50, filter: {} };
+
+  function call(fn, arg) {
+    return new Promise(function (resolve, reject) {
+      google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fn](arg);
+    });
+  }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function fmtDate(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d)) return esc(iso);
+    return d.toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+
+  function renderStatus(s) {
+    $('user').textContent = s.user || '';
+    $('dot').className = 'dot ' + (s.state || 'idle');
+    $('statusMsg').textContent = s.message + (s.lastError ? ' · 마지막 오류: ' + s.lastError : '');
+    $('lastSync').textContent = s.lastSyncAt ? fmtDate(s.lastSyncAt) : '없음';
+    $('trigger').textContent = s.weeklyTriggerInstalled ? '설치됨 (매주 월요일 03시)' : '미설치';
+    $('btnTrigger').hidden = !!s.weeklyTriggerInstalled;
+    $('btnRun').disabled = s.state === 'running' || s.state === 'queued';
+    var links = [];
+    if (s.folderUrl) links.push('<a href="' + esc(s.folderUrl) + '" target="_blank" rel="noopener">백업 폴더</a>');
+    if (s.indexSheetUrl) links.push('<a href="' + esc(s.indexSheetUrl) + '" target="_blank" rel="noopener">인덱스 시트</a>');
+    $('links').innerHTML = links.join(' · ');
+  }
+
+  function loadStatus() {
+    return call('getStatus').then(renderStatus).catch(function (e) { $('statusMsg').innerHTML = '<span class="err">상태 조회 실패: ' + esc(e.message || e) + '</span>'; });
+  }
+
+  function loadCategories() {
+    return call('getCategories').then(function (cats) {
+      var sel = document.querySelector('select[name=category]');
+      cats.forEach(function (c) {
+        var o = document.createElement('option');
+        o.value = c.name; o.textContent = c.name + ' (' + c.count + ')';
+        sel.appendChild(o);
+      });
+    }).catch(function () {});
+  }
+
+  function search() {
+    $('loading').textContent = '검색 중…';
+    var f = Object.assign({}, state.filter, { page: state.page, pageSize: state.pageSize });
+    return call('searchMessages', f).then(function (res) {
+      $('loading').textContent = '';
+      $('count').textContent = '총 ' + res.total.toLocaleString('ko-KR') + '건';
+      var tbody = $('rows');
+      tbody.innerHTML = res.items.map(function (r) {
+        return '<tr>' +
+          '<td class="date">' + fmtDate(r.date) + '</td>' +
+          '<td><span class="chip">' + esc(r.category) + '</span></td>' +
+          '<td>' + esc(r.from) + '</td>' +
+          '<td class="subject">' + esc(r.subject || '(제목 없음)') + '<span class="snippet">' + esc(r.snippet) + '</span></td>' +
+          '<td class="att">' + esc(r.attachments) + '</td>' +
+          '<td>' + (r.driveUrl ? '<a href="' + esc(r.driveUrl) + '" target="_blank" rel="noopener">열기</a>' : '') + '</td>' +
+          '</tr>';
+      }).join('');
+      $('empty').hidden = res.total > 0;
+      var pages = Math.max(1, Math.ceil(res.total / res.pageSize));
+      $('pageInfo').textContent = res.page + ' / ' + pages;
+      $('prev').disabled = res.page <= 1;
+      $('next').disabled = res.page >= pages;
+    }).catch(function (e) {
+      $('loading').innerHTML = '<span class="err">검색 실패: ' + esc(e.message || e) + '</span>';
+    });
+  }
+
+  $('filters').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var fd = new FormData(ev.target);
+    state.filter = {};
+    fd.forEach(function (v, k) { if (v) state.filter[k] = v; });
+    state.page = 1;
+    search();
+  });
+  $('prev').addEventListener('click', function () { state.page -= 1; search(); });
+  $('next').addEventListener('click', function () { state.page += 1; search(); });
+  $('btnRun').addEventListener('click', function () {
+    $('btnRun').disabled = true;
+    call('runBackupNow').then(renderStatus).then(function () { setTimeout(loadStatus, 15000); });
+  });
+  $('btnTrigger').addEventListener('click', function () {
+    $('btnTrigger').disabled = true;
+    call('installWeeklyTrigger').then(renderStatus);
+  });
+
+  loadStatus();
+  loadCategories();
+  search();
+})();
+</script>
+</body>
+</html>
