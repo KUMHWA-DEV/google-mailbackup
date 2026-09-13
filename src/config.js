@@ -6,6 +6,8 @@
  *                     '편집자'로 공유한 뒤 그 폴더 ID를 넣는다.
  *  SAVE_ATTACHMENTS   'false'면 첨부파일 별도 저장을 끈다 (.eml 안에는 항상 포함).
  *  MAX_RUN_SECONDS    한 번의 실행에서 쓸 최대 시간(초). 기본 270 (6분 제한 대비).
+ *  FOLDER_LAYOUT      'flat'(기본): <루트>/<카테고리>/ 한 폴더에 계속 쌓임.
+ *                     'yearly': <카테고리>/<YYYY>/, 'monthly': <카테고리>/<YYYY>/<YYYY-MM>/
  */
 var CONFIG = {
   ROOT_FOLDER_NAME: 'Mail Backup',
@@ -24,6 +26,8 @@ var PROP = {
   FOLDER_ID: 'BACKUP_FOLDER_ID',
   SAVE_ATTACHMENTS: 'SAVE_ATTACHMENTS',
   MAX_RUN_SECONDS: 'MAX_RUN_SECONDS',
+  FOLDER_LAYOUT: 'FOLDER_LAYOUT',
+  RUN_HISTORY_JSON: 'RUN_HISTORY_JSON',
   INDEX_SHEET_ID: 'INDEX_SHEET_ID',
   LAST_SYNC_EPOCH: 'LAST_SYNC_EPOCH',
   CURSOR_JSON: 'CURSOR_JSON',
@@ -38,3 +42,4 @@ function getProp_(key, fallback) {
 }
 function saveAttachmentsEnabled_() { return getProp_(PROP.SAVE_ATTACHMENTS, 'true') !== 'false'; }
 function maxRunSeconds_() { return Number(getProp_(PROP.MAX_RUN_SECONDS, CONFIG.DEFAULT_MAX_RUN_SECONDS)); }
+function folderLayout_() { return getProp_(PROP.FOLDER_LAYOUT, 'flat'); }

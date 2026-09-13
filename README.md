@@ -4,11 +4,18 @@
 보낸편지함·카테고리·라벨 구분을 유지한 채 검색·필터링할 수 있는 Google Apps Script 앱.
 
 - 실행 계정: `kumhwa_dev@spris.com`
-- 저장 구조: `<루트>/<카테고리>/<YYYY>/<YYYY-MM>/<날짜시각>_<제목>_<id>.eml`
+- 저장 구조: `<루트>/<카테고리>/<날짜시각>_<제목>_<id>.eml`
+  - 폴더는 실행마다 새로 만들지 않고 **항상 같은 카테고리 폴더에 계속 쌓입니다.**
+    예) `Mail Backup/받은편지함/` 에 지난 45일치와 이번 주 분이 함께 들어가며, 파일명이 날짜로
+    시작하므로 이름순 정렬이 곧 시간순입니다. 파일이 너무 많아지면 스크립트 속성
+    `FOLDER_LAYOUT`을 `yearly`(연도별 하위 폴더) 또는 `monthly`(연/월별)로 바꿀 수 있습니다.
   - 카테고리 우선순위: 사용자 라벨 > 보낸편지함 > 임시보관함 > 프로모션/소셜/업데이트/포럼 > 받은편지함 > 보관됨
   - 첨부파일은 `<루트>/_attachments/<메시지id>/` 에 한 번 더 저장 (미리보기용, `.eml`에도 포함)
-- 인덱스: 루트 폴더의 Google Sheet `Mail Backup Index` (id, 날짜, 카테고리, 전체 라벨, 보낸사람, 제목, 첨부, Drive 링크 …)
-- 웹앱: 인덱스를 검색어/카테고리/보낸사람/기간으로 필터링, 상태 확인, 수동 실행, 주간 트리거 설치
+- 인덱스: 루트 폴더의 Google Sheet `Mail Backup Index` (id, 날짜, 카테고리, 전체 라벨, 보낸사람, 제목, 첨부, 용량, Drive 링크 …)
+- 웹앱: 검색어/카테고리/보낸사람/기간 필터, 수동 실행, 주간 트리거 설치, 그리고 통계
+  - 보관 중인 메일 수(카테고리별), 총 용량, 반영된 메일 기간(가장 오래된 ~ 최신), 마지막 저장 시각
+  - 최근 실행: 감지 건수, 신규 저장, 이미 있음, 오류, 용량, 이번에 반영된 메일 기간
+  - 실행 이력 12회분 (시작/종료, 구간 수, 감지/신규/중복/오류, 용량, 메일 기간)
 - 증분: 마지막 동기화 시각 이후만 조회(2일 겹침), 이미 저장된 id는 건너뜀. 첫 실행은 전체.
 - 6분 실행 제한: 4분 30초마다 커서를 저장하고 1분 뒤 자동으로 이어서 실행
 
@@ -49,6 +56,27 @@ npx clasp open-script                             # 편집기 열기
 4. **웹앱 배포**: `npm run deploy` (또는 편집기 > 배포 > 새 배포 > 웹 앱, 실행 계정 = 나, 액세스 = spris.com 사용자).
    출력된 웹앱 URL로 접속하면 검색 화면이 뜹니다. 이후 코드 변경은 `npm run deploy` 로 재배포.
 
+## 2-1. Google Workspace 안에서 "앱"으로 쓰는 방법
+
+배포가 끝나면 `https://script.google.com/a/macros/spris.com/s/<배포ID>/exec` 형태의 URL이 생깁니다.
+이 URL이 곧 앱이며, spris.com 계정으로 로그인한 사람만 열 수 있습니다(매니페스트 `access: DOMAIN`).
+쓰는 방식은 네 가지가 있고 위에서부터 간단한 순서입니다.
+
+1. **URL 직접 사용 / Chrome 앱으로 설치 (권장, 바로 가능)**
+   `npx clasp open-web-app` 으로 열고 북마크하거나, Chrome 메뉴 > 저장 및 공유 > 바로가기 만들기 >
+   "창으로 열기"를 켜면 독립 창의 앱처럼 실행되고 Dock/런치패드에 아이콘이 생깁니다.
+2. **Google Sites에 임베드 (팀 공유용)**
+   Sites에서 새 사이트 > 삽입 > 삽입 코드 또는 "Apps Script" 위젯에 배포 URL을 넣으면
+   사이트 안에서 그대로 동작합니다(웹앱이 iframe 삽입을 허용하도록 설정돼 있음).
+   Sites는 도메인 내 공유가 쉬워 팀 포털의 한 페이지로 두기 좋습니다.
+3. **Google 앱 런처(9점 메뉴)에 노출 — 관리자 필요**
+   Google Cloud 프로젝트를 스크립트에 연결하고(편집기 > 프로젝트 설정 > GCP 프로젝트 변경),
+   Google Workspace Marketplace SDK에서 "비공개(도메인 내) 앱"으로 등록하면서
+   *Universal Navigation* 확장에 배포 URL을 넣습니다. 이후 Workspace 관리자가
+   관리 콘솔에서 도메인에 설치하면 모든 직원의 앱 런처에 아이콘이 보입니다.
+4. **Gmail 사이드바 애드온** — 메일 화면 옆에서 백업 상태를 보는 형태. 현재 코드에는 없고,
+   필요하면 카드 UI(`CardService`)를 추가해 같은 스크립트에서 배포할 수 있습니다.
+
 ## 3. 백업 위치를 개인 Google Drive로 바꾸기 (선택)
 
 기본값은 kumhwa_dev@spris.com 의 내 드라이브에 `Mail Backup` 폴더를 만듭니다.
@@ -69,8 +97,9 @@ Drive 관리자가 소유권을 이전해야 합니다. 개인 Drive 용량이 �
 | `BACKUP_FOLDER_ID` | (자동 생성) | 백업 루트 폴더 ID |
 | `SAVE_ATTACHMENTS` | `true` | `false`면 첨부 별도 저장 안 함 |
 | `MAX_RUN_SECONDS` | `270` | 한 구간 최대 실행 시간(초) |
+| `FOLDER_LAYOUT` | `flat` | `flat`: 카테고리 폴더 하나에 누적 / `yearly`: 연도별 / `monthly`: 연·월별 |
 
-내부용(자동 관리): `LAST_SYNC_EPOCH`, `CURSOR_JSON`, `STATUS_JSON`, `INDEX_SHEET_ID`, `WEEKLY_TRIGGER_ID`.
+내부용(자동 관리): `LAST_SYNC_EPOCH`, `CURSOR_JSON`, `STATUS_JSON`, `RUN_HISTORY_JSON`, `INDEX_SHEET_ID`, `WEEKLY_TRIGGER_ID`.
 전체를 처음부터 다시 받고 싶으면 편집기에서 `resetBackupState` 실행 후 `runBackup` (이미 있는 id는 건너뜀).
 
 ## 5. 개발 명령

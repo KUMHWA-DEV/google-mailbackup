@@ -66,6 +66,31 @@ function filterRecords(records, f) {
   return out;
 }
 
+/**
+ * 인덱스 전체 요약: 건수, 총 용량, 가장 오래된/최신 메일 날짜, 마지막 백업 시각, 카테고리별 건수/용량.
+ */
+function summarizeRecords(records) {
+  var s = { total: 0, totalBytes: 0, oldestDate: null, newestDate: null, lastBackedUpAt: null, categories: [] };
+  var cats = {};
+  for (var i = 0; i < records.length; i++) {
+    var r = records[i];
+    var bytes = Number(r.sizeBytes) || 0;
+    var date = r.date ? String(r.date) : '';
+    var backed = r.backedUpAt ? String(r.backedUpAt) : '';
+    s.total += 1;
+    s.totalBytes += bytes;
+    if (date && (!s.oldestDate || date < s.oldestDate)) s.oldestDate = date;
+    if (date && (!s.newestDate || date > s.newestDate)) s.newestDate = date;
+    if (backed && (!s.lastBackedUpAt || backed > s.lastBackedUpAt)) s.lastBackedUpAt = backed;
+    var c = r.category || '(없음)';
+    if (!cats[c]) cats[c] = { name: c, count: 0, bytes: 0 };
+    cats[c].count += 1;
+    cats[c].bytes += bytes;
+  }
+  s.categories = Object.keys(cats).sort().map(function (k) { return cats[k]; });
+  return s;
+}
+
 /** URL-safe base64 -> UTF-8 문자열. Apps Script에서는 Utilities로, Node에서는 Buffer로. */
 function decodeBase64Url(s) {
   var b64 = String(s || '').replace(/-/g, '+').replace(/_/g, '/');
@@ -79,6 +104,7 @@ function decodeBase64Url(s) {
 if (typeof module !== 'undefined') {
   module.exports = {
     INDEX_HEADERS: INDEX_HEADERS, headersFromPayload: headersFromPayload, buildIndexRow: buildIndexRow,
-    rowToRecord: rowToRecord, filterRecords: filterRecords, decodeBase64Url: decodeBase64Url,
+    rowToRecord: rowToRecord, filterRecords: filterRecords, summarizeRecords: summarizeRecords,
+    decodeBase64Url: decodeBase64Url,
   };
 }

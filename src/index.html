@@ -23,6 +23,15 @@
   .dot.running, .dot.queued { background: var(--warn); }
   .dot.idle { background: var(--ok); }
   .status .spacer { flex: 1; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .stat .k { color: var(--muted); font-size: 12px; }
+  .stat .v { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; margin-top: 2px; }
+  .stat .d { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  details.history { margin-bottom: 14px; }
+  details.history summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 6px 0; }
+  details.history table { font-size: 12px; }
+  details.history td, details.history th { padding: 6px 8px; white-space: nowrap; }
   button { font: inherit; border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
   button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
   button:disabled { opacity: .5; cursor: default; }
@@ -63,6 +72,23 @@
     <button id="btnTrigger" title="매주 월요일 새벽 자동 백업">주간 트리거 설치</button>
     <button id="btnRun" class="primary">지금 백업 실행</button>
   </div>
+
+  <div class="stats">
+    <div class="stat"><div class="k">보관 중인 메일</div><div class="v" id="stTotal">-</div><div class="d" id="stCats"></div></div>
+    <div class="stat"><div class="k">총 용량</div><div class="v" id="stBytes">-</div><div class="d">.eml 기준 (첨부 별도 저장분 제외)</div></div>
+    <div class="stat"><div class="k">반영된 메일 기간</div><div class="v" id="stRange">-</div><div class="d" id="stRangeDetail"></div></div>
+    <div class="stat"><div class="k">최근 실행</div><div class="v" id="stRun">-</div><div class="d" id="stRunDetail"></div></div>
+  </div>
+
+  <details class="history panel" id="history">
+    <summary>실행 이력 <span id="historyCount"></span></summary>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>시작</th><th>종료</th><th>구간</th><th>감지</th><th>신규 저장</th><th>이미 있음</th><th>오류</th><th>용량</th><th>메일 기간</th></tr></thead>
+        <tbody id="historyRows"></tbody>
+      </table>
+    </div>
+  </details>
 
   <div class="panel">
     <form class="filters" id="filters">
@@ -106,7 +132,49 @@
     return d.toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
   }
 
+  function fmtBytes(n) {
+    n = Number(n) || 0;
+    var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    var i = 0;
+    while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+    return (i === 0 ? n : n.toFixed(n >= 100 ? 0 : 1)) + ' ' + units[i];
+  }
+  function fmtDay(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    return isNaN(d) ? esc(iso) : d.toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' });
+  }
+  function fmtNum(n) { return (Number(n) || 0).toLocaleString('ko-KR'); }
+
+  function renderStats(s) {
+    var sum = s.summary || {};
+    $('stTotal').textContent = fmtNum(sum.total) + '건';
+    $('stCats').textContent = (sum.categories || []).map(function (c) { return c.name + ' ' + fmtNum(c.count); }).join(' · ');
+    $('stBytes').textContent = fmtBytes(sum.totalBytes);
+    $('stRange').textContent = sum.oldestDate ? fmtDay(sum.oldestDate) + ' ~ ' + fmtDay(sum.newestDate) : '없음';
+    $('stRangeDetail').textContent = sum.lastBackedUpAt ? '마지막 저장 ' + fmtDate(sum.lastBackedUpAt) : '';
+    var r = s.currentRun || {};
+    if (r.startedAt) {
+      $('stRun').textContent = '감지 ' + fmtNum(r.found) + ' · 신규 ' + fmtNum(r.processed);
+      $('stRunDetail').textContent = fmtDate(r.startedAt) + (r.finishedAt ? ' 완료' : ' 시작') +
+        ' · 이미 있음 ' + fmtNum(r.skipped) + ' · 오류 ' + fmtNum(r.errors) + ' · ' + fmtBytes(r.bytes) +
+        (r.mailFrom ? ' · 메일 ' + fmtDay(r.mailFrom) + ' ~ ' + fmtDay(r.mailTo) : '');
+    } else {
+      $('stRun').textContent = '없음';
+      $('stRunDetail').textContent = '';
+    }
+    var hist = s.history || [];
+    $('historyCount').textContent = hist.length ? '(' + hist.length + ')' : '';
+    $('historyRows').innerHTML = hist.map(function (h) {
+      return '<tr><td>' + fmtDate(h.startedAt) + '</td><td>' + fmtDate(h.finishedAt) + '</td><td>' + fmtNum(h.chunks) + '</td>' +
+        '<td>' + fmtNum(h.found) + '</td><td>' + fmtNum(h.processed) + '</td><td>' + fmtNum(h.skipped) + '</td>' +
+        '<td' + (h.errors ? ' class="err"' : '') + '>' + fmtNum(h.errors) + '</td><td>' + fmtBytes(h.bytes) + '</td>' +
+        '<td>' + (h.mailFrom ? fmtDay(h.mailFrom) + ' ~ ' + fmtDay(h.mailTo) : '-') + '</td></tr>';
+    }).join('') || '<tr><td colspan="9" class="empty">아직 완료된 실행이 없습니다.</td></tr>';
+  }
+
   function renderStatus(s) {
+    renderStats(s);
     $('user').textContent = s.user || '';
     $('dot').className = 'dot ' + (s.state || 'idle');
     $('statusMsg').textContent = s.message + (s.lastError ? ' · 마지막 오류: ' + s.lastError : '');

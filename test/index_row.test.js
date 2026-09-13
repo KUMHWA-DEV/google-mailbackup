@@ -71,3 +71,23 @@ describe('decodeBase64Url', () => {
     expect(decodeBase64Url('SGVsbG8_LQ')).toBe('Hello?-');
   });
 });
+
+describe('summarizeRecords', () => {
+  const { summarizeRecords } = require('../src/lib/index_row.js');
+  it('counts, sums bytes, finds oldest/newest and per-category counts', () => {
+    const s = summarizeRecords([
+      { id: '1', category: '받은편지함', date: '2026-07-01T00:00:00.000Z', sizeBytes: 100, backedUpAt: '2026-08-06T18:00:00.000Z' },
+      { id: '2', category: '보낸편지함', date: '2026-08-15T00:00:00.000Z', sizeBytes: '250', backedUpAt: '2026-09-10T18:00:00.000Z' },
+      { id: '3', category: '받은편지함', date: '2026-09-01T00:00:00.000Z', sizeBytes: 50, backedUpAt: '2026-09-10T18:00:00.000Z' },
+    ]);
+    expect(s.total).toBe(3);
+    expect(s.totalBytes).toBe(400);
+    expect(s.oldestDate).toBe('2026-07-01T00:00:00.000Z');
+    expect(s.newestDate).toBe('2026-09-01T00:00:00.000Z');
+    expect(s.lastBackedUpAt).toBe('2026-09-10T18:00:00.000Z');
+    expect(s.categories).toEqual([{ name: '받은편지함', count: 2, bytes: 150 }, { name: '보낸편지함', count: 1, bytes: 250 }]);
+  });
+  it('handles empty index', () => {
+    expect(summarizeRecords([])).toEqual({ total: 0, totalBytes: 0, oldestDate: null, newestDate: null, lastBackedUpAt: null, categories: [] });
+  });
+});

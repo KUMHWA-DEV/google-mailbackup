@@ -7,21 +7,28 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { filterRecords } = require('../src/lib/index_row.js');
+const { filterRecords, summarizeRecords } = require('../src/lib/index_row.js');
 
 const PORT = Number(process.env.PORT) || 8787;
 const ROOT = path.join(__dirname, '..');
 const fixtures = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'index.json'), 'utf8'));
 let status = {
   state: 'idle', message: '로컬 미리보기 (샘플 데이터)', updatedAt: new Date().toISOString(),
-  lastSyncAt: '2026-09-08T03:04:00.000Z', processed: 12, errors: 0, lastError: null,
+  lastSyncAt: '2026-09-08T03:04:00.000Z', lastError: null,
+  currentRun: { startedAt: '2026-09-08T03:04:00.000Z', finishedAt: '2026-09-08T03:06:41.000Z', chunks: 1, found: 9, processed: 4, skipped: 5, errors: 0, bytes: 1616000, mailFrom: '2026-09-03T07:15:00.000Z', mailTo: '2026-09-10T01:12:00.000Z' },
+  history: [
+    { startedAt: '2026-09-08T03:04:00.000Z', finishedAt: '2026-09-08T03:06:41.000Z', chunks: 1, found: 9, processed: 4, skipped: 5, errors: 0, bytes: 1616000, mailFrom: '2026-09-03T07:15:00.000Z', mailTo: '2026-09-10T01:12:00.000Z' },
+    { startedAt: '2026-09-01T03:04:00.000Z', finishedAt: '2026-09-01T03:05:12.000Z', chunks: 1, found: 7, processed: 3, skipped: 4, errors: 0, bytes: 122000, mailFrom: '2026-08-25T09:20:00.000Z', mailTo: '2026-08-30T12:00:00.000Z' },
+    { startedAt: '2026-08-25T03:04:00.000Z', finishedAt: '2026-08-25T03:15:30.000Z', chunks: 3, found: 5, processed: 5, skipped: 0, errors: 1, bytes: 230000, mailFrom: '2026-08-01T06:00:00.000Z', mailTo: '2026-08-20T00:00:00.000Z' },
+  ],
+  folderLayout: 'flat',
   weeklyTriggerInstalled: false,
   folderUrl: 'https://drive.google.com/drive/folders/LOCAL', indexSheetUrl: 'https://docs.google.com/spreadsheets/d/LOCAL',
   user: 'kumhwa_dev@spris.com (local)',
 };
 
 const api = {
-  getStatus: () => status,
+  getStatus: () => ({ ...status, summary: summarizeRecords(fixtures) }),
   getCategories: () => {
     const seen = {};
     fixtures.forEach(r => { seen[r.category] = (seen[r.category] || 0) + 1; });

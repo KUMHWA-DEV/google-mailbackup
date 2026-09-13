@@ -31,7 +31,9 @@ function runBackupLocked_() {
       query: buildQuery(getProp_(PROP.LAST_SYNC_EPOCH, null)),
       pageToken: null,
       runStartEpoch: Math.floor(startedAt / 1000),
-      processed: 0, skipped: 0, errors: 0, chunks: 0,
+      startedAt: new Date(startedAt).toISOString(),
+      found: 0, processed: 0, skipped: 0, errors: 0, chunks: 0,
+      bytes: 0, mailFrom: null, mailTo: null,
     };
   }
   cursor.chunks += 1;
@@ -47,13 +49,16 @@ function runBackupLocked_() {
   try {
     while (true) {
       var page = listMessageIds_(cursor.query, cursor.pageToken);
+      cursor.found += page.ids.length;
       for (var i = 0; i < page.ids.length; i++) {
         var id = page.ids[i];
         if (backedUp[id]) { cursor.skipped += 1; continue; }
         try {
-          pending.push(backupOne_(id, labelMap));
+          var row = backupOne_(id, labelMap);
+          pending.push(row);
           backedUp[id] = true;
           cursor.processed += 1;
+          noteRowStats_(cursor, row);
         } catch (e) {
           cursor.errors += 1;
           cursor.lastError = id + ': ' + e.message;
@@ -84,11 +89,13 @@ function runBackupLocked_() {
 
   props_().setProperty(PROP.LAST_SYNC_EPOCH, String(cursor.runStartEpoch));
   props_().deleteProperty(PROP.CURSOR_JSON);
+  cursor.finishedAt = new Date().toISOString();
+  appendRunHistory_(cursor);
   setStatus_({
     state: 'idle',
-    message: '완료: 새로 ' + cursor.processed + '건 저장, ' + cursor.skipped + '건 이미 있음, 오류 ' + cursor.errors + '건',
+    message: '완료: 감지 ' + cursor.found + '건, 새로 ' + cursor.processed + '건 저장, ' + cursor.skipped + '건 이미 있음, 오류 ' + cursor.errors + '건',
     cursor: cursor,
-    finishedAt: new Date().toISOString(),
+    finishedAt: cursor.finishedAt,
   });
   Logger.log('백업 완료. 새 %s건, 건너뜀 %s건, 오류 %s건', cursor.processed, cursor.skipped, cursor.errors);
 }
@@ -97,7 +104,7 @@ function runBackupLocked_() {
 function backupOne_(id, labelMap) {
   var m = fetchMessage_(id);
   var category = categorize(m.labelIds, labelMap);
-  var folder = ensureFolderPath_(buildFolderPath(category, m.date, CONFIG.TIME_ZONE));
+  var folder = ensureFolderPath_(buildFolderPath(category, m.date, CONFIG.TIME_ZONE, folderLayout_()));
   var fileName = buildFileName({ date: m.date, subject: m.headers.subject, id: m.id }, CONFIG.TIME_ZONE);
   var saved = saveEml_(folder, fileName, m.rawBytes);
   var attachmentNames = saveAttachments_(m.id, m.attachments);
@@ -107,6 +114,31 @@ function backupOne_(id, labelMap) {
     sizeEstimate: m.sizeEstimate, attachmentNames: attachmentNames,
     driveFileId: saved.fileId, driveUrl: saved.url, backedUpAt: new Date(),
   });
+}
+
+/** 이번 실행의 용량 합계와 메일 날짜 범위를 커서에 누적. */
+function noteRowStats_(cursor, row) {
+  var rec = rowToRecord(row);
+  cursor.bytes += Number(rec.sizeBytes) || 0;
+  var d = rec.date ? String(rec.date) : '';
+  if (d && (!cursor.mailFrom || d < cursor.mailFrom)) cursor.mailFrom = d;
+  if (d && (!cursor.mailTo || d > cursor.mailTo)) cursor.mailTo = d;
+}
+
+var RUN_HISTORY_MAX = 12;
+
+/** 완료된 실행 요약을 최근 12개까지 보관. */
+function appendRunHistory_(cursor) {
+  var hist = loadRunHistory_();
+  hist.unshift({
+    startedAt: cursor.startedAt, finishedAt: cursor.finishedAt, chunks: cursor.chunks,
+    found: cursor.found, processed: cursor.processed, skipped: cursor.skipped, errors: cursor.errors,
+    bytes: cursor.bytes, mailFrom: cursor.mailFrom, mailTo: cursor.mailTo, query: cursor.query,
+  });
+  props_().setProperty(PROP.RUN_HISTORY_JSON, JSON.stringify(hist.slice(0, RUN_HISTORY_MAX)));
+}
+function loadRunHistory_() {
+  try { return JSON.parse(getProp_(PROP.RUN_HISTORY_JSON, '[]')) || []; } catch (e) { return []; }
 }
 
 // ---------- 커서 / 상태 ----------

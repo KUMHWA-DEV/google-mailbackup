@@ -37,14 +37,21 @@ function getStatus() {
   var last = getProp_(PROP.LAST_SYNC_EPOCH, '');
   var sheetId = getProp_(PROP.INDEX_SHEET_ID, '');
   var folderId = getProp_(PROP.FOLDER_ID, '');
+  var c = status.cursor || {};
   return {
     state: status.state || 'idle',
     message: status.message || '아직 실행된 적 없음',
     updatedAt: status.updatedAt || null,
     lastSyncAt: last ? new Date(Number(last) * 1000).toISOString() : null,
-    processed: status.cursor ? status.cursor.processed : 0,
-    errors: status.cursor ? status.cursor.errors : 0,
-    lastError: status.cursor ? status.cursor.lastError || null : null,
+    currentRun: {
+      startedAt: c.startedAt || null, finishedAt: c.finishedAt || null, chunks: c.chunks || 0,
+      found: c.found || 0, processed: c.processed || 0, skipped: c.skipped || 0, errors: c.errors || 0,
+      bytes: c.bytes || 0, mailFrom: c.mailFrom || null, mailTo: c.mailTo || null,
+    },
+    lastError: c.lastError || null,
+    history: loadRunHistory_(),
+    summary: summarizeRecords(loadIndexRecords_()),
+    folderLayout: folderLayout_(),
     weeklyTriggerInstalled: weeklyTriggerInstalled_(),
     folderUrl: folderId ? 'https://drive.google.com/drive/folders/' + folderId : null,
     indexSheetUrl: sheetId ? 'https://docs.google.com/spreadsheets/d/' + sheetId : null,
