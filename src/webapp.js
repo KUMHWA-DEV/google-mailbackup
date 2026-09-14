@@ -8,55 +8,73 @@ function doGet() {
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-/**
- * @param {{q?:string, category?:string, from?:string, dateFrom?:string, dateTo?:string, page?:number, pageSize?:number}} f
- */
-function searchMessages(f) {
-  f = f || {};
-  var all = loadIndexRecords_();
-  var hits = filterRecords(all, f);
-  var pageSize = Math.max(1, Math.min(200, Number(f.pageSize) || 50));
-  var page = Math.max(1, Number(f.page) || 1);
-  var start = (page - 1) * pageSize;
-  return {
-    total: hits.length,
-    page: page,
-    pageSize: pageSize,
-    items: hits.slice(start, start + pageSize),
-  };
-}
-
-function getCategories() {
-  var seen = {};
-  loadIndexRecords_().forEach(function (r) { if (r.category) seen[r.category] = (seen[r.category] || 0) + 1; });
-  return Object.keys(seen).sort().map(function (c) { return { name: c, count: seen[c] }; });
-}
-
-function getStatus() {
+/** 대시보드/이력/설정 화면에 필요한 모든 상태를 한 번에. */
+function getDashboard() {
   var status = getStatus_();
+  var settings = getSettings_();
   var last = getProp_(PROP.LAST_SYNC_EPOCH, '');
-  var sheetId = getProp_(PROP.INDEX_SHEET_ID, '');
-  var folderId = getProp_(PROP.FOLDER_ID, '');
   var c = status.cursor || {};
+  var links = appLinks_();
   return {
     state: status.state || 'idle',
     message: status.message || '아직 실행된 적 없음',
     updatedAt: status.updatedAt || null,
     lastSyncAt: last ? new Date(Number(last) * 1000).toISOString() : null,
+    schedule: computeSchedule({ lastSyncEpoch: last || null, intervalDays: settings.intervalDays }),
     currentRun: {
       startedAt: c.startedAt || null, finishedAt: c.finishedAt || null, chunks: c.chunks || 0,
       found: c.found || 0, processed: c.processed || 0, skipped: c.skipped || 0, errors: c.errors || 0,
-      bytes: c.bytes || 0, mailFrom: c.mailFrom || null, mailTo: c.mailTo || null,
+      bytes: c.bytes || 0, mailFrom: c.mailFrom || null, mailTo: c.mailTo || null, limitHit: !!c.limitHit,
     },
     lastError: c.lastError || null,
     history: loadRunHistory_(),
     summary: summarizeRecords(loadIndexRecords_()),
-    folderLayout: folderLayout_(),
-    weeklyTriggerInstalled: weeklyTriggerInstalled_(),
-    folderUrl: folderId ? 'https://drive.google.com/drive/folders/' + folderId : null,
-    indexSheetUrl: sheetId ? 'https://docs.google.com/spreadsheets/d/' + sheetId : null,
+    settings: settings,
+    triggerInstalled: scheduledTriggerInstalled_(),
+    folderUrl: links.folderUrl || null,
+    indexSheetUrl: links.indexSheetUrl || null,
+    webAppUrl: links.webAppUrl || null,
     user: Session.getEffectiveUser().getEmail(),
   };
+}
+
+/** 하위 호환: 예전 클라이언트용. */
+function getStatus() { return getDashboard(); }
+
+/** 탐색기용 전체 인덱스(본문 제외). 필터링은 클라이언트에서. */
+function getExplorerData() {
+  var records = loadIndexRecords_();
+  return { records: filterRecords(records, {}), summary: summarizeRecords(records), history: loadRunHistory_() };
+}
+
+/** 서버 측 검색 (페이지 단위). */
+function searchMessages(f) {
+  f = f || {};
+  var hits = filterRecords(loadIndexRecords_(), f);
+  var pageSize = Math.max(1, Math.min(200, Number(f.pageSize) || 50));
+  var page = Math.max(1, Number(f.page) || 1);
+  var start = (page - 1) * pageSize;
+  return { total: hits.length, page: page, pageSize: pageSize, items: hits.slice(start, start + pageSize) };
+}
+
+/** 메일 1건의 본문 미리보기(인덱스에 저장된 plain text). */
+function getMessageBody(id) {
+  return { id: id, body: loadBodyPreview_(id) };
+}
+
+function getCategories() {
+  return summarizeRecords(loadIndexRecords_()).categories;
+}
+
+function getSettings() { return getSettings_(); }
+
+function saveSettings(input) {
+  var before = getSettings_();
+  var s = saveSettings_(input);
+  // 폴더가 바뀌면 인덱스 시트도 새 폴더에서 다시 찾거나 만든다 (BACKUP_FOLDER_ID 자체는 설정 저장에 포함됨)
+  if (s.folderId !== before.folderId) props_().deleteProperty(PROP.INDEX_SHEET_ID);
+  if (s.intervalDays !== before.intervalDays && scheduledTriggerInstalled_()) setupScheduledTrigger();
+  return getDashboard();
 }
 
 /** 지금 백업: 웹 요청 시간 제한을 피하려고 5초 뒤 트리거로 실행. */
@@ -64,10 +82,15 @@ function runBackupNow() {
   deleteContinuationTriggers_();
   scheduleContinuation_(5 * 1000);
   setStatus_({ state: 'queued', message: '수동 실행 요청됨, 잠시 후 시작' });
-  return getStatus();
+  return getDashboard();
 }
 
-function installWeeklyTrigger() {
-  setupWeeklyTrigger();
-  return getStatus();
+function installWeeklyTrigger() { return installScheduledTrigger(); }
+function installScheduledTrigger() {
+  setupScheduledTrigger();
+  return getDashboard();
+}
+function uninstallScheduledTrigger() {
+  removeScheduledTrigger();
+  return getDashboard();
 }

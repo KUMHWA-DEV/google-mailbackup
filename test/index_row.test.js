@@ -88,6 +88,33 @@ describe('summarizeRecords', () => {
     expect(s.categories).toEqual([{ name: '받은편지함', count: 2, bytes: 150 }, { name: '보낸편지함', count: 1, bytes: 250 }]);
   });
   it('handles empty index', () => {
-    expect(summarizeRecords([])).toEqual({ total: 0, totalBytes: 0, oldestDate: null, newestDate: null, lastBackedUpAt: null, categories: [] });
+    expect(summarizeRecords([])).toEqual({ total: 0, totalBytes: 0, oldestDate: null, newestDate: null, lastBackedUpAt: null, sentCount: 0, receivedCount: 0, withAttachments: 0, categories: [], agendas: [] });
+  });
+});
+
+describe('extended filters and summary', () => {
+  const { filterRecords: fr, summarizeRecords: sr } = require('../src/lib/index_row.js');
+  const recs = [
+    { id: '1', category: '받은편지함', agenda: '업무요청/협조', labels: 'INBOX', from: 'a@x.com', to: 'me', subject: 'req', snippet: '', attachments: 'a.pdf', date: '2026-09-01T00:00:00.000Z', backedUpAt: '2026-09-08T03:05:00.000Z', sizeBytes: 10 },
+    { id: '2', category: '보낸편지함', agenda: '회의/일정', labels: 'SENT', from: 'me', to: 'b@y.com', subject: 'mtg', snippet: '', attachments: '', date: '2026-09-02T00:00:00.000Z', backedUpAt: '2026-09-08T03:05:30.000Z', sizeBytes: 20 },
+    { id: '3', category: '프로젝트A', agenda: '회의/일정', labels: 'INBOX, 프로젝트A', from: 'c@z.com', to: 'me', subject: 'spec', snippet: '', attachments: '', date: '2026-09-03T00:00:00.000Z', backedUpAt: '2026-09-01T03:05:00.000Z', sizeBytes: 30 },
+  ];
+  it('folder=sent / inbox / attachments', () => {
+    expect(fr(recs, { folder: 'sent' }).map(r => r.id)).toEqual(['2']);
+    expect(fr(recs, { folder: 'inbox' }).map(r => r.id)).toEqual(['3', '1']);
+    expect(fr(recs, { folder: 'attachments' }).map(r => r.id)).toEqual(['1']);
+  });
+  it('agenda filter', () => {
+    expect(fr(recs, { agenda: '회의/일정' }).map(r => r.id)).toEqual(['3', '2']);
+  });
+  it('backup run window filter (backedUpAt between)', () => {
+    expect(fr(recs, { backedUpFrom: '2026-09-08T03:00:00.000Z', backedUpTo: '2026-09-08T04:00:00.000Z' }).map(r => r.id)).toEqual(['2', '1']);
+  });
+  it('summary has sent/received/attachment counts and agenda breakdown', () => {
+    const s = sr(recs);
+    expect(s.sentCount).toBe(1);
+    expect(s.receivedCount).toBe(2);
+    expect(s.withAttachments).toBe(1);
+    expect(s.agendas).toEqual([{ name: '업무요청/협조', count: 1 }, { name: '회의/일정', count: 2 }]);
   });
 });

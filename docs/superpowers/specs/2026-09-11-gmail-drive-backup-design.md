@@ -91,3 +91,30 @@
 - vitest: categorize, naming, query, index_row(검색 필터 포함).
 - 로컬 dev 서버로 UI 육안 확인.
 - 실제 Apps Script 동작은 `clasp push` 후 편집기에서 `runBackup` 1회 수동 실행으로 확인.
+
+## 2026-09-14 추가: AI Studio 레퍼런스(gstudio/) 반영
+
+사용자가 Google AI Studio로 만든 React 예시(`gstudio/email-backup-to-google-drive.zip`)의
+UI·기능 의도를 반영했다. 레퍼런스는 브라우저에서 OAuth 토큰으로 Gmail API를 직접 호출해
+JSON/MD 파일 1개를 Drive에 올리는 구조였고, 본 앱은 Apps Script 서버 측에서 .eml 원본을
+저장하는 구조를 유지한 채 다음을 가져왔다.
+
+- **4개 탭 구조**: 백업 대시보드 / 메일 탐색기(Gmail 뷰) / 백업 주기 및 알림 설정 / 백업 실행 이력
+- **주기 현황 카드**: 정책 배지, 진행 상태(도래/최신), 최근 완료, 다음 예정일, 알림 수신처, 진행률 바
+  (`lib/schedule.js` `computeSchedule`)
+- **실행 전 확인 모달**과 "원본 훼손 없음" 안내
+- **안건별 분류(agenda)**: 제목·요약 키워드로 회의/일정, 업무보고/공지, 계약/재무/발주,
+  업무요청/협조, 중요업무, 일반업무/기타 (`lib/agenda.js`). 인덱스 열 `agenda`로 저장하고
+  탐색기 칩으로 필터. 설정 `FOLDER_BY=agenda`면 Drive 폴더도 이 기준으로 구성
+- **탐색기 분할 뷰**: 좌측 목록(수신/발신 태그, 이름, 날짜, 제목, 요약, 분류·첨부 태그) +
+  우측 리더(메타, Drive 원본 링크, 본문 미리보기). 본문은 백업 시 `bodyPreview` 열(최대 20,000자)에
+  저장하고 열람 시 그 행만 읽는다(`loadBodyPreview_`). 목록 조회는 이 열을 제외한다.
+- **설정 화면**: `lib/settings.js` 스키마(주기, 시작 기준일, 보낸편지함 포함, 첨부 저장, 회당 최대 건수,
+  추가 검색 조건, 폴더 ID, 하위 폴더, 폴더 구성 기준, 알림 이메일, 완료 알림). 스크립트 속성에 저장.
+  주기를 바꾸면 트리거를 다시 예약(`everyDays(n)`, 7일이면 월요일 주간 트리거).
+- **완료 알림 메일**: `lib/notify.js`가 요약 보고서 HTML/텍스트를 만들고 `MailApp.sendEmail`로 발송
+  (스코프 `script.send_mail`). 이력에 `notifiedTo` 기록.
+- **회당 최대 건수**: 제한에 걸리면 `LAST_SYNC_EPOCH`를 올리지 않아 다음 실행이 이어받는다.
+
+가져오지 않은 것: 브라우저 OAuth 로그인(Apps Script가 대신), JSON/MD 패키지 파일(개별 .eml이 더 유용),
+localStorage 이력(스크립트 속성으로 대체), 45일 고정 주기(설정으로 일반화).

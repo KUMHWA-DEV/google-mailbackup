@@ -5,7 +5,7 @@ var folderCache_ = {};
 
 function rootFolder_() {
   if (folderCache_['/']) return folderCache_['/'];
-  var id = getProp_(PROP.FOLDER_ID, '');
+  var id = getSettings_().folderId || getProp_(PROP.FOLDER_ID, '');
   var folder;
   if (id) {
     try {
@@ -112,16 +112,27 @@ function appendIndexRows_(sheet, rows) {
   sheet.getRange(start, 1, rows.length, INDEX_HEADERS.length).setValues(rows);
 }
 
-/** 인덱스 전체를 레코드 배열로 읽는다 (웹앱 검색용). */
+/** 인덱스 전체를 레코드 배열로 읽는다 (웹앱 검색용). 본문 미리보기 열은 제외. */
 function loadIndexRecords_() {
   var sheet = indexSheet_();
   var last = sheet.getLastRow();
   if (last < 2) return [];
-  var values = sheet.getRange(2, 1, last - 1, INDEX_HEADERS.length).getValues();
+  var values = sheet.getRange(2, 1, last - 1, INDEX_LIST_COLUMNS).getValues();
   return values.map(function (row) {
     var rec = rowToRecord(row);
     if (rec.date instanceof Date) rec.date = rec.date.toISOString();
     if (rec.backedUpAt instanceof Date) rec.backedUpAt = rec.backedUpAt.toISOString();
     return rec;
   });
+}
+
+/** 메시지 id로 해당 행의 본문 미리보기만 읽는다. */
+function loadBodyPreview_(id) {
+  var sheet = indexSheet_();
+  var last = sheet.getLastRow();
+  if (last < 2) return '';
+  var hit = sheet.getRange(2, 1, last - 1, 1).createTextFinder(String(id)).matchEntireCell(true).findNext();
+  if (!hit) return '';
+  var v = sheet.getRange(hit.getRow(), INDEX_HEADERS.length).getValue();
+  return v == null ? '' : String(v);
 }

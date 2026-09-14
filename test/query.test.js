@@ -15,4 +15,16 @@ describe('buildQuery', () => {
   it('treats garbage as first run', () => {
     expect(buildQuery('abc')).toBe('-in:spam -in:trash -in:chats');
   });
+  it('first run with initial start date uses after:YYYY/MM/DD', () => {
+    expect(buildQuery(null, { initialStartDate: '2026-08-01' })).toBe('after:2026/08/01 -in:spam -in:trash -in:chats');
+  });
+  it('incremental run ignores initial start date', () => {
+    expect(buildQuery(1_757_000_000, { initialStartDate: '2026-08-01' })).not.toContain('2026/08/01');
+  });
+  it('excludes sent mail when includeSent is false', () => {
+    expect(buildQuery(null, { includeSent: false })).toBe('-in:spam -in:trash -in:chats -in:sent');
+  });
+  it('appends an extra filter query', () => {
+    expect(buildQuery(null, { filterQuery: 'from:partner.co.kr' })).toBe('-in:spam -in:trash -in:chats from:partner.co.kr');
+  });
 });

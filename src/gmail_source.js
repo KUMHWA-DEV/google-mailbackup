@@ -25,7 +25,7 @@ function listMessageIds_(query, pageToken) {
 
 /**
  * 메시지 1건의 백업에 필요한 모든 정보.
- * raw는 Gmail API(정확한 원본 바이트), 헤더/첨부는 GmailApp(디코딩된 값).
+ * raw는 Gmail API(정확한 원본 바이트), 헤더/본문/첨부는 GmailApp(디코딩된 값).
  */
 function fetchMessage_(id) {
   var api = Gmail.Users.Messages.get('me', id, { format: 'raw' });
@@ -34,9 +34,12 @@ function fetchMessage_(id) {
   var date = msg.getDate();
   if (!(date instanceof Date) || isNaN(date.getTime())) date = new Date(Number(api.internalDate));
 
-  var attachments = saveAttachmentsEnabled_()
+  var attachments = getSettings_().saveAttachments
     ? msg.getAttachments({ includeInlineImages: false, includeAttachments: true })
     : [];
+
+  var bodyPreview = '';
+  try { bodyPreview = msg.getPlainBody() || ''; } catch (e) { bodyPreview = api.snippet || ''; }
 
   return {
     id: api.id,
@@ -48,6 +51,7 @@ function fetchMessage_(id) {
     headers: {
       from: msg.getFrom(), to: msg.getTo(), cc: msg.getCc(), subject: msg.getSubject(),
     },
+    bodyPreview: bodyPreview,
     rawBytes: rawBytes,
     attachments: attachments,
   };

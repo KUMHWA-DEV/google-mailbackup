@@ -1,13 +1,7 @@
 /**
- * 설정. 스크립트 속성(프로젝트 설정 > 스크립트 속성)으로 덮어쓸 수 있다.
- *
- *  BACKUP_FOLDER_ID   백업 루트 폴더 ID. 비우면 내 드라이브에 ROOT_FOLDER_NAME 폴더를 만든다.
- *                     개인 계정 드라이브에 넣으려면 그 계정에서 폴더를 만들어 이 계정에
- *                     '편집자'로 공유한 뒤 그 폴더 ID를 넣는다.
- *  SAVE_ATTACHMENTS   'false'면 첨부파일 별도 저장을 끈다 (.eml 안에는 항상 포함).
- *  MAX_RUN_SECONDS    한 번의 실행에서 쓸 최대 시간(초). 기본 270 (6분 제한 대비).
- *  FOLDER_LAYOUT      'flat'(기본): <루트>/<카테고리>/ 한 폴더에 계속 쌓임.
- *                     'yearly': <카테고리>/<YYYY>/, 'monthly': <카테고리>/<YYYY>/<YYYY-MM>/
+ * 고정 설정과 스크립트 속성 접근.
+ * 사용자 설정(주기, 시작 기준일, 알림 등)은 lib/settings.js 스키마를 따르며
+ * 웹앱 설정 화면 또는 프로젝트 설정 > 스크립트 속성에서 바꿀 수 있다.
  */
 var CONFIG = {
   ROOT_FOLDER_NAME: 'Mail Backup',
@@ -18,21 +12,19 @@ var CONFIG = {
   PAGE_SIZE: 100,
   INDEX_FLUSH_EVERY: 20,
   CONTINUE_DELAY_MS: 60 * 1000,
-  WEEKLY_DAY: 'MONDAY',
-  WEEKLY_HOUR: 3,
+  TRIGGER_HOUR: 3,
 };
 
+/** 내부 상태용 속성 키 (사용자 설정 키는 SETTINGS_PROP_KEYS) */
 var PROP = {
-  FOLDER_ID: 'BACKUP_FOLDER_ID',
-  SAVE_ATTACHMENTS: 'SAVE_ATTACHMENTS',
   MAX_RUN_SECONDS: 'MAX_RUN_SECONDS',
-  FOLDER_LAYOUT: 'FOLDER_LAYOUT',
-  RUN_HISTORY_JSON: 'RUN_HISTORY_JSON',
   INDEX_SHEET_ID: 'INDEX_SHEET_ID',
   LAST_SYNC_EPOCH: 'LAST_SYNC_EPOCH',
   CURSOR_JSON: 'CURSOR_JSON',
   STATUS_JSON: 'STATUS_JSON',
-  WEEKLY_TRIGGER_ID: 'WEEKLY_TRIGGER_ID',
+  RUN_HISTORY_JSON: 'RUN_HISTORY_JSON',
+  TRIGGER_ID: 'WEEKLY_TRIGGER_ID',
+  FOLDER_ID: 'BACKUP_FOLDER_ID',
 };
 
 function props_() { return PropertiesService.getScriptProperties(); }
@@ -40,6 +32,17 @@ function getProp_(key, fallback) {
   var v = props_().getProperty(key);
   return v == null || v === '' ? fallback : v;
 }
-function saveAttachmentsEnabled_() { return getProp_(PROP.SAVE_ATTACHMENTS, 'true') !== 'false'; }
 function maxRunSeconds_() { return Number(getProp_(PROP.MAX_RUN_SECONDS, CONFIG.DEFAULT_MAX_RUN_SECONDS)); }
-function folderLayout_() { return getProp_(PROP.FOLDER_LAYOUT, 'flat'); }
+
+var settingsCache_ = null;
+/** 현재 사용자 설정 (스크립트 속성에서 읽어 정규화). 실행 중 캐시. */
+function getSettings_() {
+  if (!settingsCache_) settingsCache_ = settingsFromProps(props_().getProperties());
+  return settingsCache_;
+}
+function saveSettings_(input) {
+  var s = normalizeSettings(input);
+  props_().setProperties(settingsToProps(s), false);
+  settingsCache_ = s;
+  return s;
+}

@@ -5,7 +5,8 @@
  *  1. 커서(CURSOR_JSON)가 있으면 이어서, 없으면 새 실행(쿼리 생성, 시작 시각 기록)
  *  2. 페이지 단위로 id 목록 → 인덱스에 없는 것만 저장
  *  3. MAX_RUN_SECONDS 초과 시 커서 저장 후 1분 뒤 이어서 실행되는 트리거 생성
- *  4. 페이지 소진 시 LAST_SYNC_EPOCH = 이번 실행 시작 시각, 커서 삭제
+ *  4. 페이지 소진(또는 회당 최대 건수 도달) 시 LAST_SYNC_EPOCH = 이번 실행 시작 시각,
+ *     커서 삭제, 실행 이력 기록, 알림 메일 발송
  */
 function runBackup() {
   var lock = LockService.getScriptLock();
@@ -24,16 +25,17 @@ function runBackup() {
 function runBackupLocked_() {
   var startedAt = Date.now();
   var deadline = startedAt + maxRunSeconds_() * 1000;
+  var settings = getSettings_();
   var cursor = loadCursor_();
   var isNewRun = !cursor;
   if (isNewRun) {
     cursor = {
-      query: buildQuery(getProp_(PROP.LAST_SYNC_EPOCH, null)),
+      query: buildQuery(getProp_(PROP.LAST_SYNC_EPOCH, null), settings),
       pageToken: null,
       runStartEpoch: Math.floor(startedAt / 1000),
       startedAt: new Date(startedAt).toISOString(),
       found: 0, processed: 0, skipped: 0, errors: 0, chunks: 0,
-      bytes: 0, mailFrom: null, mailTo: null,
+      bytes: 0, mailFrom: null, mailTo: null, limitHit: false,
     };
   }
   cursor.chunks += 1;
@@ -45,6 +47,7 @@ function runBackupLocked_() {
   var backedUp = loadBackedUpIds_(sheet);
   var pending = [];
   var outOfTime = false;
+  var maxPerRun = settings.maxPerRun || 0;
 
   try {
     while (true) {
@@ -53,8 +56,9 @@ function runBackupLocked_() {
       for (var i = 0; i < page.ids.length; i++) {
         var id = page.ids[i];
         if (backedUp[id]) { cursor.skipped += 1; continue; }
+        if (maxPerRun && cursor.processed >= maxPerRun) { cursor.limitHit = true; break; }
         try {
-          var row = backupOne_(id, labelMap);
+          var row = backupOne_(id, labelMap, settings);
           pending.push(row);
           backedUp[id] = true;
           cursor.processed += 1;
@@ -67,10 +71,7 @@ function runBackupLocked_() {
         if (pending.length >= CONFIG.INDEX_FLUSH_EVERY) { appendIndexRows_(sheet, pending); pending = []; }
         if (Date.now() > deadline) { outOfTime = true; break; }
       }
-      if (outOfTime) {
-        // 이 페이지의 남은 id는 다음 구간에서 같은 pageToken으로 다시 조회 (중복은 id로 걸러짐)
-        break;
-      }
+      if (outOfTime || cursor.limitHit) break; // 시간 초과: 같은 pageToken으로 재개 (중복은 id로 걸러짐)
       cursor.pageToken = page.nextPageToken || null;
       if (!cursor.pageToken) break;
       if (Date.now() > deadline) { outOfTime = true; break; }
@@ -87,31 +88,36 @@ function runBackupLocked_() {
     return;
   }
 
-  props_().setProperty(PROP.LAST_SYNC_EPOCH, String(cursor.runStartEpoch));
+  // 회당 최대 건수에 걸렸으면 다음 실행에서 이어받도록 마지막 동기화 시각을 올리지 않는다.
+  if (!cursor.limitHit) props_().setProperty(PROP.LAST_SYNC_EPOCH, String(cursor.runStartEpoch));
   props_().deleteProperty(PROP.CURSOR_JSON);
   cursor.finishedAt = new Date().toISOString();
   appendRunHistory_(cursor);
   setStatus_({
     state: 'idle',
-    message: '완료: 감지 ' + cursor.found + '건, 새로 ' + cursor.processed + '건 저장, ' + cursor.skipped + '건 이미 있음, 오류 ' + cursor.errors + '건',
+    message: '완료: 감지 ' + cursor.found + '건, 새로 ' + cursor.processed + '건 저장, ' + cursor.skipped + '건 이미 있음, 오류 ' + cursor.errors + '건' +
+      (cursor.limitHit ? ' (회당 최대 ' + maxPerRun + '건 도달, 나머지는 다음 실행)' : ''),
     cursor: cursor,
     finishedAt: cursor.finishedAt,
   });
   Logger.log('백업 완료. 새 %s건, 건너뜀 %s건, 오류 %s건', cursor.processed, cursor.skipped, cursor.errors);
+  sendCompletionNotice_(cursor, settings);
 }
 
 /** 메시지 1건을 저장하고 인덱스 행을 돌려준다. */
-function backupOne_(id, labelMap) {
+function backupOne_(id, labelMap, settings) {
   var m = fetchMessage_(id);
   var category = categorize(m.labelIds, labelMap);
-  var folder = ensureFolderPath_(buildFolderPath(category, m.date, CONFIG.TIME_ZONE, folderLayout_()));
+  var agenda = classifyAgenda(m.headers.subject, m.snippet, m.labelIds);
+  var folderName = settings.folderBy === 'agenda' ? agenda.replace(/\//g, '-') : category;
+  var folder = ensureFolderPath_(buildFolderPath(folderName, m.date, CONFIG.TIME_ZONE, settings.folderLayout));
   var fileName = buildFileName({ date: m.date, subject: m.headers.subject, id: m.id }, CONFIG.TIME_ZONE);
   var saved = saveEml_(folder, fileName, m.rawBytes);
   var attachmentNames = saveAttachments_(m.id, m.attachments);
   return buildIndexRow({
-    id: m.id, threadId: m.threadId, date: m.date, category: category,
+    id: m.id, threadId: m.threadId, date: m.date, category: category, agenda: agenda,
     labelNames: labelNamesOf(m.labelIds, labelMap), headers: m.headers, snippet: m.snippet,
-    sizeEstimate: m.sizeEstimate, attachmentNames: attachmentNames,
+    sizeEstimate: m.sizeEstimate, attachmentNames: attachmentNames, bodyPreview: m.bodyPreview,
     driveFileId: saved.fileId, driveUrl: saved.url, backedUpAt: new Date(),
   });
 }
@@ -134,11 +140,41 @@ function appendRunHistory_(cursor) {
     startedAt: cursor.startedAt, finishedAt: cursor.finishedAt, chunks: cursor.chunks,
     found: cursor.found, processed: cursor.processed, skipped: cursor.skipped, errors: cursor.errors,
     bytes: cursor.bytes, mailFrom: cursor.mailFrom, mailTo: cursor.mailTo, query: cursor.query,
+    limitHit: !!cursor.limitHit, notifiedTo: cursor.notifiedTo || null,
   });
   props_().setProperty(PROP.RUN_HISTORY_JSON, JSON.stringify(hist.slice(0, RUN_HISTORY_MAX)));
 }
 function loadRunHistory_() {
   try { return JSON.parse(getProp_(PROP.RUN_HISTORY_JSON, '[]')) || []; } catch (e) { return []; }
+}
+
+/** 완료 알림 메일. 실패해도 백업 결과에는 영향 없음. */
+function sendCompletionNotice_(cursor, settings) {
+  if (!settings.notifyOnComplete) return;
+  var to = settings.notifyEmail || Session.getEffectiveUser().getEmail();
+  if (!to) return;
+  try {
+    var summary = summarizeRecords(loadIndexRecords_());
+    var mail = buildCompletionEmail(cursor, summary, appLinks_(), Session.getEffectiveUser().getEmail());
+    MailApp.sendEmail({ to: to, subject: mail.subject, htmlBody: mail.htmlBody, body: mail.textBody, name: 'Mail Backup' });
+    cursor.notifiedTo = to;
+    var hist = loadRunHistory_();
+    if (hist.length) { hist[0].notifiedTo = to; props_().setProperty(PROP.RUN_HISTORY_JSON, JSON.stringify(hist)); }
+  } catch (e) {
+    Logger.log('알림 메일 발송 실패: %s', e.message);
+  }
+}
+
+function appLinks_() {
+  var sheetId = getProp_(PROP.INDEX_SHEET_ID, '');
+  var folderId = getProp_(PROP.FOLDER_ID, '') || getSettings_().folderId;
+  var webAppUrl = '';
+  try { webAppUrl = ScriptApp.getService().getUrl() || ''; } catch (e) { webAppUrl = ''; }
+  return {
+    folderUrl: folderId ? 'https://drive.google.com/drive/folders/' + folderId : '',
+    indexSheetUrl: sheetId ? 'https://docs.google.com/spreadsheets/d/' + sheetId : '',
+    webAppUrl: webAppUrl,
+  };
 }
 
 // ---------- 커서 / 상태 ----------
