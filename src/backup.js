@@ -207,15 +207,22 @@ var PREVIEW_TIME_BUDGET_MS = 40000; // 웹 요청 안에서 끝내기 위한 시
 function previewBackup_() {
   var t0 = Date.now();
   var settings = getSettings_();
-  var query = buildQuery(getProp_(PROP.LAST_SYNC_EPOCH, null), settings);
+  var lastSync = getProp_(PROP.LAST_SYNC_EPOCH, null);
+  var isFirst = !lastSync;
+  var query = buildQuery(lastSync, settings);
   var backedUp = loadBackedUpIds_(indexSheet_());
   var labelMap = fetchLabelMap_();
+  // 첫 백업이면 메일함 전체 건수를 프로필에서 즉시 가져온다 (수만 건이어도 1회 호출).
+  var mailboxTotal = 0;
+  if (isFirst) { try { mailboxTotal = Number(Gmail.Users.getProfile('me').messagesTotal) || 0; } catch (e) { mailboxTotal = 0; } }
   var found = 0, skipped = 0, newIds = [], pageToken = null, truncated = false;
   do {
     var page = listMessageIds_(query, pageToken);
     found += page.ids.length;
     page.ids.forEach(function (id) { if (backedUp[id]) skipped += 1; else newIds.push(id); });
     pageToken = page.nextPageToken || null;
+    // 첫 백업은 표본 300건만 있으면 되므로 목록을 끝까지 세지 않는다 (전체 건수는 프로필 값 사용).
+    if (isFirst && mailboxTotal && newIds.length >= PREVIEW_DETAIL_MAX) { truncated = !!pageToken; break; }
     if (Date.now() - t0 > PREVIEW_TIME_BUDGET_MS / 2) { truncated = !!pageToken; break; }
   } while (pageToken);
   var metas = [];
@@ -226,9 +233,16 @@ function previewBackup_() {
       metas.push({ category: categorize(m.labelIds, labelMap), sizeBytes: m.sizeBytes, date: m.date, from: nameOrAddress_(m.from) });
     } catch (e) { /* 표본에서 제외 */ }
   }
-  var agg = aggregatePreview({ found: found, skipped: skipped, newCount: newIds.length, metas: metas, detailed: metas.length });
+  // 목록 조회가 시간 예산에 걸려 잘렸으면(첫 백업·대량), 전체 건수는 프로필 값으로 보정한다.
+  var newCount = newIds.length;
+  if (truncated && isFirst && !settings.initialStartDate && !settings.filterQuery && mailboxTotal > found) newCount = Math.max(newCount, mailboxTotal - skipped);
+  var agg = aggregatePreview({ found: found, skipped: skipped, newCount: newCount, metas: metas, detailed: metas.length });
   agg.query = query;
   agg.truncated = truncated;
+  agg.isFirst = isFirst;
+  agg.mailboxTotal = mailboxTotal;
+  agg.initialStartDate = settings.initialStartDate || '';
+  agg.estimatedSeconds = estimateRunSeconds(settings.maxPerRun ? Math.min(newCount, settings.maxPerRun) : newCount);
   agg.lastSyncAt = getProp_(PROP.LAST_SYNC_EPOCH, '') ? new Date(Number(getProp_(PROP.LAST_SYNC_EPOCH, '')) * 1000).toISOString() : null;
   agg.previewedAt = new Date().toISOString();
   agg.elapsedMs = Date.now() - t0;

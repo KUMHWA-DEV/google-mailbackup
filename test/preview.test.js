@@ -48,3 +48,12 @@ describe('runProgress', () => {
     expect(p.etaSeconds).toBe(300);
   });
 });
+
+describe('estimateRunSeconds', () => {
+  const { estimateRunSeconds } = require('../src/lib/preview.js');
+  it('scales with count and adds the 1-minute gap between chunks', () => {
+    expect(estimateRunSeconds(0)).toBe(0);
+    expect(estimateRunSeconds(100)).toBe(120);           // 100 × 1.2s, single chunk
+    expect(estimateRunSeconds(1000)).toBe(1200 + 4 * 60); // 5 chunks of 270s → 4 gaps
+  });
+});

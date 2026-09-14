@@ -53,6 +53,21 @@ function runProgress(run, nowMs) {
   return { percent: percent, elapsedSeconds: Math.round(elapsed), rate: rate, etaSeconds: eta, remaining: expected > processed ? expected - processed : 0 };
 }
 
+/**
+ * 예상 소요 시간(초). 메일당 약 1.2초, 4분 30초 구간마다 1분 대기.
+ * 경험값이며 첨부가 많으면 더 걸린다.
+ */
+var EST_SECONDS_PER_MAIL = 1.2;
+var EST_CHUNK_SECONDS = 270;
+var EST_GAP_SECONDS = 60;
+function estimateRunSeconds(count) {
+  count = Number(count) || 0;
+  if (count <= 0) return 0;
+  var work = count * EST_SECONDS_PER_MAIL;
+  var chunks = Math.ceil(work / EST_CHUNK_SECONDS);
+  return Math.round(work + Math.max(0, chunks - 1) * EST_GAP_SECONDS);
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { aggregatePreview: aggregatePreview, addToBreakdown: addToBreakdown, breakdownList: breakdownList, runProgress: runProgress };
+  module.exports = { aggregatePreview: aggregatePreview, addToBreakdown: addToBreakdown, breakdownList: breakdownList, runProgress: runProgress, estimateRunSeconds: estimateRunSeconds };
 }

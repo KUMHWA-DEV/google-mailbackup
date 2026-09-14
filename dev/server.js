@@ -12,7 +12,7 @@ const { filterRecords, summarizeRecords } = require('../src/lib/index_row.js');
 const { computeSchedule } = require('../src/lib/schedule.js');
 const { normalizeSettings } = require('../src/lib/settings.js');
 const { classifyAgenda } = require('../src/lib/agenda.js');
-const { aggregatePreview, runProgress, addToBreakdown, breakdownList } = require('../src/lib/preview.js');
+const { aggregatePreview, runProgress, addToBreakdown, breakdownList, estimateRunSeconds } = require('../src/lib/preview.js');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const PORT = Number(process.env.PORT) || 8787;
@@ -23,7 +23,7 @@ const listRecords = () => fixtures.map(({ bodyPreview, ...rest }) => rest);
 
 let settings = normalizeSettings({ notifyEmail: 'kumhwa_dev@spris.com' });
 let triggerInstalled = false;
-let lastSyncEpoch = Math.floor(new Date('2026-09-08T03:04:00.000Z').getTime() / 1000);
+let lastSyncEpoch = process.env.FIRST ? null : Math.floor(new Date('2026-09-08T03:04:00.000Z').getTime() / 1000); // FIRST=1 npm run dev → 첫 백업 화면
 let status = { state: 'idle', message: '로컬 미리보기 (샘플 데이터)', updatedAt: new Date().toISOString() };
 let currentRun = { startedAt: '2026-09-08T03:04:00.000Z', finishedAt: '2026-09-08T03:06:41.000Z', chunks: 1, found: 9, processed: 4, skipped: 5, errors: 0, bytes: 1616000, mailFrom: '2026-09-03T07:15:00.000Z', mailTo: '2026-09-10T01:12:00.000Z', limitHit: false, expectedTotal: 4, manual: false,
   byCategory: [{ name: '받은편지함', count: 2, bytes: 590000 }, { name: '보낸편지함', count: 1, bytes: 20480 }, { name: '거래처-BBB', count: 1, bytes: 950000 }] };
@@ -66,7 +66,10 @@ const api = {
     await sleep(1200);
     const metas = fixtures.slice(0, 7).map(r => ({ category: r.category, sizeBytes: r.sizeBytes, date: r.date, from: r.from.replace(/<.*>/, '').trim() || r.from }));
     preview = aggregatePreview({ found: 12, skipped: 5, newCount: 7, metas, detailed: 7 });
-    preview.query = 'after:1757000000 -in:spam -in:trash -in:chats'; preview.truncated = false; preview.lastSyncAt = new Date(lastSyncEpoch * 1000).toISOString(); preview.previewedAt = new Date().toISOString(); preview.elapsedMs = 1200;
+    const isFirst = !lastSyncEpoch;
+    if (isFirst) { preview = aggregatePreview({ found: 300, skipped: 0, newCount: settings.initialStartDate ? 420 : 4180, metas, detailed: 7 }); preview.mailboxTotal = 4180; }
+    preview.isFirst = isFirst; preview.initialStartDate = settings.initialStartDate || ''; preview.estimatedSeconds = estimateRunSeconds(preview.newCount);
+    preview.query = '-in:spam -in:trash -in:chats'; preview.truncated = isFirst; preview.lastSyncAt = lastSyncEpoch ? new Date(lastSyncEpoch * 1000).toISOString() : null; preview.previewedAt = new Date().toISOString(); preview.elapsedMs = 1200;
     return preview;
   },
   // 백그라운드 큐 모의: 3초 대기 → 1.5초마다 1건 저장 → 완료 후 이력 추가
@@ -80,12 +83,12 @@ const api = {
       status = { state: 'running', message: '새 백업 시작 (1번째 구간)', updatedAt: new Date().toISOString() };
       let i = 0;
       const tick = setInterval(() => {
-        const r = fixtures[i];
-        currentRun.processed += 1; currentRun.bytes += r.sizeBytes; addToBreakdown(cats, r.category, r.sizeBytes); currentRun.byCategory = breakdownList(cats);
+        const r = fixtures[i % fixtures.length], step = expected > 50 ? Math.ceil(expected / 40) : 1;
+        currentRun.processed = Math.min(expected, currentRun.processed + step); currentRun.bytes += r.sizeBytes * step; addToBreakdown(cats, r.category, r.sizeBytes); currentRun.byCategory = breakdownList(cats);
         if (!currentRun.mailFrom || r.date < currentRun.mailFrom) currentRun.mailFrom = r.date; if (!currentRun.mailTo || r.date > currentRun.mailTo) currentRun.mailTo = r.date;
         status = { state: 'running', message: '저장 중 ' + currentRun.processed + '건 / ' + expected, updatedAt: new Date().toISOString() };
         i += 1;
-        if (i >= expected) {
+        if (currentRun.processed >= expected) {
           clearInterval(tick);
           lastSyncEpoch = Math.floor(Date.now() / 1000);
           currentRun.finishedAt = new Date().toISOString();
