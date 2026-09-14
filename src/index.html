@@ -30,7 +30,7 @@
   button.ib:hover { background: var(--line2); }
   input, select { font: inherit; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; color: var(--ink); width: 100%; min-width: 0; }
   input:focus, select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
-  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 16px 48px; }
+  .wrap { padding: 0 24px 40px; }
   [hidden] { display: none !important; }
 
   /* switch */
@@ -44,7 +44,7 @@
 
   /* header */
   header { background: #fff; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 20; }
-  header .inner { max-width: 1240px; margin: 0 auto; padding: 10px 16px 0; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  header .inner { padding: 8px 24px 0; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
   .brand { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; }
   .logo { width: 34px; height: 34px; border-radius: 10px; background: var(--blue); color: #fff; display: grid; place-items: center; font-size: 17px; }
   nav { display: flex; gap: 2px; margin-left: 8px; }
@@ -54,17 +54,16 @@
   .pulse { position: absolute; top: 8px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--amber); animation: pulse 1.4s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
   .hright { margin-left: auto; display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; }
-  .hright a { color: var(--ink2); }
   .hright .user { margin-left: 6px; }
 
   /* blocks */
-  .page { padding-top: 18px; display: flex; flex-direction: column; gap: 14px; }
+  .page { padding-top: 16px; display: flex; flex-direction: column; gap: 14px; }
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
   .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
   .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  @media (max-width: 900px) { .grid4, .grid3, .grid2 { grid-template-columns: 1fr 1fr; } }
-  @media (max-width: 560px) { .grid4, .grid3, .grid2 { grid-template-columns: 1fr; } }
+  @media (max-width: 1000px) { .grid4, .grid3 { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 600px) { .grid4, .grid3, .grid2 { grid-template-columns: 1fr; } }
   .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; border: 1px solid transparent; white-space: nowrap; }
   .pill.blue { background: var(--blue-bg); color: var(--blue-ink); border-color: var(--blue-line); }
   .pill.green { background: var(--green-bg); color: var(--green-ink); border-color: var(--green-line); }
@@ -77,9 +76,16 @@
   .status .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--green); flex: none; }
   .status .dot.due { background: var(--amber); animation: pulse 1.4s infinite; }
   .status .dot.running { background: var(--blue); animation: pulse 1s infinite; }
-  .status .main { font-size: 16px; font-weight: 700; }
+  .status .main { font-size: 17px; font-weight: 700; }
   .status .sub { color: var(--muted); font-size: 13px; }
   .status .actions { margin-left: auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
+  @media (max-width: 1000px) { .kpis { grid-template-columns: 1fr 1fr; } }
+  .kpi { background: var(--soft); border: 1px solid var(--line2); border-radius: 12px; padding: 10px 12px; min-width: 0; display: flex; gap: 10px; align-items: center; }
+  .kpi .ic { font-size: 18px; flex: none; }
+  .kpi .k { font-size: 11px; color: var(--muted); }
+  .kpi .v { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpi .txt { min-width: 0; }
   .bar { height: 8px; background: var(--line); border-radius: 999px; overflow: hidden; margin-top: 14px; }
   .bar i { display: block; height: 100%; background: var(--blue); border-radius: 999px; transition: width .4s; }
   .bar i.due { background: var(--amber); }
@@ -93,13 +99,25 @@
   .stat .d { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .stat .txt { min-width: 0; }
 
+  /* distribution bars (single series, magnitude) */
+  .dist { display: grid; gap: 7px; }
+  .dist .r { display: grid; grid-template-columns: minmax(90px, 150px) 1fr 48px; gap: 10px; align-items: center; font-size: 12px; cursor: pointer; border-radius: 6px; padding: 2px 4px; }
+  .dist .r:hover { background: var(--soft); }
+  .dist .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink2); }
+  .dist .b { height: 8px; background: var(--line2); border-radius: 4px; overflow: hidden; }
+  .dist .b i { display: block; height: 100%; background: var(--blue); border-radius: 4px; }
+  .dist .c { text-align: right; color: var(--ink2); font-variant-numeric: tabular-nums; }
+  .policy { display: flex; flex-wrap: wrap; gap: 8px; }
+  .policy .pill { padding: 5px 10px; font-size: 12px; cursor: pointer; }
+  .policy .pill:hover { filter: brightness(.97); }
+
   /* tables */
   .cardhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
   .cardhead h3 { margin: 0; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
   .tablewrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 12px; }
   th { text-align: left; color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
-  td { padding: 10px; border-bottom: 1px solid var(--line2); vertical-align: middle; white-space: nowrap; }
+  td { padding: 9px 10px; border-bottom: 1px solid var(--line2); vertical-align: middle; white-space: nowrap; }
   tr:last-child td { border-bottom: 0; }
   .empty { padding: 36px 16px; text-align: center; color: var(--faint); }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
@@ -132,23 +150,52 @@
   .spin { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* explorer */
-  .gm { padding: 0; overflow: hidden; display: flex; flex-direction: column; height: calc(100vh - 150px); min-height: 600px; background: #fff; font-family: "Google Sans", Roboto, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; color: #202124; }
-  .gm-top { display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 16px; border-bottom: 1px solid #e0e3e7; background: #fff; }
+  /* ===== explorer (Gmail) ===== */
+  .gm { padding: 0; overflow: visible; display: flex; flex-direction: column; height: calc(100vh - 92px); min-height: 640px; background: #fff; font-family: "Google Sans", Roboto, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; color: #202124; position: relative; }
+  .gm-top { display: flex; align-items: center; gap: 12px; padding: 8px 12px 6px 16px; }
   .gm-top .brandx { display: flex; align-items: center; gap: 8px; width: 216px; flex: none; font-size: 15px; font-weight: 500; color: #444746; }
   .gm-top .brandx .m { width: 28px; height: 28px; border-radius: 8px; background: #d93025; color: #fff; display: grid; place-items: center; font-size: 15px; }
-  .gm-search { flex: 1; max-width: 720px; display: flex; align-items: center; gap: 10px; background: #eaf1fb; border-radius: 24px; height: 46px; padding: 0 8px 0 16px; transition: background .15s, box-shadow .15s; }
-  .gm-search:focus-within { background: #fff; box-shadow: 0 1px 1px rgba(0,0,0,.24), 0 0 0 1px rgba(0,0,0,.12); }
+  .gm-searchwrap { flex: 1; max-width: 760px; position: relative; }
+  .gm-search { display: flex; align-items: center; gap: 8px; background: #eaf1fb; border-radius: 24px; height: 46px; padding: 0 8px 0 16px; transition: background .15s, box-shadow .15s; }
+  .gm-search:focus-within, .gm-search.open { background: #fff; box-shadow: 0 1px 1px rgba(0,0,0,.24), 0 0 0 1px rgba(0,0,0,.12); }
+  .gm-search.open { border-radius: 24px 24px 0 0; }
   .gm-search .ic { color: #444746; font-size: 16px; }
   .gm-search input { border: 0; background: transparent; font-size: 15px; padding: 0; height: 100%; box-shadow: none; color: #202124; }
   .gm-search input:focus { box-shadow: none; }
-  .gm-search button { border: 0; background: transparent; color: #444746; padding: 6px; border-radius: 50%; font-size: 15px; }
-  .gm-search button:hover { background: rgba(60,64,67,.08); }
-  .gm-top .right { margin-left: auto; display: flex; align-items: center; gap: 4px; color: #444746; font-size: 12px; }
-  .gm-top .right select { width: auto; border: 0; background: transparent; padding: 6px 4px; font-size: 12px; color: #444746; box-shadow: none; }
+  .gm-search button { border: 0; background: transparent; color: #444746; padding: 0; width: 34px; height: 34px; border-radius: 50%; justify-content: center; font-size: 15px; }
+  .gm-search button:hover, .gm-search button.on { background: rgba(60,64,67,.08); }
+  .gm-adv { position: absolute; top: 46px; left: 0; right: 0; background: #fff; border-radius: 0 0 16px 16px; box-shadow: 0 4px 12px rgba(0,0,0,.2); padding: 16px 20px; z-index: 30; display: grid; grid-template-columns: 110px 1fr; gap: 10px 12px; align-items: center; font-size: 13px; }
+  .gm-adv label { color: #5f6368; text-align: right; }
+  .gm-adv input, .gm-adv select { border: 0; border-bottom: 1px solid #dadce0; border-radius: 0; padding: 6px 2px; font-size: 13px; box-shadow: none; }
+  .gm-adv input:focus, .gm-adv select:focus { border-bottom-color: #1a73e8; box-shadow: none; }
+  .gm-adv .inl { display: flex; gap: 10px; align-items: center; }
+  .gm-adv .inl input, .gm-adv .inl select { width: auto; flex: 1; }
+  .gm-adv .btns { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+  .gm-adv .chk { display: flex; align-items: center; gap: 8px; }
+  .gm-adv .chk input { width: 16px; height: 16px; }
+  .gm-top .right { margin-left: auto; display: flex; align-items: center; gap: 4px; }
   .gm-ib { border: 0; background: transparent; color: #444746; width: 34px; height: 34px; border-radius: 50%; padding: 0; display: grid; place-items: center; font-size: 15px; }
   .gm-ib:hover { background: rgba(60,64,67,.08); }
   .gm-ib:disabled { opacity: .35; }
+  .gm-chips { display: flex; align-items: center; gap: 8px; padding: 4px 16px 10px 244px; flex-wrap: wrap; border-bottom: 1px solid #e0e3e7; font-size: 13px; }
+  @media (max-width: 1000px) { .gm-chips { padding-left: 16px; } }
+  .fchip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 1px solid #c4c7c5; border-radius: 8px; background: #fff; color: #444746; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+  .fchip:hover { background: #f1f3f4; }
+  .fchip.on { background: #c2e7ff; border-color: #c2e7ff; color: #001d35; }
+  .fchip .x { margin-left: 2px; font-size: 13px; opacity: .8; }
+  .fchip .x:hover { opacity: 1; }
+  .gm-reset { color: #0b57d0; font-weight: 500; cursor: pointer; margin-left: 4px; }
+  .pop { position: absolute; z-index: 40; background: #fff; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.25); min-width: 240px; max-width: 360px; max-height: 380px; overflow-y: auto; padding: 8px 0; font-size: 13px; color: #202124; }
+  .pop .ph { padding: 4px 16px 8px; }
+  .pop .ph input { border: 1px solid #dadce0; border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+  .pop .it { display: flex; align-items: center; gap: 10px; padding: 8px 16px; cursor: pointer; }
+  .pop .it:hover { background: #f1f3f4; }
+  .pop .it.on { background: #e8f0fe; color: #0b57d0; font-weight: 500; }
+  .pop .it .ct { margin-left: auto; color: #5f6368; font-size: 12px; }
+  .pop .sep { border-top: 1px solid #e0e3e7; margin: 6px 0; }
+  .pop .rng { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; align-items: center; padding: 6px 16px; }
+  .pop .rng input { border: 1px solid #dadce0; border-radius: 8px; padding: 5px 8px; font-size: 12px; }
+  .pop .foot { display: flex; justify-content: flex-end; gap: 6px; padding: 8px 12px 4px; }
   .gm-body { flex: 1; display: flex; min-height: 0; }
   .gm-nav { width: 232px; flex: none; background: #f6f8fc; padding: 10px 12px 10px 0; overflow-y: auto; font-size: 14px; }
   .gm-nav .sec { color: #444746; font-size: 12px; font-weight: 500; padding: 14px 0 4px 24px; letter-spacing: .02em; }
@@ -158,30 +205,27 @@
   .gm-nav .it .ic { width: 20px; text-align: center; font-size: 15px; flex: none; }
   .gm-nav .it .lb { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .gm-nav .it .ct { font-size: 12px; color: #444746; }
-  .gm-nav .it.active .ct { color: #202124; }
   .gm-nav .it .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; margin: 0 5px; }
   .gm-nav .runsel { margin: 14px 0 0 24px; font-size: 12px; color: #444746; }
   .gm-nav .runsel select { width: calc(100% - 4px); border: 1px solid #dadce0; border-radius: 8px; padding: 6px 8px; font-size: 12px; background: #fff; margin-top: 4px; }
   .gm-main { flex: 1; display: flex; min-width: 0; background: #fff; border-radius: 16px 0 0 0; box-shadow: 0 0 0 1px #e0e3e7 inset; }
-  .gm-listwrap { width: 54%; min-width: 380px; display: flex; flex-direction: column; border-right: 1px solid #e0e3e7; min-height: 0; }
+  .gm-listwrap { width: 52%; min-width: 380px; display: flex; flex-direction: column; border-right: 1px solid #e0e3e7; min-height: 0; }
   .gm-tools { display: flex; align-items: center; gap: 4px; padding: 6px 8px 6px 14px; border-bottom: 1px solid #e0e3e7; font-size: 12px; color: #444746; min-height: 48px; }
   .gm-tools .pg { margin-left: auto; display: flex; align-items: center; gap: 2px; white-space: nowrap; }
-  .gm-tools .chipx { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #dadce0; border-radius: 8px; padding: 3px 10px; font-size: 12px; color: #444746; background: #fff; cursor: pointer; }
-  .gm-tools .chipx:hover { background: #f1f3f4; }
   .gm-list { flex: 1; overflow-y: auto; min-height: 0; }
   .gm-row { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 10px; border-bottom: 1px solid #e8eaed; cursor: pointer; font-size: 14px; color: #202124; position: relative; background: #f2f6fc; }
   .gm-row:hover { background: #fff; box-shadow: inset 1px 0 0 #dadce0, inset -1px 0 0 #dadce0, 0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15); z-index: 1; }
   .gm-row.active { background: #c2e7ff; }
   .gm-row .star { color: #c4c7c5; font-size: 16px; flex: none; width: 22px; text-align: center; }
   .gm-row .star.on { color: #f4b400; }
-  .gm-row .sd { width: 150px; flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 400; text-align: left; }
-  .gm-row .sd.sentme { font-weight: 400; color: #444746; }
-  .gm-row .sd .to { color: #444746; font-weight: 400; }
+  .gm-row .sd { width: 150px; flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+  .gm-row .sd.sentme { color: #444746; }
+  .gm-row .sd .to { color: #444746; }
   .gm-row .txt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
   .gm-row .txt .lb { flex: none; font-size: 11px; padding: 1px 7px; border-radius: 4px; font-weight: 500; }
-  .gm-row .txt .sj { font-weight: 400; }
   .gm-row .txt .sn { color: #5f6368; }
   .gm-row .att { flex: none; color: #5f6368; font-size: 14px; }
+  .gm-row .sz { flex: none; color: #9aa0a6; font-size: 11px; width: 52px; text-align: right; }
   .gm-row .dt { flex: none; width: 64px; text-align: right; font-size: 12px; color: #5f6368; }
   .gm-row.active .dt, .gm-row.active .sn { color: #202124; }
   .gm-empty { padding: 60px 20px; text-align: center; color: #5f6368; font-size: 13px; }
@@ -201,8 +245,8 @@
   .gm-hd .l details { margin-top: 2px; }
   .gm-hd .l summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 4px; }
   .gm-hd .l summary::-webkit-details-marker { display: none; }
-  .gm-hd .l table { font-size: 12px; margin-top: 8px; border: 1px solid #e0e3e7; border-radius: 8px; padding: 8px; border-collapse: separate; }
-  .gm-hd .l table td { padding: 2px 8px 2px 0; border: 0; vertical-align: top; }
+  .gm-hd .l table { font-size: 12px; margin-top: 8px; border: 1px solid #e0e3e7; border-radius: 8px; padding: 8px; border-collapse: separate; width: auto; }
+  .gm-hd .l table td { padding: 2px 8px 2px 0; border: 0; vertical-align: top; white-space: normal; }
   .gm-hd .l table td:first-child { color: #5f6368; text-align: right; white-space: nowrap; }
   .gm-hd .r { font-size: 12px; color: #5f6368; white-space: nowrap; display: flex; align-items: center; gap: 2px; }
   .gm-bd { font-size: 14px; line-height: 1.6; color: #202124; white-space: pre-wrap; word-break: break-word; padding: 4px 0 8px 54px; }
@@ -226,8 +270,10 @@
   .gm-ph { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #5f6368; padding: 40px; font-size: 13px; }
   .gm-ph b { display: block; color: #202124; font-size: 16px; font-weight: 400; margin: 12px 0 4px; }
   .gm-back { display: none; }
-  @media (max-width: 1000px) { .gm-nav { display: none; } .gm-navchips { display: flex; } }
   .gm-navchips { display: none; gap: 6px; padding: 8px 12px; overflow-x: auto; border-bottom: 1px solid #e0e3e7; }
+  .chip { border: 0; background: var(--line2); color: var(--ink2); border-radius: 999px; padding: 4px 10px; font-size: 11px; white-space: nowrap; }
+  .chip.active { background: var(--blue); color: #fff; }
+  @media (max-width: 1000px) { .gm-nav { display: none; } .gm-navchips { display: flex; } }
   @media (max-width: 760px) {
     .gm { height: auto; min-height: 640px; }
     .gm-top .brandx { display: none; }
@@ -236,9 +282,11 @@
     .gm-body:not(.reading) .gm-reader { display: none; }
     .gm-back { display: grid; }
     .gm-row .sd { width: 110px; }
+    .gm-row .sz { display: none; }
     .gm-bd, .gm-atts { padding-left: 0; margin-left: 0; }
+    .gm-adv { grid-template-columns: 1fr; }
+    .gm-adv label { text-align: left; }
   }
-
 </style>
 </head>
 <body>
@@ -252,8 +300,8 @@
       <button data-tab="history">🕘 이력</button>
     </nav>
     <div class="hright">
-      <a id="hdFolder" class="ib" hidden title="Drive 백업 폴더" target="_blank" rel="noopener"><button type="button" class="ib">📁</button></a>
-      <a id="hdSheet" class="ib" hidden title="인덱스 시트" target="_blank" rel="noopener"><button type="button" class="ib">📊</button></a>
+      <a id="hdFolder" hidden title="Drive 백업 폴더" target="_blank" rel="noopener"><button type="button" class="ib">📁</button></a>
+      <a id="hdSheet" hidden title="인덱스 시트" target="_blank" rel="noopener"><button type="button" class="ib">📊</button></a>
       <span class="user" id="hdUser"></span>
     </div>
   </div>
@@ -273,6 +321,12 @@
           <button id="btnRun" class="primary">▶ 지금 백업</button>
         </div>
       </div>
+      <div class="kpis">
+        <div class="kpi"><span class="ic">⏱</span><div class="txt"><div class="k">마지막 백업</div><div class="v" id="kLast">-</div></div></div>
+        <div class="kpi"><span class="ic">📆</span><div class="txt"><div class="k">다음 백업</div><div class="v" id="kNext">-</div></div></div>
+        <div class="kpi"><span class="ic">🔁</span><div class="txt"><div class="k">주기</div><div class="v" id="kCycle">-</div></div></div>
+        <div class="kpi"><span class="ic">📨</span><div class="txt"><div class="k">완료 알림</div><div class="v" id="kNotify">-</div></div></div>
+      </div>
       <div class="bar"><i id="progressBar" style="width:0%"></i></div>
       <div class="barlbl"><span id="progressL"></span><span id="progressR"></span></div>
     </div>
@@ -284,20 +338,46 @@
       <div class="stat"><div class="ic">✅</div><div class="txt"><div class="k">최근 실행</div><div class="v" id="stRun">-</div><div class="d" id="stRunD"></div></div></div>
     </div>
 
+    <div class="grid3">
+      <div class="card"><div class="cardhead"><h3>🏷 라벨별</h3><span class="pill gray" id="distCatN"></span></div><div class="dist" id="distCat"></div></div>
+      <div class="card"><div class="cardhead"><h3>💼 안건별</h3><span class="pill gray" id="distAgN"></span></div><div class="dist" id="distAg"></div></div>
+      <div class="card"><div class="cardhead"><h3>⚙️ 현재 정책</h3><button type="button" class="sm" data-goto="settings">변경 ›</button></div><div class="policy" id="policy"></div></div>
+    </div>
+
     <div class="card">
-      <div class="cardhead"><h3>🕘 최근 실행</h3><button type="button" class="sm" data-goto="history">전체 보기 ›</button></div>
-      <div class="tablewrap"><table><thead><tr><th>일시</th><th>신규</th><th>감지</th><th>용량</th><th>메일 기간</th><th></th></tr></thead><tbody id="histMini"></tbody></table></div>
+      <div class="cardhead"><h3>🕘 최근 실행</h3><button type="button" class="sm" data-goto="history">전체 ›</button></div>
+      <div class="tablewrap"><table><thead><tr><th>시작</th><th>소요</th><th>감지</th><th>신규</th><th>중복</th><th>오류</th><th>용량</th><th>메일 기간</th><th>알림</th><th></th></tr></thead><tbody id="histMini"></tbody></table></div>
     </div>
   </section>
 
-  <!-- ===== 탐색기 ===== -->
+  <!-- ===== 메일함 ===== -->
   <section class="page" id="tab-explorer" hidden>
     <div class="card gm">
       <div class="gm-top">
         <div class="brandx"><span class="m">M</span><span>메일함</span><span class="pill blue" id="exTotal" style="font-family:inherit">0건</span></div>
-        <div class="gm-search"><span class="ic">🔍</span><input id="exQ" placeholder="메일 검색"><button type="button" id="exClear" title="지우기" hidden>✕</button></div>
+        <div class="gm-searchwrap">
+          <div class="gm-search" id="gmSearch">
+            <span class="ic">🔍</span>
+            <input id="exQ" placeholder="메일 검색 · from: to: subject: has:attachment after:2026-09-01 -제외어">
+            <button type="button" id="exClear" title="지우기" hidden>✕</button>
+            <button type="button" id="exAdvBtn" title="검색 옵션">⚙️</button>
+          </div>
+          <form class="gm-adv" id="adv" hidden>
+            <label>보낸사람</label><input name="from">
+            <label>받는사람</label><input name="to">
+            <label>제목</label><input name="subject">
+            <label>포함 단어</label><input name="words">
+            <label>제외 단어</label><input name="not">
+            <label>크기</label><div class="inl"><select name="sizeOp"><option value="larger">초과</option><option value="smaller">미만</option></select><input name="sizeVal" type="number" min="0" step="0.1" placeholder="0"><select name="sizeUnit"><option value="M">MB</option><option value="K">KB</option></select></div>
+            <label>기간</label><div class="inl"><input name="after" type="date"><span>~</span><input name="before" type="date"></div>
+            <label>위치</label><div class="inl"><select name="in"><option value="anywhere">전체 메일</option><option value="inbox">받은편지함</option><option value="sent">보낸편지함</option><option value="drafts">임시보관함</option></select><select name="label" id="advLabel"><option value="">라벨 전체</option></select><select name="agenda" id="advAgenda"><option value="">안건 전체</option></select></div>
+            <label></label><div class="chk"><input type="checkbox" name="hasAttachment" id="advAtt"><label for="advAtt" style="text-align:left">📎 첨부파일 있음</label></div>
+            <div class="btns"><button type="button" id="advReset">초기화</button><button type="submit" class="primary">🔍 검색</button></div>
+          </form>
+        </div>
         <div class="right"><button type="button" class="gm-ib" id="exRefresh" title="새로고침">⟳</button></div>
       </div>
+      <div class="gm-chips" id="gmChips"></div>
       <div class="gm-navchips" id="exNavChips"></div>
       <div class="gm-body" id="split">
         <div class="gm-nav" id="exNav"></div>
@@ -305,18 +385,16 @@
           <div class="gm-listwrap">
             <div class="gm-tools">
               <span id="exWhere" style="font-weight:500;color:#202124">전체 메일</span>
-              <span id="exFilterChips" style="display:flex;gap:4px;margin-left:8px"></span>
-              <div class="pg"><span id="exPage">0–0 / 0</span><button type="button" class="gm-ib" id="exPrev" title="이전">‹</button><button type="button" class="gm-ib" id="exNext" title="다음">›</button></div>
+              <div class="pg"><span id="exPage">0 / 0</span><button type="button" class="gm-ib" id="exPrev" title="이전">‹</button><button type="button" class="gm-ib" id="exNext" title="다음">›</button></div>
             </div>
             <div class="gm-list" id="mlist"><div class="gm-empty">불러오는 중…</div></div>
           </div>
           <div class="gm-reader" id="reader"><div class="gm-ph"><div style="font-size:44px">✉️</div><b>메일을 선택하세요</b></div></div>
         </div>
       </div>
+      <div class="pop" id="pop" hidden></div>
     </div>
   </section>
-
-
 
   <!-- ===== 설정 ===== -->
   <section class="page" id="tab-settings" hidden>
@@ -325,7 +403,7 @@
       <div class="grid3">
         <div class="field"><label class="t">🔁 백업 주기</label><div class="row"><input type="number" name="intervalDays" min="1" max="30"><span class="unit">일마다 · 새벽 3시</span></div></div>
         <div class="field"><label class="t">📅 시작일 <span class="unit">(첫 백업만)</span></label><input type="date" name="initialStartDate"></div>
-        <div class="field"><label class="t">🔢 회당 최대</label><div class="row"><input type="number" name="maxPerRun" min="0" max="100000"><span class="unit" id="maxUnit">건 · 0 = 무제한</span></div></div>
+        <div class="field"><label class="t">🔢 회당 최대</label><div class="row"><input type="number" name="maxPerRun" min="0" max="100000"><span class="unit">건 · 0 = 무제한</span></div></div>
       </div>
       <div class="divider"></div>
       <div class="toggles">
@@ -350,7 +428,7 @@
   <section class="page" id="tab-history" hidden>
     <div class="card">
       <div class="cardhead"><h3>🕘 실행 이력 <span class="pill blue" id="histCount">0</span></h3></div>
-      <div class="tablewrap"><table><thead><tr><th>시작</th><th>소요</th><th>감지</th><th>신규</th><th>중복</th><th>오류</th><th>용량</th><th>메일 기간</th><th>알림</th><th></th></tr></thead><tbody id="histRows"></tbody></table></div>
+      <div class="tablewrap"><table><thead><tr><th>시작</th><th>종료</th><th>소요</th><th>감지</th><th>신규</th><th>중복</th><th>오류</th><th>용량</th><th>메일 기간</th><th>알림</th><th></th></tr></thead><tbody id="histRows"></tbody></table></div>
     </div>
   </section>
 </div>
@@ -366,9 +444,12 @@
 
 <!-- DEV_SHIM -->
 <script>
+<?!= searchLib ?>
+</script>
+<script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
-  var state = { dash: null, explorer: null, tab: 'overview', ex: { q: '', folder: '', agenda: '', category: '', run: 'all', selected: null }, pollTimer: null };
+  var state = { dash: null, explorer: null, tab: 'overview', ex: { q: '', folder: '', agenda: '', category: '', run: 'all', selected: null, page: 1, sort: 'newest' }, pollTimer: null };
 
   // ---------- helpers ----------
   function call(fn, arg) {
@@ -383,7 +464,9 @@
   function fmtDay(iso) { if (!iso) return ''; var d = new Date(iso); return isNaN(d) ? esc(iso) : d.toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }); }
   function fmtDayShort(iso) { if (!iso) return ''; var d = new Date(iso); return isNaN(d) ? esc(iso) : d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }); }
   function fmtDayLong(epoch) { return new Date(epoch * 1000).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }); }
+  function isoDay(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   function nameOnly(addr) { var s = String(addr || ''); var m = s.match(/^\s*"?([^"<]*)"?\s*<.*>/); return (m && m[1].trim()) || s; }
+  function emailOf(addr) { var m = String(addr || '').match(/<([^>]+)>/); return m ? m[1] : String(addr || '').trim(); }
   function isSentRec(r) { return r.category === '보낸편지함' || /(^|,\s*)SENT(\s*,|$)/.test(String(r.labels || '')); }
   function dur(a, b) { if (!a || !b) return ''; var s = Math.max(0, Math.round((new Date(b) - new Date(a)) / 1000)); return s < 60 ? s + '초' : Math.round(s / 60) + '분'; }
   var toastTimer;
@@ -405,8 +488,21 @@
   }
   $('tabs').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) showTab(b.dataset.tab); });
   document.querySelectorAll('[data-goto]').forEach(function (b) { b.addEventListener('click', function () { showTab(b.dataset.goto); }); });
+  /** 메일함을 특정 필터로 연다 (대시보드 막대/이력 📬에서 호출). */
+  function openExplorer(patch) {
+    var x = state.ex; x.q = ''; x.folder = ''; x.category = ''; x.agenda = ''; x.page = 1;
+    Object.keys(patch || {}).forEach(function (k) { x[k] = patch[k]; });
+    showTab('explorer');
+    if (state.explorer) { $('exQ').value = x.q; renderExplorer(); }
+  }
 
   // ---------- dashboard ----------
+  function distBars(el, items, key) {
+    var max = items.reduce(function (m, c) { return Math.max(m, c.count); }, 0) || 1;
+    el.innerHTML = items.slice(0, 10).map(function (c) {
+      return '<div class="r" data-k="' + key + '" data-v="' + esc(c.name) + '" title="' + esc(c.name) + ' · ' + fmtNum(c.count) + '건' + (c.bytes != null ? ' · ' + fmtBytes(c.bytes) : '') + '"><span class="n">' + esc(c.name) + '</span><span class="b"><i style="width:' + Math.round(c.count / max * 100) + '%"></i></span><span class="c">' + fmtNum(c.count) + '</span></div>';
+    }).join('') || '<div class="empty">-</div>';
+  }
   function renderDashboard(d) {
     state.dash = d;
     var s = d.settings || {}, sch = d.schedule || {}, sum = d.summary || {}, r = d.currentRun || {};
@@ -418,13 +514,15 @@
 
     $('stateDot').className = 'dot' + (running ? ' running' : sch.isDue ? ' due' : '');
     $('stateText').textContent = running ? '백업 진행 중' : (sch.isDue ? (d.lastSyncAt ? '백업할 때가 됐어요' : '첫 백업을 시작하세요') : '최신 상태');
-    $('stateSub').textContent = running ? d.message
-      : (d.lastSyncAt ? '마지막 ' + fmtDate(d.lastSyncAt) + ' · ' : '') + (sch.isDue ? sch.intervalDays + '일 주기' : '다음 ' + fmtDayLong(sch.nextRunEpoch) + ' (' + sch.daysRemaining + '일 후)');
+    $('stateSub').textContent = running ? d.message : (sch.isDue ? '' : '다음 주기까지 ' + sch.daysRemaining + '일');
     $('swAuto').checked = !!d.triggerInstalled;
-    $('swAutoLbl').textContent = '자동 백업 · ' + sch.intervalDays + '일';
     $('btnRun').disabled = running;
     $('btnRun').className = running ? '' : (sch.isDue ? 'warn' : 'primary');
     $('btnRun').innerHTML = running ? '<span class="spin"></span> 진행 중' : '▶ 지금 백업';
+    $('kLast').textContent = d.lastSyncAt ? fmtDate(d.lastSyncAt) + (r.processed ? ' · +' + fmtNum(r.processed) : '') : '없음';
+    $('kNext').textContent = d.triggerInstalled ? (sch.isDue ? '곧 실행' : fmtDayLong(sch.nextRunEpoch) + ' 03:00') : '자동 꺼짐';
+    $('kCycle').textContent = sch.intervalDays + '일' + (s.initialStartDate ? ' · ' + s.initialStartDate + '부터' : '') + (s.maxPerRun ? ' · 최대 ' + fmtNum(s.maxPerRun) : '');
+    $('kNotify').textContent = s.notifyOnComplete ? (s.notifyEmail || d.user || '-') : '꺼짐';
     $('progressBar').style.width = sch.progressPercent + '%';
     $('progressBar').className = sch.isDue ? 'due' : '';
     $('progressL').textContent = sch.elapsedDays + '일 경과 / ' + sch.intervalDays + '일';
@@ -435,34 +533,50 @@
     $('stBytes').textContent = fmtBytes(sum.totalBytes);
     $('stBytesD').textContent = sum.total ? '메일당 ' + fmtBytes(sum.totalBytes / sum.total) : '';
     $('stRange').textContent = sum.oldestDate ? fmtDayShort(sum.oldestDate) + ' ~ ' + fmtDayShort(sum.newestDate) : '-';
-    $('stRangeD').textContent = sum.oldestDate ? Math.round((new Date(sum.newestDate) - new Date(sum.oldestDate)) / 86400000 + 1) + '일치 · ' + new Date(sum.newestDate).getFullYear() + '년' : '';
+    $('stRangeD').textContent = sum.oldestDate ? Math.round((new Date(sum.newestDate) - new Date(sum.oldestDate)) / 86400000 + 1) + '일치 · 마지막 저장 ' + fmtDate(sum.lastBackedUpAt) : '';
     if (r.startedAt) {
       $('stRun').textContent = '+' + fmtNum(r.processed) + '건' + (r.errors ? ' ⚠️' + fmtNum(r.errors) : '');
-      $('stRunD').textContent = fmtDate(r.startedAt) + ' · 감지 ' + fmtNum(r.found) + ' · ' + fmtBytes(r.bytes);
+      $('stRunD').textContent = '감지 ' + fmtNum(r.found) + ' · 중복 ' + fmtNum(r.skipped) + ' · ' + fmtBytes(r.bytes) + (r.mailFrom ? ' · ' + fmtDayShort(r.mailFrom) + '~' + fmtDayShort(r.mailTo) : '');
     } else { $('stRun').textContent = '-'; $('stRunD').textContent = ''; }
+    distBars($('distCat'), sum.categories || [], 'category'); $('distCatN').textContent = (sum.categories || []).length + '개';
+    distBars($('distAg'), sum.agendas || [], 'agenda'); $('distAgN').textContent = (sum.agendas || []).length + '개';
+    $('policy').innerHTML = [
+      ['blue', '🔁 ' + sch.intervalDays + '일'], ['blue', '📅 ' + (s.initialStartDate || '전체')], ['blue', '🔢 ' + (s.maxPerRun ? fmtNum(s.maxPerRun) + '건' : '무제한')],
+      [s.includeSent ? 'green' : 'gray', '📤 ' + (s.includeSent ? '수발신' : '수신만')], [s.saveAttachments ? 'green' : 'gray', '📎 ' + (s.saveAttachments ? '별도 저장' : '.eml만')],
+      ['purple', (s.folderBy === 'agenda' ? '💼 안건별' : '🏷 라벨별') + ' · ' + ({ flat: '누적', yearly: '연도', monthly: '연·월' }[s.folderLayout] || s.folderLayout)],
+      [s.notifyOnComplete ? 'green' : 'gray', '📨 ' + (s.notifyOnComplete ? (s.notifyEmail || '내 계정') : '꺼짐')],
+      s.filterQuery ? ['amber', '🔎 ' + esc(s.filterQuery)] : null,
+    ].filter(Boolean).map(function (p) { return '<span class="pill ' + p[0] + '" data-goto="settings">' + p[1] + '</span>'; }).join('');
     renderHistory(d.history || []);
     banner(d.lastError ? d.lastError : '');
     if (running && !state.pollTimer) state.pollTimer = setInterval(loadDashboard, 15000);
     if (!running && state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
   }
+  document.addEventListener('click', function (e) {
+    var g = e.target.closest('.policy [data-goto]'); if (g) { showTab(g.dataset.goto); return; }
+    var b = e.target.closest('.dist .r'); if (b) { var p = {}; p[b.dataset.k] = b.dataset.v; openExplorer(p); }
+  });
 
+  function histRow(h, i, full) {
+    var ok = h.errors ? '<span title="오류 ' + h.errors + '건">⚠️</span>' : '<span title="정상">✅</span>';
+    var range = h.mailFrom ? fmtDayShort(h.mailFrom) + ' ~ ' + fmtDayShort(h.mailTo) : '-';
+    return '<tr><td>' + ok + ' ' + fmtDate(h.startedAt) + '</td>' + (full ? '<td>' + fmtDate(h.finishedAt) + '</td>' : '') +
+      '<td>' + dur(h.startedAt, h.finishedAt) + (h.chunks > 1 ? ' <span class="mono" title="이어서 실행 ' + h.chunks + '구간">×' + h.chunks + '</span>' : '') + '</td>' +
+      '<td>' + fmtNum(h.found) + '</td><td><b style="color:var(--blue-ink)">+' + fmtNum(h.processed) + '</b></td><td>' + fmtNum(h.skipped) + '</td>' +
+      '<td' + (h.errors ? ' style="color:var(--red);font-weight:700"' : '') + '>' + fmtNum(h.errors) + '</td><td>' + fmtBytes(h.bytes) + '</td>' +
+      '<td style="color:var(--muted)">' + range + (h.limitHit ? ' <span class="pill gray" title="회당 최대 건수 도달">⏭</span>' : '') + '</td>' +
+      '<td>' + (h.notifiedTo ? '<span title="' + esc(h.notifiedTo) + '">📨</span>' : '<span style="color:var(--faint)">–</span>') + '</td>' +
+      '<td style="text-align:right"><button type="button" class="ib" data-run="' + i + '" title="이 회차 메일 보기">📬</button></td></tr>';
+  }
   function renderHistory(hist) {
     $('histCount').textContent = hist.length;
-    var empty = '<tr><td colspan="10" class="empty">아직 실행 이력이 없습니다</td></tr>';
-    var okIcon = function (h) { return h.errors ? '<span title="오류 ' + h.errors + '건">⚠️</span>' : '<span title="정상">✅</span>'; };
-    var range = function (h) { return h.mailFrom ? fmtDayShort(h.mailFrom) + ' ~ ' + fmtDayShort(h.mailTo) : '-'; };
-    $('histMini').innerHTML = hist.slice(0, 3).map(function (h, i) {
-      return '<tr><td>' + okIcon(h) + ' ' + fmtDate(h.startedAt) + '</td><td><b style="color:var(--blue-ink)">+' + fmtNum(h.processed) + '</b></td><td>' + fmtNum(h.found) + '</td><td>' + fmtBytes(h.bytes) + '</td><td style="color:var(--muted)">' + range(h) + '</td><td style="text-align:right"><button type="button" class="ib" data-run="' + i + '" title="이 회차 메일 보기">📬</button></td></tr>';
-    }).join('') || empty;
-    $('histRows').innerHTML = hist.map(function (h, i) {
-      return '<tr><td>' + okIcon(h) + ' ' + fmtDate(h.startedAt) + '</td><td>' + dur(h.startedAt, h.finishedAt) + (h.chunks > 1 ? ' <span class="mono" title="이어서 실행 구간">×' + h.chunks + '</span>' : '') + '</td><td>' + fmtNum(h.found) + '</td><td><b style="color:var(--blue-ink)">+' + fmtNum(h.processed) + '</b></td><td>' + fmtNum(h.skipped) + '</td><td' + (h.errors ? ' style="color:var(--red);font-weight:700"' : '') + '>' + fmtNum(h.errors) + '</td><td>' + fmtBytes(h.bytes) + '</td><td style="color:var(--muted)">' + range(h) + (h.limitHit ? ' <span class="pill gray" title="회당 최대 건수 도달">⏭</span>' : '') + '</td><td>' + (h.notifiedTo ? '<span title="' + esc(h.notifiedTo) + '">📨</span>' : '<span style="color:var(--faint)">–</span>') + '</td><td style="text-align:right"><button type="button" class="ib" data-run="' + i + '" title="이 회차 메일 보기">📬</button></td></tr>';
-    }).join('') || empty;
+    var empty = '<tr><td colspan="11" class="empty">아직 실행 이력이 없습니다</td></tr>';
+    $('histMini').innerHTML = hist.slice(0, 5).map(function (h, i) { return histRow(h, i, false); }).join('') || empty;
+    $('histRows').innerHTML = hist.map(function (h, i) { return histRow(h, i, true); }).join('') || empty;
   }
   function onRunClick(e) {
     var b = e.target.closest('button[data-run]'); if (!b) return;
-    state.ex.run = String(b.dataset.run); state.ex.page = 1;
-    showTab('explorer');
-    if (state.explorer) renderExplorer();
+    openExplorer({ run: String(b.dataset.run) });
   }
   $('histRows').addEventListener('click', onRunClick);
   $('histMini').addEventListener('click', onRunClick);
@@ -519,12 +633,10 @@
 
   // ---------- explorer ----------
   var PAGE = 50;
-  state.ex.page = 1;
   var LABEL_COLORS = ['#e8f0fe:#1967d2', '#fce8e6:#c5221f', '#e6f4ea:#137333', '#fef7e0:#b06000', '#f3e8fd:#7627bb', '#e4f7fb:#007b83', '#fde7f3:#b80672', '#e8eaed:#3c4043'];
   var AV_COLORS = ['#1a73e8', '#d93025', '#188038', '#f9ab00', '#9334e6', '#12b5cb', '#e52592', '#5f6368'];
   function hash(s) { var h = 0; s = String(s || ''); for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
   function labelStyle(name) { var c = LABEL_COLORS[hash(name) % LABEL_COLORS.length].split(':'); return 'background:' + c[0] + ';color:' + c[1]; }
-  function emailOf(addr) { var m = String(addr || '').match(/<([^>]+)>/); return m ? m[1] : String(addr || '').trim(); }
   function initialOf(addr) { var n = nameOnly(addr).replace(/["']/g, '').trim(); return (n[0] || '?').toUpperCase(); }
   function gmDate(iso) {
     if (!iso) return ''; var d = new Date(iso); if (isNaN(d)) return esc(iso);
@@ -565,26 +677,136 @@
     return true;
   }
   function loadExplorer() {
-    $('mlist').innerHTML = '<div class="gm-empty">백업 메일 목록을 불러오는 중…</div>';
-    return call('getExplorerData').then(function (data) { state.explorer = data; renderExplorer(); })
+    $('mlist').innerHTML = '<div class="gm-empty">불러오는 중…</div>';
+    return call('getExplorerData').then(function (data) { state.explorer = data; fillAdvLists(); renderExplorer(); })
       .catch(function (e) { $('mlist').innerHTML = '<div class="gm-empty"><b>불러오기 실패</b>' + esc(e.message || e) + '</div>'; });
   }
+  function allRecords() { return (state.explorer && state.explorer.records) || []; }
   function sourceRecords() {
-    var recs = (state.explorer && state.explorer.records) || [];
+    var recs = allRecords();
     if (state.ex.run !== 'all') {
       var h = (state.explorer.history || [])[Number(state.ex.run)];
       if (h) recs = recs.filter(function (r) { return r.backedUpAt >= h.startedAt && (!h.finishedAt || r.backedUpAt <= h.finishedAt); });
     }
     return recs;
   }
+  var parsedQ = null;
   function matches(r) {
     var x = state.ex;
     if (!folderMatch(r, x.folder)) return false;
     if (x.agenda && r.agenda !== x.agenda) return false;
     if (x.category && r.category !== x.category) return false;
-    if (x.q) { var q = x.q.toLowerCase(); var hay = [r.subject, r.from, r.to, r.cc, r.snippet, r.labels, r.attachments, r.agenda, r.category].join(' | ').toLowerCase(); if (hay.indexOf(q) < 0) return false; }
+    if (parsedQ && !matchSearch(r, parsedQ)) return false;
     return true;
   }
+  var SORTS = { newest: ['최신순', function (a, b) { return String(b.date).localeCompare(String(a.date)); }], oldest: ['오래된순', function (a, b) { return String(a.date).localeCompare(String(b.date)); }],
+    size: ['용량순', function (a, b) { return (Number(b.sizeBytes) || 0) - (Number(a.sizeBytes) || 0); }], sender: ['보낸사람순', function (a, b) { return nameOnly(a.from).localeCompare(nameOnly(b.from), 'ko'); }],
+    subject: ['제목순', function (a, b) { return String(a.subject).localeCompare(String(b.subject), 'ko'); }] };
+
+  // --- 검색 문자열 조작 (칩은 Gmail처럼 검색창의 연산자를 넣고 뺀다) ---
+  function tokensOf(q) { return String(q || '').match(/-?(?:[a-zA-Z]+:)?(?:"[^"]*"|\S+)/g) || []; }
+  function qWithout(q, keyRe) { return tokensOf(q).filter(function (t) { return !keyRe.test(t); }).join(' '); }
+  function qv(v) { return /\s/.test(v) ? '"' + v + '"' : v; }
+  function setQuery(q) { state.ex.q = q.replace(/\s+/g, ' ').trim(); $('exQ').value = state.ex.q; state.ex.page = 1; renderExplorer(); }
+  function toggleOp(keyRe, token) { var q = qWithout(state.ex.q, keyRe); setQuery(token ? q + ' ' + token : q); }
+
+  function fillAdvLists() {
+    var cats = {}, ags = {};
+    allRecords().forEach(function (r) { if (r.category) cats[r.category] = 1; if (r.agenda) ags[r.agenda] = 1; });
+    $('advLabel').innerHTML = '<option value="">라벨 전체</option>' + Object.keys(cats).sort().map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
+    $('advAgenda').innerHTML = '<option value="">안건 전체</option>' + Object.keys(ags).sort().map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
+  }
+
+  // --- 필터 칩 + 팝오버 ---
+  var CHIPS = [
+    { key: 'from', lb: '보낸사람', re: /^-?from:/i }, { key: 'to', lb: '받는사람', re: /^-?to:/i }, { key: 'date', lb: '날짜', re: /^-?(after|before|newer|older):/i },
+    { key: 'att', lb: '첨부파일', re: /^-?(has|filename):/i }, { key: 'label', lb: '라벨', re: /^-?label:/i }, { key: 'agenda', lb: '안건', re: /^-?agenda:/i },
+    { key: 'size', lb: '크기', re: /^-?(larger|smaller):/i }, { key: 'sort', lb: '정렬' },
+  ];
+  function chipValue(c, p) {
+    if (c.key === 'from') return p.from.join(', ') || (p.notFrom.length ? '-' + p.notFrom.join(', ') : '');
+    if (c.key === 'to') return p.to.join(', ');
+    if (c.key === 'date') return (p.after || p.before) ? (p.after || '…') + ' ~ ' + (p.before || '…') : '';
+    if (c.key === 'att') return p.hasAttachment === true ? '있음' : p.hasAttachment === false ? '없음' : p.filename.join(', ');
+    if (c.key === 'label') return p.label.join(', ') || (p.notLabel.length ? '-' + p.notLabel.join(', ') : '');
+    if (c.key === 'agenda') return p.agenda.join(', ');
+    if (c.key === 'size') return p.larger != null ? '> ' + fmtBytes(p.larger) : p.smaller != null ? '< ' + fmtBytes(p.smaller) : '';
+    if (c.key === 'sort') return state.ex.sort === 'newest' ? '' : SORTS[state.ex.sort][0];
+    return '';
+  }
+  function renderChips(p) {
+    var html = CHIPS.map(function (c) {
+      var v = chipValue(c, p), on = !!v;
+      return '<button type="button" class="fchip' + (on ? ' on' : '') + '" data-chip="' + c.key + '">' + (on ? c.lb + ': ' + esc(v) : c.lb) + (on && c.key !== 'sort' ? ' <span class="x" data-clear="' + c.key + '">✕</span>' : ' ▾') + '</button>';
+    }).join('');
+    var active = state.ex.q || state.ex.category || state.ex.agenda || state.ex.folder || state.ex.sort !== 'newest';
+    if (active) html += '<span class="gm-reset" id="exResetAll">필터 초기화</span>';
+    $('gmChips').innerHTML = html;
+  }
+  function counts(fn) { var m = {}; sourceRecords().forEach(function (r) { var k = fn(r); if (k) m[k] = (m[k] || 0) + 1; }); return Object.keys(m).map(function (k) { return { name: k, count: m[k] }; }).sort(function (a, b) { return b.count - a.count || a.name.localeCompare(b.name, 'ko'); }); }
+  function listPop(items, current, onPick, withSearch) {
+    var html = withSearch ? '<div class="ph"><input placeholder="검색" id="popQ"></div>' : '';
+    html += '<div id="popList">' + items.map(function (it) { return '<div class="it' + (current === it.name ? ' on' : '') + '" data-v="' + esc(it.name) + '">' + esc(it.name) + '<span class="ct">' + fmtNum(it.count) + '</span></div>'; }).join('') + '</div>';
+    $('pop').innerHTML = html;
+    $('pop').onclick = function (e) { var it = e.target.closest('.it'); if (it) { onPick(it.dataset.v); closePop(); } };
+    if (withSearch) $('popQ').oninput = function () { var q = this.value.toLowerCase(); document.querySelectorAll('#popList .it').forEach(function (el) { el.hidden = q && el.dataset.v.toLowerCase().indexOf(q) < 0; }); };
+  }
+  function openPop(chipEl, key) {
+    var pop = $('pop'), p = parsedQ || parseSearch('');
+    var gm = chipEl.closest('.gm').getBoundingClientRect(), cr = chipEl.getBoundingClientRect();
+    pop.style.left = (cr.left - gm.left) + 'px'; pop.style.top = (cr.bottom - gm.top + 4) + 'px';
+    if (key === 'from') listPop(counts(function (r) { return nameOnly(r.from) || emailOf(r.from); }), p.from[0], function (v) { toggleOp(/^-?from:/i, 'from:' + qv(v)); }, true);
+    else if (key === 'to') listPop(counts(function (r) { return nameOnly(r.to) || emailOf(r.to); }), p.to[0], function (v) { toggleOp(/^-?to:/i, 'to:' + qv(v)); }, true);
+    else if (key === 'label') listPop(counts(function (r) { return r.category; }), p.label[0], function (v) { toggleOp(/^-?label:/i, 'label:' + qv(v)); });
+    else if (key === 'agenda') listPop(counts(function (r) { return r.agenda; }), p.agenda[0], function (v) { toggleOp(/^-?agenda:/i, 'agenda:' + qv(v)); });
+    else if (key === 'att') {
+      var types = [['📎 첨부 있음', 'has:attachment'], ['📭 첨부 없음', '-has:attachment'], ['📕 PDF', 'filename:pdf'], ['🖼️ 이미지', 'filename:png'], ['📗 스프레드시트', 'filename:xls'], ['📘 문서', 'filename:doc'], ['🗜️ 압축', 'filename:zip']];
+      pop.innerHTML = types.map(function (t) { return '<div class="it" data-q="' + esc(t[1]) + '">' + t[0] + '</div>'; }).join('');
+      pop.onclick = function (e) { var it = e.target.closest('.it'); if (it) { toggleOp(/^-?(has|filename):/i, it.dataset.q); closePop(); } };
+    } else if (key === 'date') {
+      var now = new Date(), presets = [['오늘', 0], ['지난 7일', 7], ['지난 30일', 30], ['지난 90일', 90], ['올해', 'year']];
+      pop.innerHTML = presets.map(function (t) { return '<div class="it" data-d="' + t[1] + '">' + t[0] + '</div>'; }).join('') +
+        '<div class="sep"></div><div class="rng"><input type="date" id="popA" value="' + (p.after || '') + '"><span>~</span><input type="date" id="popB" value="' + (p.before || '') + '"></div><div class="foot"><button type="button" class="sm primary" id="popApply">적용</button></div>';
+      pop.onclick = function (e) {
+        var it = e.target.closest('.it');
+        if (it) { var d = it.dataset.d, a; if (d === 'year') a = now.getFullYear() + '-01-01'; else { var t = new Date(now); t.setDate(t.getDate() - Number(d)); a = isoDay(t); } toggleOp(/^-?(after|before|newer|older):/i, 'after:' + a); closePop(); }
+        if (e.target.id === 'popApply') { var q = qWithout(state.ex.q, /^-?(after|before|newer|older):/i); if ($('popA').value) q += ' after:' + $('popA').value; if ($('popB').value) q += ' before:' + $('popB').value; setQuery(q); closePop(); }
+      };
+    } else if (key === 'size') {
+      var sizes = [['> 100 KB', 'larger:100K'], ['> 1 MB', 'larger:1M'], ['> 5 MB', 'larger:5M'], ['> 10 MB', 'larger:10M'], ['< 100 KB', 'smaller:100K'], ['< 1 MB', 'smaller:1M']];
+      pop.innerHTML = sizes.map(function (t) { return '<div class="it" data-q="' + t[1] + '">' + t[0] + '</div>'; }).join('');
+      pop.onclick = function (e) { var it = e.target.closest('.it'); if (it) { toggleOp(/^-?(larger|smaller):/i, it.dataset.q); closePop(); } };
+    } else if (key === 'sort') {
+      pop.innerHTML = Object.keys(SORTS).map(function (k) { return '<div class="it' + (state.ex.sort === k ? ' on' : '') + '" data-s="' + k + '">' + SORTS[k][0] + '</div>'; }).join('');
+      pop.onclick = function (e) { var it = e.target.closest('.it'); if (it) { state.ex.sort = it.dataset.s; state.ex.page = 1; renderExplorer(); closePop(); } };
+    }
+    pop.hidden = false;
+  }
+  function closePop() { $('pop').hidden = true; }
+  $('gmChips').addEventListener('click', function (e) {
+    var x = e.target.closest('[data-clear]');
+    if (x) { var c = CHIPS.filter(function (c) { return c.key === x.dataset.clear; })[0]; setQuery(qWithout(state.ex.q, c.re)); e.stopPropagation(); return; }
+    if (e.target.id === 'exResetAll') { state.ex.sort = 'newest'; openExplorer({}); return; }
+    var chip = e.target.closest('[data-chip]'); if (!chip) return;
+    if (!$('pop').hidden && $('pop').dataset.key === chip.dataset.chip) { closePop(); return; }
+    $('pop').dataset.key = chip.dataset.chip; openPop(chip, chip.dataset.chip); e.stopPropagation();
+  });
+  document.addEventListener('click', function (e) { if (!e.target.closest('#pop') && !e.target.closest('[data-chip]')) closePop(); if (!e.target.closest('.gm-searchwrap')) hideAdv(); });
+
+  // --- 고급 검색 ---
+  function hideAdv() { $('adv').hidden = true; $('gmSearch').classList.remove('open'); $('exAdvBtn').classList.remove('on'); }
+  $('exAdvBtn').addEventListener('click', function () {
+    var open = $('adv').hidden; $('adv').hidden = !open; $('gmSearch').classList.toggle('open', open); this.classList.toggle('on', open);
+    if (open) { var p = parseSearch(state.ex.q), f = $('adv').elements; f.from.value = p.from[0] || ''; f.to.value = p.to[0] || ''; f.subject.value = p.subject[0] || ''; f.words.value = p.terms.join(' '); f.not.value = p.not.join(' '); f.after.value = p.after || ''; f.before.value = p.before || ''; f.hasAttachment.checked = p.hasAttachment === true; f.in.value = p.in || 'anywhere'; f.label.value = p.label[0] || ''; f.agenda.value = p.agenda[0] || ''; f.sizeVal.value = p.larger != null ? Math.round(p.larger / 1048576 * 10) / 10 : p.smaller != null ? Math.round(p.smaller / 1048576 * 10) / 10 : ''; f.sizeOp.value = p.smaller != null ? 'smaller' : 'larger'; f.sizeUnit.value = 'M'; }
+  });
+  $('adv').addEventListener('submit', function (e) {
+    e.preventDefault(); var f = this.elements, o = { from: f.from.value, to: f.to.value, subject: f.subject.value, words: f.words.value, not: f.not.value, hasAttachment: f.hasAttachment.checked, after: f.after.value, before: f.before.value, in: f.in.value, label: f.label.value, agenda: f.agenda.value };
+    if (f.sizeVal.value) o[f.sizeOp.value] = f.sizeVal.value + f.sizeUnit.value;
+    setQuery(buildSearchQuery(o)); hideAdv();
+  });
+  $('advReset').addEventListener('click', function () { $('adv').reset(); setQuery(''); });
+
+  // --- 내비 ---
   function navItem(key, val, ic, lb, ct, active, swatch) {
     return '<div class="it' + (active ? ' active' : '') + '" data-k="' + key + '" data-v="' + esc(val) + '">' + (swatch ? '<span class="sw" style="' + swatch + '"></span>' : '<span class="ic">' + ic + '</span>') + '<span class="lb">' + esc(lb) + '</span>' + (ct != null ? '<span class="ct">' + fmtNum(ct) + '</span>' : '') + '</div>';
   }
@@ -605,25 +827,22 @@
     Object.keys(cats).sort().forEach(function (c) { chips += '<button type="button" class="chip' + (x.category === c ? ' active' : '') + '" data-k="category" data-v="' + esc(c) + '">' + esc(c) + '</button>'; });
     Object.keys(agendas).sort().forEach(function (a) { chips += '<button type="button" class="chip' + (x.agenda === a ? ' active' : '') + '" data-k="agenda" data-v="' + esc(a) + '">💼 ' + esc(a) + '</button>'; });
     $('exNavChips').innerHTML = chips;
-    var where = x.category ? '라벨: ' + x.category : x.agenda ? '안건: ' + x.agenda : (FOLDERS.filter(function (f) { return f.key === x.folder; })[0] || FOLDERS[0]).lb;
-    $('exWhere').textContent = where;
-    var fc = '';
-    if (x.folder && (x.category || x.agenda)) fc += '<span class="chipx" data-k="folder" data-v="">' + (FOLDERS.filter(function (f) { return f.key === x.folder; })[0] || {}).lb + ' ✕</span>';
-    if (x.category && x.agenda) fc += '<span class="chipx" data-k="agenda" data-v="">' + esc(x.agenda) + ' ✕</span>';
-    if (x.q) fc += '<span class="chipx" data-k="q" data-v="">🔍 ' + esc(x.q) + ' ✕</span>';
-    $('exFilterChips').innerHTML = fc;
+    $('exWhere').textContent = x.category ? '🏷 ' + x.category : x.agenda ? '💼 ' + x.agenda : (FOLDERS.filter(function (f) { return f.key === x.folder; })[0] || FOLDERS[0]).lb;
   }
   function renderExplorer() {
+    parsedQ = state.ex.q ? parseSearch(state.ex.q) : null;
     var src = sourceRecords();
-    var hits = src.filter(matches);
+    var hits = src.filter(matches).sort(SORTS[state.ex.sort][1]);
     $('exTotal').textContent = fmtNum(src.length) + '건';
     renderNav(src);
+    renderChips(parsedQ || parseSearch(''));
     var pages = Math.max(1, Math.ceil(hits.length / PAGE));
     if (state.ex.page > pages) state.ex.page = pages;
     var start = (state.ex.page - 1) * PAGE, slice = hits.slice(start, start + PAGE);
     $('exPage').textContent = hits.length ? (start + 1) + '–' + (start + slice.length) + ' / ' + fmtNum(hits.length) : '0 / 0';
     $('exPrev').disabled = state.ex.page <= 1; $('exNext').disabled = state.ex.page >= pages;
     $('exClear').hidden = !state.ex.q;
+    state.ex.hits = hits;
     $('mlist').innerHTML = slice.map(function (r) {
       var out = isSentRec(r), atts = String(r.attachments || '').trim();
       var star = /(^|,\s*)(IMPORTANT|STARRED)(\s*,|$)/.test(String(r.labels || ''));
@@ -634,6 +853,7 @@
         '<span class="sd' + (out ? ' sentme' : '') + '">' + who + '</span>' +
         '<span class="txt">' + (showCat ? '<span class="lb" style="' + labelStyle(r.category) + '">' + esc(r.category) + '</span>' : '') + '<span class="sj">' + esc(r.subject || '(제목 없음)') + '</span><span class="sn"> – ' + esc(r.snippet) + '</span></span>' +
         (atts ? '<span class="att" title="' + esc(atts) + '">📎</span>' : '') +
+        '<span class="sz">' + fmtBytes(r.sizeBytes) + '</span>' +
         '<span class="dt">' + gmDate(r.date) + '</span></div>';
     }).join('') || '<div class="gm-empty"><div style="font-size:40px">📭</div><b>메일이 없습니다</b></div>';
   }
@@ -642,23 +862,22 @@
     if (k === 'folder') { x.folder = v; x.category = ''; x.agenda = ''; }
     else if (k === 'category') { x.category = (x.category === v ? '' : v); x.agenda = ''; }
     else if (k === 'agenda') { x.agenda = (x.agenda === v ? '' : v); x.category = ''; }
-    else if (k === 'q') { x.q = v; $('exQ').value = v; }
     x.page = 1; renderExplorer();
   }
   function onNavClick(e) { var it = e.target.closest('[data-k]'); if (!it || it.tagName === 'SELECT') return; setFilter(it.dataset.k, it.dataset.v); }
   $('exNav').addEventListener('click', onNavClick);
   $('exNavChips').addEventListener('click', onNavClick);
-  $('exFilterChips').addEventListener('click', onNavClick);
   $('exNav').addEventListener('change', function (e) { if (e.target.id === 'exRun') { state.ex.run = e.target.value; state.ex.selected = null; state.ex.page = 1; renderExplorer(); } });
   var qTimer;
-  $('exQ').addEventListener('input', function () { var v = this.value.trim(); clearTimeout(qTimer); qTimer = setTimeout(function () { state.ex.q = v; state.ex.page = 1; renderExplorer(); }, 150); });
-  $('exClear').addEventListener('click', function () { setFilter('q', ''); });
+  $('exQ').addEventListener('input', function () { var v = this.value; clearTimeout(qTimer); qTimer = setTimeout(function () { state.ex.q = v.trim(); state.ex.page = 1; renderExplorer(); }, 180); });
+  $('exQ').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(qTimer); state.ex.q = this.value.trim(); state.ex.page = 1; renderExplorer(); hideAdv(); } });
+  $('exClear').addEventListener('click', function () { setQuery(''); });
   $('exPrev').addEventListener('click', function () { state.ex.page -= 1; renderExplorer(); $('mlist').scrollTop = 0; });
   $('exNext').addEventListener('click', function () { state.ex.page += 1; renderExplorer(); $('mlist').scrollTop = 0; });
   $('exRefresh').addEventListener('click', function () { state.explorer = null; loadExplorer(); });
   $('mlist').addEventListener('click', function (e) {
     var row = e.target.closest('.gm-row'); if (!row) return;
-    var r = (state.explorer.records || []).filter(function (x) { return String(x.id) === row.dataset.id; })[0];
+    var r = allRecords().filter(function (x) { return String(x.id) === row.dataset.id; })[0];
     if (r) openMessage(r);
   });
   function attCard(a) {
@@ -672,6 +891,7 @@
     state.ex.selected = r.id;
     document.querySelectorAll('.gm-row').forEach(function (el) { el.classList.toggle('active', el.dataset.id === String(r.id)); });
     $('split').classList.add('reading');
+    var hits = state.ex.hits || [], idx = hits.indexOf(r);
     var out = isSentRec(r), atts = parseAtts(r), av = AV_COLORS[hash(emailOf(r.from)) % AV_COLORS.length];
     var labels = String(r.labels || '').split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s && !/^(INBOX|SENT|UNREAD|IMPORTANT|STARRED|DRAFT|CATEGORY_\w+)$/.test(s); });
     var chips = (r.category && r.category !== '받은편지함' && r.category !== '보낸편지함' ? [r.category] : []).concat(labels.filter(function (l) { return l !== r.category; }));
@@ -680,6 +900,9 @@
       '<div class="gm-rt"><button type="button" class="gm-ib gm-back" id="readerBack" title="목록">←</button>' +
       (out ? '<span class="pill purple">📤 보낸 편지</span>' : '<span class="pill blue">📥 받은 편지</span>') + (r.agenda ? '<span class="pill gray" style="margin-left:4px">💼 ' + esc(r.agenda) + '</span>' : '') +
       '<span class="sp"></span>' +
+      '<button type="button" class="gm-ib" id="rdPrev" title="이전 메일 (k)"' + (idx <= 0 ? ' disabled' : '') + '>‹</button><span style="font-size:12px;color:#5f6368">' + (idx + 1) + ' / ' + hits.length + '</span><button type="button" class="gm-ib" id="rdNext" title="다음 메일 (j)"' + (idx >= hits.length - 1 ? ' disabled' : '') + '>›</button>' +
+      '<span style="width:8px"></span>' +
+      '<button type="button" class="gm-ib" id="rdFrom" title="이 사람이 보낸 메일">👤</button>' +
       (emlDl ? '<a class="gm-ib" href="' + esc(emlDl) + '" title="원본(.eml) 다운로드" target="_blank" rel="noopener">⬇</a>' : '') +
       (r.driveUrl ? '<a class="gm-ib" href="' + esc(r.driveUrl) + '" title="Drive에서 원본 열기" target="_blank" rel="noopener">↗</a>' : '') + '</div>' +
       '<div class="gm-msg"><h2>' + esc(r.subject || '(제목 없음)') + chips.map(function (c) { return '<span class="lb" style="' + labelStyle(c) + '">' + esc(c) + '</span>'; }).join('') + '</h2>' +
@@ -695,9 +918,20 @@
         (atts.some(function (a) { return !a.fileId; }) ? '<div class="gm-note">' + (emlDl ? '첨부는 <a href="' + esc(emlDl) + '" target="_blank" rel="noopener">원본(.eml) ⬇</a> 안에 있습니다' : '원본(.eml)에서 열 수 있습니다') + '</div>' : '') + '</div>' : '') +
       '</div>';
     $('readerBack').onclick = function () { $('split').classList.remove('reading'); };
+    $('rdPrev').onclick = function () { if (idx > 0) openMessage(hits[idx - 1]); };
+    $('rdNext').onclick = function () { if (idx < hits.length - 1) openMessage(hits[idx + 1]); };
+    $('rdFrom').onclick = function () { setQuery('from:' + qv(emailOf(r.from) || nameOnly(r.from))); };
     call('getMessageBody', r.id).then(function (res) { if (state.ex.selected !== r.id) return; $('readerBody').textContent = (res && res.body) ? res.body : (r.snippet || '(본문 미리보기 없음 — Drive의 원본을 열어 확인하세요)'); })
       .catch(function () { $('readerBody').textContent = r.snippet || ''; });
   }
+  document.addEventListener('keydown', function (e) {
+    if (state.tab !== 'explorer' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+    var hits = state.ex.hits || [], idx = hits.findIndex(function (h) { return h.id === state.ex.selected; });
+    if (e.key === 'j' && idx < hits.length - 1) openMessage(hits[idx + 1]);
+    if (e.key === 'k' && idx > 0) openMessage(hits[idx - 1]);
+    if (e.key === '/') { e.preventDefault(); $('exQ').focus(); }
+    if (e.key === 'Escape') { closePop(); hideAdv(); }
+  });
 
   // ---------- init ----------
   loadDashboard();

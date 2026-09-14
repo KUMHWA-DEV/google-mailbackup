@@ -108,7 +108,10 @@ http.createServer((req, res) => {
     return;
   }
   if (req.url === '/' || req.url.startsWith('/index')) {
-    const html = fs.readFileSync(path.join(ROOT, 'src', 'index.html'), 'utf8').replace('<!-- DEV_SHIM -->', SHIM);
+    const searchLib = fs.readFileSync(path.join(ROOT, 'src', 'lib', 'search.js'), 'utf8');
+    const html = fs.readFileSync(path.join(ROOT, 'src', 'index.html'), 'utf8')
+      .replace('<!-- DEV_SHIM -->', SHIM)
+      .replace('<?!= searchLib ?>', searchLib); // Apps Script 템플릿 스크립틀릿을 로컬에서 대체
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     res.end(html);
     return;

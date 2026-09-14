@@ -2,10 +2,18 @@
  * 웹앱 진입점과 클라이언트(google.script.run)에서 호출하는 함수들.
  */
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('index')
+  var t = HtmlService.createTemplateFromFile('index');
+  t.searchLib = searchClientLib_();
+  return t.evaluate()
     .setTitle('Mail Backup')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+/** lib/search.js의 함수 소스를 클라이언트 스크립트로 내보낸다 (서버와 같은 검색 문법). */
+function searchClientLib_() {
+  return 'var SEARCH_LIST_KEYS = ' + JSON.stringify(SEARCH_LIST_KEYS) + ';\n' +
+    SEARCH_CLIENT_FUNCS.map(function (f) { return f.toString(); }).join('\n');
 }
 
 /** 대시보드/이력/설정 화면에 필요한 모든 상태를 한 번에. */

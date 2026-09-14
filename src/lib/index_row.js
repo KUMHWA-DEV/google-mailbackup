@@ -9,6 +9,12 @@ var INDEX_HEADERS = [
   'sizeBytes', 'attachments', 'attachmentFiles', 'driveFileId', 'driveUrl', 'backedUpAt', 'bodyPreview',
 ];
 var INDEX_LIST_COLUMNS = INDEX_HEADERS.length - 1; // bodyPreview 제외
+
+// Node에서는 search.js를 명시적으로 불러온다 (Apps Script에서는 전역으로 이미 존재).
+if (typeof module !== 'undefined' && typeof parseSearch === 'undefined') {
+  var searchLib_ = require('./search.js');
+  var parseSearch = searchLib_.parseSearch, matchSearch = searchLib_.matchSearch;
+}
 var BODY_PREVIEW_MAX = 20000;
 
 function headersFromPayload(payload) {
@@ -80,6 +86,8 @@ function filterRecords(records, f) {
   var dTo = f.dateTo ? String(f.dateTo).slice(0, 10) : '';
   var bFrom = f.backedUpFrom ? String(f.backedUpFrom) : '';
   var bTo = f.backedUpTo ? String(f.backedUpTo) : '';
+  // q는 Gmail식 연산자(from: subject: has:attachment after: …)를 지원하는 search.js 파서로 처리한다.
+  var parsed = (q && typeof parseSearch === 'function') ? parseSearch(f.q) : null;
   var out = records.filter(function (r) {
     if (cat && r.category !== cat) return false;
     if (agenda && r.agenda !== agenda) return false;
@@ -93,7 +101,8 @@ function filterRecords(records, f) {
     var backed = String(r.backedUpAt || '');
     if (bFrom && backed < bFrom) return false;
     if (bTo && backed > bTo) return false;
-    if (q) {
+    if (parsed) { if (!matchSearch(r, parsed)) return false; }
+    else if (q) {
       var hay = [r.subject, r.from, r.to, r.cc, r.snippet, r.labels, r.attachments, r.agenda].map(lc).join(' | ');
       if (hay.indexOf(q) < 0) return false;
     }
