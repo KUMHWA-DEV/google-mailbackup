@@ -18,7 +18,7 @@
     "https://www.googleapis.com/auth/userinfo.email"
   ],
   "webapp": {
-    "executeAs": "USER_DEPLOYING",
+    "executeAs": "USER_ACCESSING",
     "access": "DOMAIN"
   },
   "addOns": {

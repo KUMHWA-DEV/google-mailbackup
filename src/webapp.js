@@ -46,7 +46,7 @@ function getDashboard() {
     folderUrl: links.folderUrl || null,
     indexSheetUrl: links.indexSheetUrl || null,
     webAppUrl: links.webAppUrl || null,
-    user: Session.getEffectiveUser().getEmail(),
+    user: Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail(),
   };
 }
 

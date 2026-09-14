@@ -9,7 +9,7 @@
  *     커서 삭제, 실행 이력 기록, 알림 메일 발송
  */
 function runBackup() {
-  var lock = LockService.getScriptLock();
+  var lock = LockService.getUserLock(); // 사용자별 잠금: 같은 사람의 백업만 겹치지 않게
   if (!lock.tryLock(10 * 1000)) {
     Logger.log('다른 백업 실행이 진행 중이라 건너뜁니다.');
     return;

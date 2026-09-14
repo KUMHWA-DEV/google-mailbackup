@@ -28,7 +28,13 @@ var PROP = {
   FOLDER_ID: 'BACKUP_FOLDER_ID',
 };
 
-function props_() { return PropertiesService.getScriptProperties(); }
+/**
+ * 상태·설정 저장소. 사용자별(UserProperties)이다.
+ * 웹앱은 "접속한 사용자"로 실행되므로(appsscript.json webapp.executeAs=USER_ACCESSING) 직원마다
+ * 자기 설정·인덱스 시트·백업 폴더·트리거·이력을 따로 가지며, 백업은 각자의 내 드라이브에 들어간다.
+ * 트리거로 실행될 때도 트리거를 만든 사용자 권한으로 돌아 같은 사용자 속성을 읽는다.
+ */
+function props_() { return PropertiesService.getUserProperties(); }
 function getProp_(key, fallback) {
   var v = props_().getProperty(key);
   return v == null || v === '' ? fallback : v;

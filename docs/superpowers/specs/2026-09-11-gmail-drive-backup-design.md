@@ -133,3 +133,11 @@ localStorage 이력(스크립트 속성으로 대체), 45일 고정 주기(설�
 - **Gmail 애드온**(`src/addon.js`, 매니페스트 `addOns`): 홈 카드(상태·보관 현황·지금 백업·앱 열기·Drive·최근 3회),
   메일 열람 시 컨텍스트 카드(백업 여부, Drive 원본, .eml, 첨부 다운로드). 스코프
   `gmail.addons.execute`, `gmail.addons.current.message.metadata` 추가. 배포 절차는 README 2-2.
+
+## 2026-09-14 변경: 회사 전체 배포 = 사용자별 실행
+
+- 웹앱 `executeAs: USER_ACCESSING`(접속 사용자 권한), 상태 저장소를 `getUserProperties()`로, 잠금을
+  `getUserLock()`으로 바꿨다. 직원마다 자기 Gmail → 자기 내 드라이브 `Mail Backup` 폴더 + 인덱스 시트,
+  자기 트리거·설정·이력. 스크립트 소유자는 남의 데이터를 만지지 않는다.
+- 배포 권장안: 웹앱 URL 공유가 메인(전체 UI). Gmail 애드온은 같은 스크립트로 선택 배포(카드 UI만 가능하므로
+  보조). 앱 런처 노출은 Marketplace 비공개 앱(관리자).
