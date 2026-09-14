@@ -277,6 +277,19 @@
   .gm-row .sz { flex: none; color: #9aa0a6; font-size: 11px; width: 52px; text-align: right; }
   .gm-row .dt { flex: none; width: 64px; text-align: right; font-size: 12px; color: #5f6368; }
   .gm-row.active .dt, .gm-row.active .sn { color: #202124; }
+  .gm-row .cnt { color: #5f6368; font-size: 12px; margin-left: 4px; }
+  .gm-th { border-bottom: 1px solid #e0e3e7; }
+  .gm-th .hd { display: flex; gap: 12px; align-items: flex-start; padding: 12px 8px; cursor: pointer; }
+  .gm-th .hd:hover { background: #f8f9fa; }
+  .gm-th.open .hd { cursor: default; }
+  .gm-th .l { flex: 1; min-width: 0; font-size: 12px; color: #5f6368; }
+  .gm-th .l .fr { font-size: 14px; color: #202124; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+  .gm-th .l .fr b { font-weight: 700; }
+  .gm-th .l .sn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #5f6368; }
+  .gm-th .r { font-size: 12px; color: #5f6368; white-space: nowrap; display: flex; align-items: center; gap: 2px; }
+  .gm-th .bd { padding: 0 8px 18px 60px; }
+  .gm-th.hit .hd { box-shadow: inset 3px 0 0 #f4b400; }
+  .gm-thbar { display: flex; align-items: center; gap: 8px; padding: 10px 24px 0; font-size: 12px; color: #5f6368; }
   .gm-empty { padding: 60px 20px; text-align: center; color: #5f6368; font-size: 13px; }
   .gm-empty b { display: block; color: #202124; font-size: 15px; margin: 10px 0 4px; font-weight: 500; }
   .gm-reader { flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; }
@@ -440,6 +453,7 @@
           <div class="gm-listwrap">
             <div class="gm-tools">
               <span id="exWhere" style="font-weight:500;color:#202124">전체 메일</span>
+              <button type="button" class="fchip on" id="exThreads" style="height:26px;padding:0 9px;font-size:12px;margin-left:10px" title="같은 대화를 한 줄로 묶기">🧵 대화 묶기</button>
               <div class="pg"><span id="exPage">0 / 0</span><button type="button" class="gm-ib" id="exPrev" title="이전">‹</button><button type="button" class="gm-ib" id="exNext" title="다음">›</button></div>
             </div>
             <div class="gm-list" id="mlist"><div class="gm-empty">불러오는 중…</div></div>
@@ -511,7 +525,7 @@
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
-  var state = { scope: null, sinceDate: '', dash: null, explorer: null, tab: 'overview', ex: { q: '', folder: '', agenda: '', category: '', run: 'all', selected: null, page: 1, sort: 'newest' }, pollTimer: null };
+  var state = { scope: null, sinceDate: '', dash: null, explorer: null, tab: 'overview', ex: { q: '', folder: '', agenda: '', category: '', run: 'all', selected: null, page: 1, sort: 'newest', threads: true }, pollTimer: null };
 
   // ---------- helpers ----------
   function call(fn, arg) {
@@ -1020,6 +1034,45 @@
     $('exPrev').disabled = state.ex.page <= 1; $('exNext').disabled = state.ex.page >= pages;
     $('exClear').hidden = !state.ex.q;
     state.ex.hits = hits;
+    if (state.ex.threads) {
+      var groups = {}, order = [];
+      hits.forEach(function (r) { var k = r.threadId || r.id; if (!groups[k]) { groups[k] = { id: k, msgs: [], hitIds: {} }; order.push(k); } groups[k].msgs.push(r); groups[k].hitIds[r.id] = true; });
+      // 대화의 나머지 메일(검색에 안 걸린 것)도 포함해 시간순으로
+      var byThread = {};
+      src.forEach(function (r) { var k = r.threadId || r.id; (byThread[k] = byThread[k] || []).push(r); });
+      var threads = order.map(function (k) {
+        var msgs = (byThread[k] || groups[k].msgs).slice().sort(function (a, b) { return String(a.date).localeCompare(String(b.date)); });
+        var latest = msgs[msgs.length - 1];
+        return { id: k, msgs: msgs, latest: latest, hitIds: groups[k].hitIds, matched: Object.keys(groups[k].hitIds).length,
+          date: latest.date, subject: latest.subject, from: latest.from, to: latest.to, sizeBytes: msgs.reduce(function (s, m) { return s + (Number(m.sizeBytes) || 0); }, 0) };
+      });
+      threads.sort(SORTS[state.ex.sort][1]);
+      var tpages = Math.max(1, Math.ceil(threads.length / PAGE));
+      if (state.ex.page > tpages) state.ex.page = tpages;
+      var tstart = (state.ex.page - 1) * PAGE, tslice = threads.slice(tstart, tstart + PAGE);
+      $('exPage').textContent = threads.length ? (tstart + 1) + '–' + (tstart + tslice.length) + ' / ' + fmtNum(threads.length) + ' 대화' : '0 / 0';
+      $('exPrev').disabled = state.ex.page <= 1; $('exNext').disabled = state.ex.page >= tpages;
+      state.ex.items = threads;
+      var me = (state.dash && state.dash.user || '').toLowerCase();
+      $('mlist').innerHTML = tslice.map(function (t) {
+        var atts = t.msgs.some(function (m) { return String(m.attachments || '').trim(); });
+        var star = t.msgs.some(function (m) { return /(^|,\s*)(IMPORTANT|STARRED)(\s*,|$)/.test(String(m.labels || '')); });
+        var names = [], seen = {};
+        t.msgs.forEach(function (m) { var e = emailOf(m.from).toLowerCase(); var n = (e && e === me) || isSentRec(m) ? '나' : (nameOnly(m.from) || emailOf(m.from)); n = n.split(' ')[0] || n; if (!seen[n]) { seen[n] = 1; names.push(n); } });
+        var who = names.length > 3 ? names[0] + ' … ' + names[names.length - 1] : names.join(', ');
+        var cats = {}; t.msgs.forEach(function (m) { if (m.category && m.category !== '받은편지함' && m.category !== '보낸편지함') cats[m.category] = 1; });
+        var cat = Object.keys(cats)[0];
+        return '<div class="gm-row' + (state.ex.selected === t.id ? ' active' : '') + '" data-tid="' + esc(t.id) + '" title="' + esc(t.subject) + '">' +
+          '<span class="star' + (star ? ' on' : '') + '">' + (star ? '★' : '☆') + '</span>' +
+          '<span class="sd">' + esc(who) + (t.msgs.length > 1 ? '<span class="cnt">' + t.msgs.length + '</span>' : '') + '</span>' +
+          '<span class="txt">' + (cat ? '<span class="lb" style="' + labelStyle(cat) + '">' + esc(cat) + '</span>' : '') + '<span class="sj">' + esc(String(t.subject || '(제목 없음)').replace(/^(re|fwd?|fw)\s*:\s*/i, '')) + '</span><span class="sn"> – ' + esc(t.latest.snippet) + '</span></span>' +
+          (atts ? '<span class="att">📎</span>' : '') +
+          '<span class="sz">' + fmtBytes(t.sizeBytes) + '</span>' +
+          '<span class="dt">' + gmDate(t.date) + '</span></div>';
+      }).join('') || '<div class="gm-empty"><div style="font-size:40px">📭</div><b>메일이 없습니다</b></div>';
+      return;
+    }
+    state.ex.items = hits;
     $('mlist').innerHTML = slice.map(function (r) {
       var out = isSentRec(r), atts = String(r.attachments || '').trim();
       var star = /(^|,\s*)(IMPORTANT|STARRED)(\s*,|$)/.test(String(r.labels || ''));
@@ -1054,9 +1107,12 @@
   $('exRefresh').addEventListener('click', function () { state.explorer = null; loadExplorer(); });
   $('mlist').addEventListener('click', function (e) {
     var row = e.target.closest('.gm-row'); if (!row) return;
+    if (row.dataset.tid) { var t = (state.ex.items || []).filter(function (x) { return String(x.id) === row.dataset.tid; })[0]; if (t) openThread(t); return; }
     var r = allRecords().filter(function (x) { return String(x.id) === row.dataset.id; })[0];
     if (r) openMessage(r);
   });
+  $('exThreads').addEventListener('click', function () { state.ex.threads = !state.ex.threads; this.classList.toggle('on', state.ex.threads); state.ex.page = 1; state.ex.selected = null; renderExplorer(); });
+  function openItem(it) { if (it && it.msgs) openThread(it); else if (it) openMessage(it); }
   function attCard(a) {
     var has = !!a.fileId, icon = fileIcon(a.name, a.mime), isImg = icon === '🖼️';
     return '<div class="gm-card' + (has ? '' : ' nodl') + '" title="' + esc(a.name) + '">' +
@@ -1101,11 +1157,57 @@
     call('getMessageBody', r.id).then(function (res) { if (state.ex.selected !== r.id) return; $('readerBody').textContent = (res && res.body) ? res.body : (r.snippet || '(본문 미리보기 없음 — Drive의 원본을 열어 확인하세요)'); })
       .catch(function () { $('readerBody').textContent = r.snippet || ''; });
   }
+  function msgBlock(m, open, hit) {
+    var out = isSentRec(m), atts = parseAtts(m), av = AV_COLORS[hash(emailOf(m.from)) % AV_COLORS.length];
+    var emlDl = dlUrl(m.driveFileId);
+    return '<div class="gm-th' + (open ? ' open' : '') + (hit ? ' hit' : '') + '" data-mid="' + esc(m.id) + '">' +
+      '<div class="hd"><div class="gm-av" style="background:' + av + '">' + esc(initialOf(m.from)) + '</div><div class="l">' +
+      '<div class="fr"><b>' + esc(out ? '나' : (nameOnly(m.from) || emailOf(m.from))) + '</b><span style="color:#5f6368">&lt;' + esc(emailOf(m.from)) + '&gt;</span>' + (m.agenda ? '<span class="pill gray" style="margin-left:4px">💼 ' + esc(m.agenda) + '</span>' : '') + (String(m.attachments || '').trim() ? '<span title="' + esc(m.attachments) + '">📎</span>' : '') + '</div>' +
+      (open ? '<details><summary>받는사람: ' + esc(nameOnly(m.to) || emailOf(m.to) || '-') + (m.cc ? ', 참조 ' + esc(nameOnly(m.cc)) : '') + ' ▾</summary><table><tr><td>보낸사람:</td><td>' + esc(m.from) + '</td></tr><tr><td>받는사람:</td><td>' + esc(m.to || '-') + '</td></tr>' + (m.cc ? '<tr><td>참조:</td><td>' + esc(m.cc) + '</td></tr>' : '') + '<tr><td>날짜:</td><td>' + gmDateLong(m.date) + '</td></tr><tr><td>Gmail 라벨:</td><td>' + esc(m.labels || '-') + '</td></tr><tr><td>Drive 폴더:</td><td>' + esc(m.category) + '</td></tr><tr><td>백업:</td><td>' + fmtDate(m.backedUpAt) + ' · ' + fmtBytes(m.sizeBytes) + '</td></tr></table></details>' : '<div class="sn">' + esc(m.snippet) + '</div>') +
+      '</div><div class="r">' + gmDate(m.date) +
+      (open ? (emlDl ? '<a class="gm-ib" href="' + esc(emlDl) + '" title="원본(.eml) 다운로드" target="_blank" rel="noopener">⬇</a>' : '') + (m.driveUrl ? '<a class="gm-ib" href="' + esc(m.driveUrl) + '" title="Drive에서 원본 열기" target="_blank" rel="noopener">↗</a>' : '') : '') + '</div></div>' +
+      (open ? '<div class="bd"><div class="gm-bd" style="padding-left:0" id="mb_' + esc(m.id) + '">본문을 불러오는 중…</div>' +
+        (atts.length ? '<div class="gm-atts" style="margin-left:0"><div class="t">📎 ' + atts.length + '개</div><div class="gm-cards">' + atts.map(attCard).join('') + '</div>' + (atts.some(function (a) { return !a.fileId; }) ? '<div class="gm-note">' + (emlDl ? '첨부는 <a href="' + esc(emlDl) + '" target="_blank" rel="noopener">원본(.eml) ⬇</a> 안에 있습니다' : '원본(.eml)에서 열 수 있습니다') + '</div>' : '') + '</div>' : '') + '</div>' : '') +
+      '</div>';
+  }
+  function loadBody(m) {
+    var el = $('mb_' + m.id); if (!el || el.dataset.loaded) return; el.dataset.loaded = '1';
+    call('getMessageBody', m.id).then(function (res) { el.textContent = (res && res.body) ? res.body : (m.snippet || '(본문 미리보기 없음 — Drive의 원본을 열어 확인하세요)'); })
+      .catch(function () { el.textContent = m.snippet || ''; });
+  }
+  function openThread(t) {
+    state.ex.selected = t.id;
+    document.querySelectorAll('.gm-row').forEach(function (el) { el.classList.toggle('active', el.dataset.tid === String(t.id)); });
+    $('split').classList.add('reading');
+    var items = state.ex.items || [], idx = items.indexOf(t);
+    var labels = {}; t.msgs.forEach(function (m) { String(m.labels || '').split(',').forEach(function (s) { s = s.trim(); if (s && !/^(INBOX|SENT|UNREAD|IMPORTANT|STARRED|DRAFT|CATEGORY_\w+)$/.test(s)) labels[s] = 1; }); if (m.category && m.category !== '받은편지함' && m.category !== '보낸편지함') labels[m.category] = 1; });
+    var openIds = {}; openIds[t.latest.id] = 1; if (parsedQ) t.msgs.forEach(function (m) { if (t.hitIds[m.id]) openIds[m.id] = 1; });
+    $('reader').innerHTML =
+      '<div class="gm-rt"><button type="button" class="gm-ib gm-back" id="readerBack" title="목록">←</button>' +
+      '<span class="pill blue">🧵 대화 ' + t.msgs.length + '건</span>' + (parsedQ && t.matched < t.msgs.length ? '<span class="pill amber" style="margin-left:4px">검색 일치 ' + t.matched + '</span>' : '') +
+      '<span class="sp"></span>' +
+      '<button type="button" class="gm-ib" id="rdPrev" title="이전 (k)"' + (idx <= 0 ? ' disabled' : '') + '>‹</button><span style="font-size:12px;color:#5f6368">' + (idx + 1) + ' / ' + items.length + '</span><button type="button" class="gm-ib" id="rdNext" title="다음 (j)"' + (idx >= items.length - 1 ? ' disabled' : '') + '>›</button>' +
+      '<span style="width:8px"></span><button type="button" class="gm-ib" id="rdExpand" title="모두 펼치기">⤵</button></div>' +
+      '<div class="gm-msg"><h2>' + esc(String(t.subject || '(제목 없음)').replace(/^(re|fwd?|fw)\s*:\s*/i, '')) + Object.keys(labels).map(function (c) { return '<span class="lb" style="' + labelStyle(c) + '">' + esc(c) + '</span>'; }).join('') + '</h2>' +
+      '<div id="thMsgs">' + t.msgs.map(function (m) { return msgBlock(m, !!openIds[m.id], parsedQ && t.hitIds[m.id] && t.matched < t.msgs.length); }).join('') + '</div></div>';
+    $('readerBack').onclick = function () { $('split').classList.remove('reading'); };
+    $('rdPrev').onclick = function () { if (idx > 0) openItem(items[idx - 1]); };
+    $('rdNext').onclick = function () { if (idx < items.length - 1) openItem(items[idx + 1]); };
+    $('rdExpand').onclick = function () { $('thMsgs').innerHTML = t.msgs.map(function (m) { return msgBlock(m, true, false); }).join(''); t.msgs.forEach(loadBody); };
+    $('thMsgs').onclick = function (e) {
+      var blk = e.target.closest('.gm-th'); if (!blk || blk.classList.contains('open')) return;
+      if (e.target.closest('a')) return;
+      var m = t.msgs.filter(function (x) { return String(x.id) === blk.dataset.mid; })[0]; if (!m) return;
+      blk.outerHTML = msgBlock(m, true, false); loadBody(m);
+    };
+    t.msgs.forEach(function (m) { if (openIds[m.id]) loadBody(m); });
+    var last = document.querySelector('#thMsgs .gm-th.open:last-of-type'); if (last && t.msgs.length > 2) last.scrollIntoView({ block: 'nearest' });
+  }
   document.addEventListener('keydown', function (e) {
     if (state.tab !== 'explorer' || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
-    var hits = state.ex.hits || [], idx = hits.findIndex(function (h) { return h.id === state.ex.selected; });
-    if (e.key === 'j' && idx < hits.length - 1) openMessage(hits[idx + 1]);
-    if (e.key === 'k' && idx > 0) openMessage(hits[idx - 1]);
+    var hits = state.ex.items || [], idx = hits.findIndex(function (h) { return h.id === state.ex.selected; });
+    if (e.key === 'j' && idx < hits.length - 1) openItem(hits[idx + 1]);
+    if (e.key === 'k' && idx > 0) openItem(hits[idx - 1]);
     if (e.key === '/') { e.preventDefault(); $('exQ').focus(); }
     if (e.key === 'Escape') { closePop(); hideAdv(); $('acctMenu').hidden = true; }
   });
