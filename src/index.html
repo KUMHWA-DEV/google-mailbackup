@@ -84,6 +84,8 @@
   .status .main { font-size: 17px; font-weight: 700; }
   .status .sub { color: var(--muted); font-size: 13px; }
   .status .actions { margin-left: auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .scopebox { display: flex; align-items: center; gap: 6px; }
+  .scopebox input[type=date] { width: auto; padding: 6px 8px; font-size: 12px; }
   .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
   @media (max-width: 1000px) { .kpis { grid-template-columns: 1fr 1fr; } }
   .kpi { background: var(--soft); border: 1px solid var(--line2); border-radius: 12px; padding: 10px 12px; min-width: 0; display: flex; gap: 10px; align-items: center; }
@@ -369,6 +371,7 @@
         <div><div class="main" id="stateText">-</div><div class="sub" id="stateSub"></div></div>
         <div class="actions">
           <label class="sw" title="설정한 주기마다 자동 실행"><input type="checkbox" id="swAuto"><i></i><span id="swAutoLbl">자동 백업</span></label>
+          <div class="scopebox"><div class="seg" id="scopeSeg" title="이번 백업 범위"><button type="button" data-v="incremental">🔄 마지막 이후</button><button type="button" data-v="all">📦 전부</button><button type="button" data-v="since">📅 날짜부터</button></div><input type="date" id="scopeDate" hidden></div>
           <button id="btnRun" class="primary">▶ 지금 백업</button>
         </div>
       </div>
@@ -508,7 +511,7 @@
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
-  var state = { dash: null, explorer: null, tab: 'overview', ex: { q: '', folder: '', agenda: '', category: '', run: 'all', selected: null, page: 1, sort: 'newest' }, pollTimer: null };
+  var state = { scope: null, sinceDate: '', dash: null, explorer: null, tab: 'overview', ex: { q: '', folder: '', agenda: '', category: '', run: 'all', selected: null, page: 1, sort: 'newest' }, pollTimer: null };
 
   // ---------- helpers ----------
   function call(fn, arg) {
@@ -591,6 +594,10 @@
     $('stateText').textContent = running ? '백업 진행 중' : (sch.isDue ? (d.lastSyncAt ? '백업할 때가 됐어요' : '첫 백업을 시작하세요') : '최신 상태');
     $('stateSub').textContent = running ? d.message : (sch.isDue ? '' : '다음 주기까지 ' + sch.daysRemaining + '일');
     $('swAuto').checked = !!d.triggerInstalled;
+    if (!state.scope) state.scope = d.lastSyncAt ? 'incremental' : 'all';
+    if (!d.lastSyncAt && state.scope === 'incremental') state.scope = 'all';
+    document.querySelector('#scopeSeg [data-v=incremental]').hidden = !d.lastSyncAt;
+    renderScopeSeg();
     $('btnRun').disabled = running;
     $('btnRun').className = running ? '' : (sch.isDue ? 'warn' : 'primary');
     $('btnRun').innerHTML = running ? '<span class="spin"></span> 진행 중' : '▶ 지금 백업';
@@ -696,6 +703,14 @@
     return call('getDashboard').then(renderDashboard).catch(function (e) { $('stateText').textContent = '연결 실패'; banner(e.message || String(e)); });
   }
 
+  function renderScopeSeg() {
+    document.querySelectorAll('#scopeSeg button').forEach(function (b) { b.classList.toggle('active', b.dataset.v === state.scope); });
+    $('scopeDate').hidden = state.scope !== 'since';
+    if (state.sinceDate) $('scopeDate').value = state.sinceDate;
+  }
+  $('scopeSeg').addEventListener('click', function (e) { var b = e.target.closest('button[data-v]'); if (!b) return; state.scope = b.dataset.v; renderScopeSeg(); if (state.scope === 'since') $('scopeDate').focus(); });
+  $('scopeDate').addEventListener('change', function () { state.sinceDate = this.value; });
+
   // run now (감지 → 모달 → 백그라운드 실행)
   var previewSeq = 0;
   function distSmall(list, total) {
@@ -713,7 +728,7 @@
     var scopeBlock = '<div class="first' + (p.isFirst ? '' : ' plain') + '"><div class="ft">' + (p.isFirst ? '🎉 첫 백업이신가요? ' : '') + '범위를 고르세요</div><div class="opts three">' +
       (p.lastSyncAt ? opt('incremental', '🔄 마지막 백업 이후', fmtDate(p.lastSyncAt) + ' 이후 새 메일') : '') +
       opt('all', '📦 지금 있는 메일 전부', (p.mailboxTotal ? '메일함 약 ' + fmtNum(p.mailboxTotal) + '건 · ' : '') + '이미 저장된 건 건너뜀') +
-      '<label class="opt' + (sc === 'since' ? ' on' : '') + '"><input type="radio" name="scope" value="since"' + (sc === 'since' ? ' checked' : '') + '><div><b>📅 날짜부터</b><span class="row"><input type="date" id="sinceDate" value="' + esc(p.sinceDate || p.initialStartDate || '') + '"><button type="button" class="sm" id="sinceApply">적용</button></span></div></label>' +
+      '<label class="opt' + (sc === 'since' ? ' on' : '') + '"><input type="radio" name="scope" value="since"' + (sc === 'since' ? ' checked' : '') + '><div><b>📅 날짜부터</b><span class="row"><input type="date" id="sinceDate" value="' + esc(p.sinceDate || state.sinceDate || p.initialStartDate || '') + '"><button type="button" class="sm" id="sinceApply">적용</button></span></div></label>' +
       '</div><div class="fh">⏱ 예상 소요 약 ' + secs(p.estimatedSeconds) + ' · 백그라운드에서 1분 간격 여러 구간으로 진행 · 창을 닫아도 계속</div></div>';
     $('modalBody').innerHTML = scopeBlock +
       '<div class="pv-nums">' +
@@ -733,6 +748,7 @@
     $('modalNote').textContent = '감지 ' + Math.round((p.elapsedMs || 0) / 100) / 10 + '초' + (p.isFirst ? '' : ' · 예상 약 ' + secs(p.estimatedSeconds));
     $('modalOk').disabled = false; $('modalOk').textContent = '▶ 백업 시작' + (p.newCount ? ' · ' + fmtNum(p.newCount) + '건' : '');
     var rePreview = function (scope, date) {
+      state.scope = scope; if (scope === 'since') state.sinceDate = date || ''; renderScopeSeg();
       $('modalOk').disabled = true; $('modalBody').innerHTML = '<div class="pv-loading"><span class="spin dark"></span> 범위를 바꾸고 다시 감지하는 중…</div>';
       var seq = ++previewSeq;
       call('previewBackup', { scope: scope, sinceDate: date || '' }).then(function (pp) { if (seq === previewSeq) renderPreview(pp); })
@@ -752,7 +768,8 @@
     $('modalPill').hidden = true; $('modalNote').textContent = ''; $('modalOk').disabled = true; $('modalOk').textContent = '백업 시작';
     $('modalBody').innerHTML = '<div class="pv-loading"><span class="spin dark"></span> 백업할 메일을 감지하는 중…</div>';
     $('modal').hidden = false;
-    call('previewBackup').then(function (p) { if (seq === previewSeq) renderPreview(p); })
+    if (state.scope === 'since' && !state.sinceDate) { $('modal').hidden = true; toast('시작 날짜를 먼저 고르세요', true); $('scopeDate').focus(); return; }
+    call('previewBackup', { scope: state.scope, sinceDate: state.scope === 'since' ? state.sinceDate : '' }).then(function (p) { if (seq === previewSeq) renderPreview(p); })
       .catch(function (e) { if (seq !== previewSeq) return; $('modalBody').innerHTML = '<div class="box" style="color:var(--red-ink)">⚠️ 감지 실패: ' + esc(e.message || e) + '</div>'; $('modalOk').disabled = false; $('modalOk').textContent = '그래도 백업 시작'; });
   });
   $('modalCancel').addEventListener('click', function () { previewSeq++; $('modal').hidden = true; });
