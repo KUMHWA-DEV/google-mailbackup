@@ -104,6 +104,38 @@ function cancelBackup() {
   return getDashboard();
 }
 
+/**
+ * 대시보드를 읽을 때 상태를 현실과 맞춘다. "중지 중"인데 실제 실행이 없거나(구간 사이·할당량 대기 중에 중지를 누른 경우),
+ * running/queued 인데 8분 넘게 아무 갱신이 없고 실행도 없으면(트리거가 안 돈 경우) 중지됨/대기 상태로 바꿔 화면이 영원히 멈추지 않게 한다.
+ */
+var STALE_RUN_MS = 8 * 60 * 1000;
+function reconcileStatus_() {
+  var st = getStatus_();
+  if (!/^(stopping|running|queued)$/.test(st.state || '')) return st;
+  var c = st.cursor || {};
+  var age = Date.now() - new Date(st.updatedAt || 0).getTime();
+  var waiting = c.resumeAt && new Date(c.resumeAt).getTime() > Date.now() - 60 * 1000; // 예약된 재개 시각이 아직 안 지남
+  if (st.state !== 'stopping' && (age < STALE_RUN_MS || waiting)) return st;
+  var lock = LockService.getUserLock();
+  var free = false;
+  try { free = lock.tryLock(0); } catch (e) { free = false; }
+  if (!free) return st; // 진짜 실행 중 → 그 실행이 알아서 상태를 바꾼다
+  try {
+    var cur = loadCursor_();
+    props_().deleteProperty('STOP_REQUESTED');
+    try { deleteContinuationTriggers_(); } catch (e2) { /* 무시 */ }
+    var why = st.state === 'stopping' ? '중지됨' : '실행이 끊겨 멈춤';
+    if (cur && cur.startedAt) {
+      delete cur.resumeAt; cur.pausedAt = new Date().toISOString(); saveCursor_(cur);
+      setStatus_({ state: 'paused', message: why + ' · ' + (cur.processed || 0) + '건 저장 · "이어서"를 누르면 이 위치부터 계속', cursor: cur });
+    } else {
+      props_().deleteProperty(PROP.CURSOR_JSON);
+      setStatus_({ state: 'idle', message: st.state === 'stopping' ? '중지됨' : '실행이 시작되지 않아 취소됨', cursor: {} });
+    }
+  } finally { lock.releaseLock(); }
+  return getStatus_();
+}
+
 var QUOTA_BACKOFF_MS = 2 * 60 * 1000;
 function isQuotaError_(msg) { return /quota|rate ?limit|too many|429|user-rate/i.test(String(msg || '')); }
 

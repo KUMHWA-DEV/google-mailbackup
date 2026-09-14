@@ -18,7 +18,7 @@ function searchClientLib_() {
 
 /** 대시보드/이력/설정 화면에 필요한 모든 상태를 한 번에. */
 function getDashboard() {
-  var status = getStatus_();
+  var status = reconcileStatus_();
   var settings = getSettings_();
   var last = getProp_(PROP.LAST_SYNC_EPOCH, '');
   var c = status.cursor || {};
