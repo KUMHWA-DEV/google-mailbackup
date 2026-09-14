@@ -18,12 +18,24 @@ function runBackup() {
     deleteContinuationTriggers_();
     runBackupLocked_();
   } catch (e) {
-    // 실행이 예외로 끝나면 상태에 남겨 대시보드/애드온에서 보이게 한다 (안 그러면 '대기 중'으로 영원히 보임)
-    var cur = loadCursor_() || (getStatus_().cursor || {});
-    cur.lastError = String(e && e.message || e);
+    var msg = String(e && e.message || e);
+    var cur = e.cursor || loadCursor_() || (getStatus_().cursor || {});
+    if (isQuotaError_(msg)) {
+      // Gmail 분당 할당량(사용자당 15,000단위) 초과: 실패가 아니라 잠시 뒤 이어서 실행
+      cur.resumeAt = new Date(Date.now() + QUOTA_BACKOFF_MS).toISOString();
+      cur.quotaHits = (cur.quotaHits || 0) + 1;
+      saveCursor_(cur);
+      try { scheduleContinuation_(QUOTA_BACKOFF_MS); } catch (e2) { Logger.log('재개 트리거 생성 실패: %s', e2.message); }
+      setStatus_({ state: 'running', message: 'Gmail 분당 할당량 초과 · ' + Math.round(QUOTA_BACKOFF_MS / 60000) + '분 뒤 자동 재개 (' + cur.processed + '건 저장됨)', cursor: cur });
+      Logger.log('할당량 초과, %s 후 재개', QUOTA_BACKOFF_MS);
+      return;
+    }
+    // 그 외 예외: 상태에 남겨 대시보드/애드온에서 보이게 한다 (안 그러면 '대기 중'으로 영원히 보임)
+    cur.lastError = msg;
     cur.failedAt = new Date().toISOString();
+    saveCursor_(cur); // 다시 시도하면 저장된 위치부터
     Logger.log('runBackup 실패: %s', e && e.stack || e);
-    setStatus_({ state: 'error', message: '실행 실패: ' + cur.lastError, cursor: cur, errorStack: String(e && e.stack || '') });
+    setStatus_({ state: 'error', message: '실행 실패: ' + msg, cursor: cur, errorStack: String(e && e.stack || '') });
     throw e;
   } finally {
     lock.releaseLock();
@@ -35,9 +47,14 @@ function runBackup() {
  * 클라이언트가 running 상태인 동안 반복 호출한다. 같은 사용자의 트리거 실행과 겹치면 사용자 잠금으로 건너뛴다.
  */
 function runBackupInline() {
+  var c = loadCursor_();
+  if (c && c.resumeAt && new Date(c.resumeAt) > new Date()) return getDashboard(); // 재개 시각 전이면 대기 (클라이언트가 기다림)
   try { runBackup(); } catch (e) { /* 상태에 기록됨 */ }
   return getDashboard();
 }
+
+var QUOTA_BACKOFF_MS = 2 * 60 * 1000;
+function isQuotaError_(msg) { return /quota|rate ?limit|too many|429|user-rate/i.test(String(msg || '')); }
 
 function runBackupLocked_() {
   var startedAt = Date.now();
@@ -67,9 +84,9 @@ function runBackupLocked_() {
   setStatus_({ state: 'running', message: (isNewRun ? '새 백업 시작' : '이어서 실행') + ' (' + cursor.chunks + '번째 구간)', cursor: cursor });
   Logger.log('백업 %s: query="%s" pageToken=%s', isNewRun ? '시작' : '재개', cursor.query, cursor.pageToken || '-');
 
-  var labelMap = fetchLabelMap_();
-  var sheet = indexSheet_();
-  var backedUp = loadBackedUpIds_(sheet);
+  var labelMap, sheet, backedUp;
+  try { labelMap = fetchLabelMap_(); sheet = indexSheet_(); backedUp = loadBackedUpIds_(sheet); }
+  catch (e0) { e0.cursor = cursor; throw e0; }
   var pending = [];
   var outOfTime = false;
   var maxPerRun = settings.maxPerRun || 0;
@@ -104,6 +121,11 @@ function runBackupLocked_() {
       if (!cursor.pageToken) break;
       if (Date.now() > deadline) { outOfTime = true; break; }
     }
+  } catch (e) {
+    // 루프 중 예외(할당량 등): 지금까지 저장한 행을 기록하고 커서를 예외에 실어 올린다
+    appendIndexRows_(sheet, pending); pending = [];
+    e.cursor = cursor;
+    throw e;
   } finally {
     appendIndexRows_(sheet, pending);
   }
@@ -216,7 +238,8 @@ function appLinks_() {
 
 // ---------- 미리보기(감지) ----------
 
-var PREVIEW_DETAIL_MAX = 300;      // 상세(크기·라벨)까지 읽는 새 메일 수 상한
+var PREVIEW_DETAIL_MAX = 150;      // 상세(크기·라벨)까지 읽는 새 메일 수 상한 (Gmail 분당 할당량 15,000단위 고려, 150건 ≈ 750단위)
+var PREVIEW_CACHE_MS = 3 * 60 * 1000; // 같은 범위 재감지는 3분간 캐시
 var PREVIEW_TIME_BUDGET_MS = 40000; // 웹 요청 안에서 끝내기 위한 시간 예산
 
 /**

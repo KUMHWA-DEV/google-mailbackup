@@ -804,7 +804,10 @@
     var step = function () {
       call('runBackupInline').then(function (d) {
         renderDashboard(d);
-        if (d.state === 'running' || d.state === 'queued') setTimeout(step, 1500); else { state.inlineRunning = false; toast(d.state === 'error' ? '백업 실패' : '✔ 백업 완료', d.state === 'error'); }
+        if (d.state === 'running' || d.state === 'queued') {
+          var ra = d.currentRun && d.currentRun.resumeAt ? new Date(d.currentRun.resumeAt).getTime() - Date.now() : 0;
+          setTimeout(step, Math.max(1500, Math.min(ra, 3 * 60 * 1000))); // 할당량 대기 시각까지 기다렸다가 재개
+        } else { state.inlineRunning = false; toast(d.state === 'error' ? '백업 실패' : '✔ 백업 완료', d.state === 'error'); }
       }).catch(function (e) { state.inlineRunning = false; toast('실행 실패: ' + (e.message || e), true); loadDashboard(); });
     };
     step();
@@ -855,7 +858,7 @@
       (p.truncated ? '<div style="color:var(--amber-ink)">⚠️ 메일이 많아 표본만 상세 감지했습니다. 건수·기간은 전체 기준으로 보정됨.</div>' : '') +
       '<div class="mono" style="color:var(--faint)" title="실제 Gmail 검색 조건">🔎 ' + esc(p.query || '') + '</div>' +
       '</div>';
-    $('modalNote').textContent = '감지 ' + Math.round((p.elapsedMs || 0) / 100) / 10 + '초' + (p.isFirst ? '' : ' · 예상 약 ' + secs(p.estimatedSeconds));
+    $('modalNote').textContent = (p.cached ? '감지 결과 재사용(3분 캐시)' : '감지 ' + Math.round((p.elapsedMs || 0) / 100) / 10 + '초') + (p.isFirst ? '' : ' · 예상 약 ' + secs(p.estimatedSeconds));
     $('modalOk').disabled = false; $('modalOk').textContent = '▶ 백업 시작' + (p.newCount ? ' · ' + fmtNum(p.newCount) + '건' : '');
     var rePreview = function (scope, date) {
       state.scope = scope; if (scope === 'since') state.sinceDate = date || ''; renderScopeSeg();

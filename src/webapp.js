@@ -99,8 +99,17 @@ function saveSettings(input) {
  */
 function previewBackup(opt) {
   opt = opt || {};
+  var key = (opt.scope || 'auto') + '|' + (opt.sinceDate || '') + '|' + getProp_(PROP.LAST_SYNC_EPOCH, '');
+  var cached = null;
+  try { cached = JSON.parse(getProp_('PREVIEW_CACHE_JSON', '') || 'null'); } catch (e) { cached = null; }
+  if (cached && cached.key === key && Date.now() - new Date(cached.at).getTime() < PREVIEW_CACHE_MS) {
+    cached.preview.cached = true;
+    savePreview_(cached.preview);
+    return cached.preview;
+  }
   var p = previewBackup_(opt.scope, opt.sinceDate);
   savePreview_(p);
+  try { props_().setProperty('PREVIEW_CACHE_JSON', JSON.stringify({ key: key, at: new Date().toISOString(), preview: p })); } catch (e) { /* 크기 초과 등은 무시 */ }
   return p;
 }
 
