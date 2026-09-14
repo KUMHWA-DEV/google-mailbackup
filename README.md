@@ -201,6 +201,48 @@ Chrome "바로가기 만들기 > 창으로 열기"로 설치하면 독립 앱처
 내부용(자동 관리, 사용자별): `LAST_SYNC_EPOCH`, `CURSOR_JSON`, `STATUS_JSON`, `RUN_HISTORY_JSON`, `PREVIEW_JSON`, `INDEX_SHEET_ID`, `WEEKLY_TRIGGER_ID`.
 전체를 처음부터 다시 받고 싶으면 편집기에서 `resetBackupState` 실행 후 `runBackup` (이미 있는 id는 건너뜀).
 
+## 7. AI(MCP)로 백업 메일 조회하기
+
+`mcp/server.js`는 **본인 Google 계정**(읽기 전용)으로 내 드라이브의 인덱스 시트와 백업 파일을 읽는 MCP 서버입니다.
+Claude Desktop, Claude Code 등 MCP 클라이언트를 연결하면 AI가 메일을 검색하고 첨부 내용을 읽습니다.
+각 직원이 자기 PC에서 실행하며, 다른 사람의 백업은 볼 수 없습니다.
+
+| 도구 | 하는 일 |
+|---|---|
+| `search_mail` | 웹앱과 같은 검색 문법(`from:` `subject:` `has:attachment` `after:` `-제외` …)으로 검색, 최신순, 페이지 |
+| `get_mail` | 메타데이터 + 본문 미리보기(최대 20,000자) + 첨부 목록(fileId) |
+| `get_mail_raw` | Drive의 .eml 원문 |
+| `get_attachment_text` | 첨부 텍스트: txt/csv/json 그대로, **PDF/DOCX/PPTX는 Google 문서로 임시 변환(OCR 포함)**, XLSX는 CSV |
+| `download_attachment` | 첨부·원문을 `~/Downloads/mail-backup/`에 저장하고 경로 반환 |
+| `backup_stats`, `list_labels` | 보관 현황, 라벨·안건·보낸사람 목록 |
+
+### 준비 (1회)
+
+1. **OAuth 클라이언트**: https://console.cloud.google.com → 프로젝트(2-2 B의 것을 써도 됨) → API 및 서비스 →
+   사용자 인증 정보 → "OAuth 클라이언트 ID 만들기" → 유형 **데스크톱 앱** → JSON 다운로드.
+   같은 프로젝트에서 **Google Drive API**와 **Google Sheets API**를 사용 설정합니다. 이 JSON은 회사 직원 모두가 같은 것을 써도 됩니다
+   (데스크톱 클라이언트 비밀은 공개되어도 무방하도록 설계된 값입니다).
+2. 저장소 받기: `git clone https://github.com/KUMHWA-DEV/google-mailbackup && cd google-mailbackup && npm install`
+3. JSON을 `~/.config/mail-backup-mcp/oauth_client.json` 에 두거나 환경변수 `MAIL_BACKUP_OAUTH_CLIENT` 로 경로 지정.
+4. 첫 실행 때 브라우저가 열리면 **본인 회사 계정**으로 로그인. 토큰은 `~/.config/mail-backup-mcp/token.json` 에 저장.
+
+### 연결
+
+**Claude Code**
+```bash
+claude mcp add mail-backup -- node /절대경로/google-mailbackup/mcp/server.js
+```
+
+**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`)
+```json
+{ "mcpServers": { "mail-backup": { "command": "node", "args": ["/절대경로/google-mailbackup/mcp/server.js"] } } }
+```
+
+이후 "지난달 partner.co.kr에서 온 계약서 첨부 내용 요약해줘" 같은 요청이 `search_mail → get_mail → get_attachment_text` 순으로 처리됩니다.
+
+환경변수: `MAIL_BACKUP_SHEET_ID`(인덱스 시트 직접 지정), `MAIL_BACKUP_DOWNLOAD_DIR`, `MAIL_BACKUP_MCP_DIR`.
+Google 없이 시험하려면 `npm run mcp:demo`(샘플 데이터, 첨부 도구는 비활성). `node dev/mcp_smoke.js` 가 도구 호출을 자동 검증합니다.
+
 ## 5. 개발 명령
 
 | 명령 | 동작 |
@@ -225,7 +267,8 @@ src/
   triggers.js       주간/이어서 실행 트리거
   webapp.js         doGet + 클라이언트 호출 함수
   index.html        검색 UI
-dev/                로컬 미리보기 서버 + 샘플 데이터
+dev/                로컬 미리보기 서버 + 샘플 데이터 + MCP 스모크 테스트
+mcp/                MCP 서버 (server.js) + 순수 로직 (lib.js) — AI가 백업 메일·첨부 조회
 test/               vitest
 gstudio/            Google AI Studio 레퍼런스 zip (로컬 전용, Firebase 키가 들어 있어 git 제외)
 ```

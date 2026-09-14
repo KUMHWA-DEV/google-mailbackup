@@ -11,10 +11,17 @@
     "push": "clasp push -f",
     "open": "clasp open-script",
     "deploy": "bash dev/deploy.sh",
-    "release": "npm test && npm run push && git push origin main"
+    "release": "npm test && npm run push && git push origin main",
+    "mcp": "node mcp/server.js",
+    "mcp:demo": "MAIL_BACKUP_FIXTURE=dev/fixtures/index.json node mcp/server.js"
   },
   "devDependencies": {
     "@google/clasp": "^3.4.1",
     "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "googleapis": "^180.0.0",
+    "zod": "^4.6.5"
   }
 }

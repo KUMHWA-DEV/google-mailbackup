@@ -141,3 +141,11 @@ localStorage 이력(스크립트 속성으로 대체), 45일 고정 주기(설�
   자기 트리거·설정·이력. 스크립트 소유자는 남의 데이터를 만지지 않는다.
 - 배포 권장안: 웹앱 URL 공유가 메인(전체 UI). Gmail 애드온은 같은 스크립트로 선택 배포(카드 UI만 가능하므로
   보조). 앱 런처 노출은 Marketplace 비공개 앱(관리자).
+
+## 2026-09-14 추가: MCP 서버 (AI 조회)
+
+- `mcp/server.js`(Node, stdio, @modelcontextprotocol/sdk): 사용자 본인 OAuth(드라이브·시트 읽기, drive.file)로
+  인덱스 시트를 읽어 캐시(5분)하고, 웹앱과 같은 `src/lib/search.js` 문법으로 검색한다. Apps Script는 관여하지 않는다.
+- 도구: search_mail, get_mail(본문 미리보기), get_mail_raw(.eml), get_attachment_text(txt 그대로 / PDF·DOCX·PPTX는
+  Drive files.copy로 Google 문서 변환 후 text/plain export, XLSX는 CSV export, 사본 삭제), download_attachment, backup_stats, list_labels.
+- `MAIL_BACKUP_FIXTURE` 로 Google 없이 샘플 데이터 모드. `dev/mcp_smoke.js` 가 stdio 클라이언트로 도구 호출을 검증.
