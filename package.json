@@ -23,5 +23,14 @@
     "@modelcontextprotocol/sdk": "^1.30.0",
     "googleapis": "^180.0.0",
     "zod": "^4.6.5"
-  }
+  },
+  "bin": {
+    "mailbackup-mcp": "mcp/server.js",
+    "mailbackup-setup": "mcp/setup.js"
+  },
+  "files": [
+    "mcp/",
+    "src/lib/",
+    "README.md"
+  ]
 }

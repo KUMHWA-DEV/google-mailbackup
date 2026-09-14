@@ -51,7 +51,33 @@ function getDashboard() {
     indexSheetUrl: links.indexSheetUrl || null,
     webAppUrl: links.webAppUrl || null,
     user: Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail(),
+    isOwner: isOwner_(),
+    oauthClientJson: PropertiesService.getScriptProperties().getProperty('OAUTH_CLIENT_JSON') || null, // 관리자가 등록한 MCP용 OAuth 클라이언트(데스크톱 앱, 공개 무방)
+    scriptId: ScriptApp.getScriptId(),
   };
+}
+
+/** 스크립트 소유자 여부 (관리자 카드 표시용). */
+function isOwner_() {
+  try {
+    var sp = PropertiesService.getScriptProperties();
+    var owner = sp.getProperty('OWNER_EMAIL');
+    if (!owner) { owner = DriveApp.getFileById(ScriptApp.getScriptId()).getOwner().getEmail(); sp.setProperty('OWNER_EMAIL', owner); }
+    var me = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail();
+    return !!me && me.toLowerCase() === String(owner).toLowerCase();
+  } catch (e) { return false; }
+}
+
+/** 관리자(소유자)만: MCP용 OAuth 데스크톱 클라이언트 JSON을 저장/삭제. 직원은 AI 연결 탭에서 내려받는다. */
+function saveOauthClientJson(json) {
+  if (!isOwner_()) throw new Error('스크립트 소유자만 설정할 수 있습니다');
+  var sp = PropertiesService.getScriptProperties();
+  if (!json || !String(json).trim()) { sp.deleteProperty('OAUTH_CLIENT_JSON'); return getDashboard(); }
+  var obj = JSON.parse(json);
+  var c = obj.installed || obj.web || obj;
+  if (!c.client_id || !c.client_secret) throw new Error('client_id / client_secret 이 없는 파일입니다. GCP 콘솔에서 "데스크톱 앱" 유형으로 만든 JSON을 넣으세요');
+  sp.setProperty('OAUTH_CLIENT_JSON', JSON.stringify({ installed: { client_id: c.client_id, client_secret: c.client_secret, project_id: c.project_id || '', auth_uri: 'https://accounts.google.com/o/oauth2/auth', token_uri: 'https://oauth2.googleapis.com/token', redirect_uris: ['http://localhost'] } }));
+  return getDashboard();
 }
 
 /** 하위 호환: 예전 클라이언트용. */

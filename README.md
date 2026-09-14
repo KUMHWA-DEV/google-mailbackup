@@ -79,7 +79,8 @@ npx clasp open-script                             # 편집기 열기
    **실행 = 웹 앱에 액세스하는 사용자, 액세스 = spris.com 사용자**로 설정돼 있습니다. 출력된 URL이 앱 주소입니다.
    이후 코드 변경은 `npm run deploy` 로 재배포(URL 유지).
 3. **각 사용자가 할 일 (본인 포함)**: URL 접속 → 첫 방문 시 권한 승인(Gmail 읽기, Drive, Sheets, 트리거, 메일 발송)
-   → 대시보드에서 **▶ 지금 백업**(첫 실행은 전체) 또는 **자동 백업** 스위치. 메일이 많으면 1분 간격으로 이어서 실행됩니다.
+   → 대시보드에서 범위(마지막 이후 / 전부 / 날짜부터)를 고르고 **▶ 지금 백업** 또는 **자동 백업** 스위치. 메일이 많으면 1분 간격으로 이어서 실행됩니다.
+   실행 중 **⏹ 중지**를 누르면 현재 메일까지 저장하고 멈추며, **▶ 이어서**로 그 자리부터 재개하거나 **✕ 취소**로 종료할 수 있습니다(저장된 메일은 남음).
    설정한 주기(기본 7일 = 매주 월요일)마다 새벽 3시(KST)에 그 사용자 계정으로 실행됩니다.
 
 ## 2-0. 회사 전체 배포 체크리스트 (관리자)
@@ -228,31 +229,38 @@ Claude Desktop, Claude Code 등 MCP 클라이언트를 연결하면 AI가 메일
 | `download_attachment` | 첨부·원문을 `~/Downloads/mail-backup/`에 저장하고 경로 반환 |
 | `backup_stats`, `list_labels` | 보관 현황, 라벨·안건·보낸사람 목록 |
 
-### 준비 (1회)
+### 준비 (관리자 1회) — 직원은 준비물 없음
 
 1. **OAuth 클라이언트**: https://console.cloud.google.com → 프로젝트(2-2 B의 것을 써도 됨) → API 및 서비스 →
    사용자 인증 정보 → "OAuth 클라이언트 ID 만들기" → 유형 **데스크톱 앱** → JSON 다운로드.
-   같은 프로젝트에서 **Google Drive API**와 **Google Sheets API**를 사용 설정합니다. 이 JSON은 회사 직원 모두가 같은 것을 써도 됩니다
-   (데스크톱 클라이언트 비밀은 공개되어도 무방하도록 설계된 값입니다).
-2. 저장소 받기: `git clone https://github.com/KUMHWA-DEV/google-mailbackup && cd google-mailbackup && npm install`
-3. JSON을 `~/.config/mail-backup-mcp/oauth_client.json` 에 두거나 환경변수 `MAIL_BACKUP_OAUTH_CLIENT` 로 경로 지정.
-4. 첫 실행 때 브라우저가 열리면 **본인 회사 계정**으로 로그인. 토큰은 `~/.config/mail-backup-mcp/token.json` 에 저장.
+   같은 프로젝트에서 **Google Drive API**와 **Google Sheets API**를 사용 설정합니다.
+2. 웹앱 **🤖 AI 연결** 탭 맨 아래 **관리자 · MCP용 OAuth 클라이언트** 카드(스크립트 소유자에게만 보임)에 JSON을 붙여넣고 저장.
+   이후 모든 직원의 프롬프트·설정 코드에 인증 정보가 자동으로 들어가고(`MAIL_BACKUP_OAUTH_JSON`, base64), **⬇ OAuth 파일로 받기** 버튼도 생깁니다.
+   데스크톱 클라이언트 비밀은 공개되어도 무방하도록 설계된 값이라 전 직원이 같은 것을 씁니다.
+   (대안: 같은 JSON을 `mcp/oauth_client.json`으로 저장소에 넣어도 됩니다. .gitignore에 있으니 `git add -f`.)
+3. 각 직원: 첫 사용 때 브라우저가 열리면 **본인 회사 계정**으로 로그인. 토큰은 `~/.config/mail-backup-mcp/token.json`.
 
 ### 연결 (웹앱 🤖 AI 연결 탭에 앱별 설정이 복사 버튼과 함께 있음)
 
-- Claude Desktop / Claude Code / Gemini CLI / Cursor / VS Code: 로컬(stdio) MCP 지원 — 아래 설정 그대로.
-- ChatGPT: HTTPS 원격 MCP만 지원 → `npx supergateway --stdio "node …/mcp/server.js" --port 8788 --outputTransport streamableHttp` 로 감싸고 터널(localtunnel/ngrok) 주소를 커넥터에 등록. 회사망에서 터널이 막히면 불가.
-- Gemini CLI: `~/.gemini/settings.json` 의 `mcpServers`에 같은 형식. VS Code는 최상위 키가 `servers`.
+저장소를 받거나 경로를 적을 필요가 없습니다. 실행 명령은 항상 `npx -y -p github:KUMHWA-DEV/google-mailbackup mailbackup-mcp`(Node.js 18+).
+
+- **AI에게 맡기기**: 탭의 "설정 프롬프트 복사"를 Claude Code 등에 붙여넣으면 `mailbackup-setup`이 감지된 앱(Claude Desktop / Claude Code / Gemini CLI / Cursor)에 등록합니다.
+  직접 실행: `npx -y -p github:KUMHWA-DEV/google-mailbackup mailbackup-setup --apps claude-desktop,claude-code` (`--oauth <파일|base64>`, `--script-id <id>` 선택).
+- Claude Desktop / Claude Code / Gemini CLI / Cursor / VS Code: 로컬(stdio) MCP — 아래 설정 그대로. VS Code는 최상위 키가 `servers`.
+- ChatGPT: HTTPS 원격 MCP만 지원 → `npx -y supergateway --stdio "npx -y -p github:KUMHWA-DEV/google-mailbackup mailbackup-mcp" --port 8788 --outputTransport streamableHttp` 로 감싸고 터널(localtunnel/ngrok) 주소를 커넥터에 등록. 회사망에서 터널이 막히면 불가.
 
 **Claude Code**
 ```bash
-claude mcp add mail-backup -- node /절대경로/google-mailbackup/mcp/server.js
+claude mcp add mail-backup -s user -e MAIL_BACKUP_SCRIPT_ID=1GRe3TOJy2G-riYt3TzWcAjF3B_roXbt27cjuuEZhip-8sk4FzJaWFkwF -- npx -y -p github:KUMHWA-DEV/google-mailbackup mailbackup-mcp
 ```
 
 **Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`)
 ```json
-{ "mcpServers": { "mail-backup": { "command": "node", "args": ["/절대경로/google-mailbackup/mcp/server.js"] } } }
+{ "mcpServers": { "mail-backup": { "command": "npx", "args": ["-y", "-p", "github:KUMHWA-DEV/google-mailbackup", "mailbackup-mcp"],
+  "env": { "MAIL_BACKUP_SCRIPT_ID": "1GRe3TOJy2G-riYt3TzWcAjF3B_roXbt27cjuuEZhip-8sk4FzJaWFkwF", "MAIL_BACKUP_OAUTH_JSON": "<탭에서 복사한 base64>" } } } }
 ```
+
+OAuth 클라이언트 탐색 순서: `MAIL_BACKUP_OAUTH_JSON`(JSON 또는 base64, 처음 한 번 `~/.config`에 저장) → `MAIL_BACKUP_OAUTH_CLIENT`(파일 경로) → `~/.config/mail-backup-mcp/oauth_client.json` → 저장소의 `mcp/oauth_client.json`.
 
 이후 "지난달 partner.co.kr에서 온 계약서 첨부 내용 요약해줘" 같은 요청이 `search_mail → get_mail → get_attachment_text` 순으로 처리됩니다.
 
@@ -269,7 +277,7 @@ MCP 서버가 Apps Script API로 웹앱의 서버 함수를 호출하게 합니�
    `~/.config/mail-backup-mcp/token.json`을 지운 뒤 다시 로그인(스코프가 늘어나므로). 예:
 
 ```bash
-claude mcp add mail-backup -e MAIL_BACKUP_SCRIPT_ID=1GRe3TOJy2G-riYt3TzWcAjF3B_roXbt27cjuuEZhip-8sk4FzJaWFkwF -- node /절대경로/google-mailbackup/mcp/server.js
+claude mcp add mail-backup -s user -e MAIL_BACKUP_SCRIPT_ID=1GRe3TOJy2G-riYt3TzWcAjF3B_roXbt27cjuuEZhip-8sk4FzJaWFkwF -- npx -y -p github:KUMHWA-DEV/google-mailbackup mailbackup-mcp
 ```
 
 OAuth 클라이언트와 스크립트가 **같은 GCP 프로젝트**에 있어야 Apps Script API 호출이 허용됩니다. 설정하지 않으면 조회 도구 7개만 동작합니다.

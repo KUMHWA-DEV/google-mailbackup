@@ -53,6 +53,38 @@ function runBackupInline() {
   return getDashboard();
 }
 
+// ---------- 중지 / 이어서 / 취소 ----------
+function stopRequested_() { return getProp_('STOP_REQUESTED', '') === '1'; }
+/** ⏹ 중지: 진행 중인 실행은 다음 메일에서 멈추고, 예약된 이어서 실행은 취소. 커서는 남아 ▶ 이어서로 재개 가능. */
+function stopBackup() {
+  props_().setProperty('STOP_REQUESTED', '1');
+  try { deleteContinuationTriggers_(); } catch (e) { /* 무시 */ }
+  var st = getStatus_();
+  if (st.state === 'queued') { props_().deleteProperty('STOP_REQUESTED'); setStatus_({ state: 'idle', message: '대기열에서 취소됨' }); }
+  else if (st.state === 'running') setStatus_({ state: 'stopping', message: '중지 중 · 현재 메일까지 저장 후 멈춥니다', cursor: st.cursor });
+  return getDashboard();
+}
+/** ▶ 이어서: 저장된 커서 위치부터 백그라운드 재개. */
+function resumeBackup() {
+  props_().deleteProperty('STOP_REQUESTED');
+  var c = loadCursor_();
+  if (c) { delete c.resumeAt; saveCursor_(c); }
+  deleteContinuationTriggers_();
+  var triggerError = '';
+  try { scheduleContinuation_(5 * 1000); } catch (e) { triggerError = String(e && e.message || e); }
+  setStatus_({ state: 'queued', message: '이어서 실행 · 곧 시작', cursor: Object.assign({}, c || {}, { queuedAt: new Date().toISOString(), triggerError: triggerError || null }) });
+  return getDashboard();
+}
+/** ✕ 취소: 커서를 버린다. 이미 저장된 메일은 그대로 남고 다음 백업에서 중복 저장되지 않는다. */
+function cancelBackup() {
+  props_().deleteProperty('STOP_REQUESTED');
+  try { deleteContinuationTriggers_(); } catch (e) { /* 무시 */ }
+  var c = loadCursor_();
+  props_().deleteProperty(PROP.CURSOR_JSON);
+  setStatus_({ state: 'idle', message: '취소됨' + (c && c.processed ? ' · ' + c.processed + '건은 저장됨' : ''), cursor: c || {} });
+  return getDashboard();
+}
+
 var QUOTA_BACKOFF_MS = 2 * 60 * 1000;
 function isQuotaError_(msg) { return /quota|rate ?limit|too many|429|user-rate/i.test(String(msg || '')); }
 
@@ -62,6 +94,7 @@ function runBackupLocked_() {
   var settings = getSettings_();
   var cursor = loadCursor_();
   var isNewRun = !cursor;
+  if (isNewRun) props_().deleteProperty('STOP_REQUESTED');
   if (isNewRun) {
     var preview = loadPreview_();
     cursor = {
@@ -116,7 +149,9 @@ function runBackupLocked_() {
         if (pending.length >= CONFIG.INDEX_FLUSH_EVERY) { appendIndexRows_(sheet, pending); pending = []; }
         if ((cursor.processed + cursor.errors) % CONFIG.STATUS_EVERY === 0) setStatus_({ state: 'running', message: '저장 중 ' + cursor.processed + '건' + (cursor.expectedTotal ? ' / ' + cursor.expectedTotal : ''), cursor: cursor });
         if (Date.now() > deadline) { outOfTime = true; break; }
+        if ((cursor.processed + cursor.errors) % 3 === 0 && stopRequested_()) { cursor.paused = true; break; } // 사용자가 ⏹ 중지
       }
+      if (cursor.paused) break;
       if (outOfTime || cursor.limitHit) break; // 시간 초과: 같은 pageToken으로 재개 (중복은 id로 걸러짐)
       cursor.pageToken = page.nextPageToken || null;
       if (!cursor.pageToken) break;
@@ -131,7 +166,14 @@ function runBackupLocked_() {
     appendIndexRows_(sheet, pending);
   }
 
+  if (cursor.paused) {
+    delete cursor.paused; delete cursor.resumeAt;
+    saveCursor_(cursor);
+    setStatus_({ state: 'paused', message: '중지됨 · ' + cursor.processed + '건 저장 · "이어서"를 누르면 이 위치부터 계속', cursor: cursor });
+    return;
+  }
   if (outOfTime) {
+    if (stopRequested_()) { saveCursor_(cursor); setStatus_({ state: 'paused', message: '중지됨 · ' + cursor.processed + '건 저장', cursor: cursor }); return; }
     cursor.resumeAt = new Date(Date.now() + CONFIG.CONTINUE_DELAY_MS).toISOString();
     saveCursor_(cursor);
     scheduleContinuation_();

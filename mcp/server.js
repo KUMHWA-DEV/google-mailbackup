@@ -27,7 +27,9 @@ const SCRIPT_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https:
 const ALL_SCOPES = SCRIPT_ID ? SCOPES.concat(SCRIPT_SCOPES) : SCOPES;
 const CONFIG_DIR = process.env.MAIL_BACKUP_MCP_DIR || path.join(os.homedir(), '.config', 'mail-backup-mcp');
 const TOKEN_PATH = path.join(CONFIG_DIR, 'token.json');
-const CLIENT_PATH = process.env.MAIL_BACKUP_OAUTH_CLIENT || path.join(CONFIG_DIR, 'oauth_client.json');
+// OAuth 클라이언트(데스크톱 앱) 찾는 순서: 환경변수 JSON 본문 → 환경변수 경로 → ~/.config → 패키지에 동봉된 mcp/oauth_client.json
+const BUNDLED_CLIENT = path.join(__dirname, 'oauth_client.json');
+const CLIENT_PATH = process.env.MAIL_BACKUP_OAUTH_CLIENT || [path.join(CONFIG_DIR, 'oauth_client.json'), BUNDLED_CLIENT].find(p => fs.existsSync(p)) || path.join(CONFIG_DIR, 'oauth_client.json');
 const INDEX_SHEET_NAME = 'Mail Backup Index';
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const DOWNLOAD_DIR = process.env.MAIL_BACKUP_DOWNLOAD_DIR || path.join(os.homedir(), 'Downloads', 'mail-backup');
@@ -36,10 +38,17 @@ const log = (...a) => console.error('[mail-backup-mcp]', ...a);
 
 // ---------- auth ----------
 async function getAuth() {
-  if (!fs.existsSync(CLIENT_PATH)) {
-    throw new Error(`OAuth 클라이언트 파일이 없습니다: ${CLIENT_PATH}\nGCP 콘솔에서 '데스크톱 앱' OAuth 클라이언트를 만들어 JSON을 내려받고 그 경로를 MAIL_BACKUP_OAUTH_CLIENT 로 지정하세요 (README 7).`);
+  let raw;
+  if (process.env.MAIL_BACKUP_OAUTH_JSON) {
+    const v = process.env.MAIL_BACKUP_OAUTH_JSON.trim();
+    raw = JSON.parse(v.startsWith('{') ? v : Buffer.from(v, 'base64').toString('utf8'));
+    try { fs.mkdirSync(CONFIG_DIR, { recursive: true }); fs.writeFileSync(path.join(CONFIG_DIR, 'oauth_client.json'), JSON.stringify(raw, null, 2), { mode: 0o600 }); } catch (e) { /* 저장 실패는 무시 */ }
+  } else {
+    if (!fs.existsSync(CLIENT_PATH)) {
+      throw new Error(`OAuth 클라이언트 파일이 없습니다: ${CLIENT_PATH}\n웹앱 'AI 연결' 탭에서 OAuth 파일을 내려받아 ${path.join(CONFIG_DIR, 'oauth_client.json')} 에 두거나, 환경변수 MAIL_BACKUP_OAUTH_JSON 에 내용을 넣으세요.`);
+    }
+    raw = JSON.parse(fs.readFileSync(CLIENT_PATH, 'utf8'));
   }
-  const raw = JSON.parse(fs.readFileSync(CLIENT_PATH, 'utf8'));
   const c = raw.installed || raw.web || raw;
   const oauth = new google.auth.OAuth2(c.client_id, c.client_secret, 'http://127.0.0.1');
   if (fs.existsSync(TOKEN_PATH)) {

@@ -33,6 +33,7 @@ const history = [
   { startedAt: '2026-08-25T03:04:00.000Z', finishedAt: '2026-08-25T03:15:30.000Z', chunks: 3, found: 5, processed: 5, skipped: 0, errors: 1, bytes: 230000, mailFrom: '2026-08-01T06:00:00.000Z', mailTo: '2026-08-20T00:00:00.000Z', notifiedTo: null, manual: false, expectedTotal: 0, byCategory: [{ name: '받은편지함', count: 2, bytes: 150000 }, { name: '포럼', count: 1, bytes: 22000 }, { name: '임시보관함', count: 1, bytes: 8000 }, { name: '프로모션', count: 1, bytes: 50000 }] },
 ];
 let preview = null;
+let oauthJson = null;
 
 function dashboard() {
   return {
@@ -43,7 +44,7 @@ function dashboard() {
     summary: summarizeRecords(listRecords()),
     settings, triggerInstalled,
     folderUrl: 'https://drive.google.com/drive/folders/LOCAL', folderPath: '내 드라이브 › Mail Backup', indexSheetUrl: 'https://docs.google.com/spreadsheets/d/LOCAL',
-    webAppUrl: `http://localhost:${PORT}/`, user: 'kumhwa_dev@spris.com (local)',
+    webAppUrl: `http://localhost:${PORT}/`, user: 'kumhwa_dev@spris.com (local)', isOwner: true, oauthClientJson: oauthJson, scriptId: 'LOCAL',
   };
 }
 
@@ -106,6 +107,10 @@ const api = {
   installScheduledTrigger: () => { triggerInstalled = true; return dashboard(); },
   disconnectApp: () => ({ ok: true }),
   runBackupInline: () => dashboard(),
+  saveOauthClientJson: (j) => { oauthJson = j ? JSON.stringify({ installed: JSON.parse(j).installed || JSON.parse(j) }) : null; return dashboard(); },
+  stopBackup: () => { status = { state: 'paused', message: '중지됨 · ' + currentRun.processed + '건 저장', updatedAt: new Date().toISOString() }; return dashboard(); },
+  resumeBackup: () => { status = { state: 'running', message: '이어서 실행', updatedAt: new Date().toISOString() }; return dashboard(); },
+  cancelBackup: () => { status = { state: 'idle', message: '취소됨', updatedAt: new Date().toISOString() }; return dashboard(); },
   installWeeklyTrigger: () => api.installScheduledTrigger(),
   uninstallScheduledTrigger: () => { triggerInstalled = false; return dashboard(); },
 };
