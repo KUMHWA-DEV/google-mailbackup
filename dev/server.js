@@ -42,7 +42,7 @@ function dashboard() {
     currentRun: { ...currentRun, progress: runProgress(currentRun) }, lastError: null, history,
     summary: summarizeRecords(listRecords()),
     settings, triggerInstalled,
-    folderUrl: 'https://drive.google.com/drive/folders/LOCAL', indexSheetUrl: 'https://docs.google.com/spreadsheets/d/LOCAL',
+    folderUrl: 'https://drive.google.com/drive/folders/LOCAL', folderPath: '내 드라이브 › Mail Backup', indexSheetUrl: 'https://docs.google.com/spreadsheets/d/LOCAL',
     webAppUrl: `http://localhost:${PORT}/`, user: 'kumhwa_dev@spris.com (local)',
   };
 }

@@ -235,7 +235,11 @@ Claude Desktop, Claude Code 등 MCP 클라이언트를 연결하면 AI가 메일
 3. JSON을 `~/.config/mail-backup-mcp/oauth_client.json` 에 두거나 환경변수 `MAIL_BACKUP_OAUTH_CLIENT` 로 경로 지정.
 4. 첫 실행 때 브라우저가 열리면 **본인 회사 계정**으로 로그인. 토큰은 `~/.config/mail-backup-mcp/token.json` 에 저장.
 
-### 연결
+### 연결 (웹앱 🤖 AI 연결 탭에 앱별 설정이 복사 버튼과 함께 있음)
+
+- Claude Desktop / Claude Code / Gemini CLI / Cursor / VS Code: 로컬(stdio) MCP 지원 — 아래 설정 그대로.
+- ChatGPT: HTTPS 원격 MCP만 지원 → `npx supergateway --stdio "node …/mcp/server.js" --port 8788 --outputTransport streamableHttp` 로 감싸고 터널(localtunnel/ngrok) 주소를 커넥터에 등록. 회사망에서 터널이 막히면 불가.
+- Gemini CLI: `~/.gemini/settings.json` 의 `mcpServers`에 같은 형식. VS Code는 최상위 키가 `servers`.
 
 **Claude Code**
 ```bash

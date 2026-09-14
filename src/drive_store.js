@@ -22,6 +22,24 @@ function rootFolder_() {
   return folder;
 }
 
+/** 루트 폴더의 경로 문자열 ("내 드라이브 › Mail Backup"). 사용자 속성에 캐시. */
+function rootFolderPath_() {
+  var id = getSettings_().folderId || getProp_(PROP.FOLDER_ID, '');
+  if (!id) return '내 드라이브 › ' + CONFIG.ROOT_FOLDER_NAME + ' (첫 백업 때 생성)';
+  var cached = getProp_('FOLDER_PATH_' + id, '');
+  if (cached) return cached;
+  try {
+    var folder = DriveApp.getFolderById(id), names = [folder.getName()], guard = 0;
+    var parents = folder.getParents();
+    while (parents.hasNext() && guard++ < 10) { var p = parents.next(); names.unshift(p.getName()); parents = p.getParents(); }
+    if (names[0] !== '내 드라이브' && names[0] !== 'My Drive') names.unshift('공유됨');
+    else names[0] = '내 드라이브';
+    var path = names.join(' › ');
+    props_().setProperty('FOLDER_PATH_' + id, path);
+    return path;
+  } catch (e) { return CONFIG.ROOT_FOLDER_NAME; }
+}
+
 function childFolder_(parent, parentKey, name) {
   var key = parentKey + '/' + name;
   if (folderCache_[key]) return folderCache_[key];

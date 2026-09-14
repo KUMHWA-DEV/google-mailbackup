@@ -47,6 +47,7 @@ function getDashboard() {
     settings: settings,
     triggerInstalled: scheduledTriggerInstalled_(),
     folderUrl: links.folderUrl || null,
+    folderPath: rootFolderPath_(),
     indexSheetUrl: links.indexSheetUrl || null,
     webAppUrl: links.webAppUrl || null,
     user: Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail(),
