@@ -8,6 +8,9 @@
  */
 function onAddonHomepage() { return buildAddonHomeCard_(); }
 function onAddonMessageOpen(e) { return buildAddonMessageCard_(e && e.gmail && e.gmail.messageId); }
+function onAddonStop() { stopBackup(); return addonUpdate_('⏹ 중지 요청', buildAddonHomeCard_()); }
+function onAddonResume() { resumeBackup(); return addonUpdate_('▶ 이어서 실행', buildAddonHomeCard_()); }
+function onAddonCancel() { cancelBackup(); return addonUpdate_('취소됨', buildAddonHomeCard_()); }
 function onAddonRefresh() { return addonUpdate_('', buildAddonHomeCard_()); }
 function onAddonGoHome() { return CardService.newActionResponseBuilder().setNavigation(CardService.newNavigation().pushCard(buildAddonHomeCard_())).build(); }
 
@@ -81,12 +84,12 @@ function linkSection_(d) {
 function buildAddonHomeCard_() {
   var d = getDashboard();
   var s = d.settings || {}, sch = d.schedule || {}, sum = d.summary || {}, r = d.currentRun || {};
-  var running = d.state === 'running' || d.state === 'queued', failed = d.state === 'error';
+  var running = d.state === 'running' || d.state === 'queued' || d.state === 'stopping', failed = d.state === 'error', paused = d.state === 'paused';
   var card = CardService.newCardBuilder().setHeader(CardService.newCardHeader().setTitle('Mail Backup').setSubtitle(d.user || '')
     .setImageUrl('https://www.gstatic.com/images/icons/material/system/2x/cloud_upload_black_24dp.png').setImageStyle(CardService.ImageStyle.CIRCLE));
 
   // 첫 실행: 온보딩
-  if (!d.lastSyncAt && !running && !failed) {
+  if (!d.lastSyncAt && !running && !failed && !paused) {
     card.addSection(CardService.newCardSection().setHeader('🎉 첫 백업')
       .addWidget(CardService.newTextParagraph().setText('회사 메일은 45일 뒤 지워집니다. 원본(.eml)과 첨부를 아래 위치에 보관하고, 이후엔 새 메일만 자동으로 추가합니다.'))
       .addWidget(kv_('BOOKMARK', '저장 위치 (본인 드라이브)', d.folderPath || '내 드라이브 › Mail Backup', '라벨별 폴더 · 인덱스 시트 자동 생성'))
@@ -104,16 +107,27 @@ function buildAddonHomeCard_() {
   }
 
   // 상태
-  var stateText = running ? '⚙️ 백업 진행 중' + (r.expectedTotal ? ' ' + r.processed + ' / ' + r.expectedTotal + '건' : ' ' + r.processed + '건') + (r.progress && r.progress.percent != null ? ' · ' + r.progress.percent + '%' : '')
+  var p = r.progress || {};
+  var pct = p.percent != null ? p.percent : (r.expectedTotal ? Math.min(100, Math.round(r.processed / r.expectedTotal * 100)) : null);
+  var stateText = running ? (d.state === 'queued' ? '⏳ 대기열 · 곧 시작' : d.state === 'stopping' ? '⏹ 중지 중' : '⚙️ 백업 진행 중') + (r.startedAt ? ' · ' + r.processed + (r.expectedTotal ? ' / ' + r.expectedTotal : '') + '건' + (pct != null ? ' (' + pct + '%)' : '') : '')
+    : paused ? '⏸ 중지됨 · ' + (r.processed || 0) + '건 저장'
     : failed ? '⚠️ 백업 실패' : (sch.isDue ? '🟠 백업할 때가 됐어요' : '🟢 최신 상태');
-  var stateSub = running ? (d.message || '') : failed ? (d.lastError || d.message) : ('마지막 ' + fmtD_(d.lastSyncAt) + ' · 다음 ' + (d.triggerInstalled ? fmtD_(new Date(sch.nextRunEpoch * 1000).toISOString()) : '자동 꺼짐'));
+  var stateSub = running ? ((r.startedAt ? '시작 ' + fmtD_(r.startedAt) + ' · 경과 ' + Math.round((p.elapsedSeconds || 0) / 60) + '분 · ' + fmtB_(r.bytes || 0) + ' · ' : '') + (d.message || ''))
+    : paused ? '"이어서"를 누르면 이 위치부터 계속합니다'
+    : failed ? (d.lastError || d.message) : ('마지막 ' + fmtD_(d.lastSyncAt) + ' · 다음 ' + (d.triggerInstalled ? fmtD_(new Date(sch.nextRunEpoch * 1000).toISOString()) : '자동 꺼짐'));
   var st = CardService.newCardSection()
-    .addWidget(kv_(running ? 'CLOCK' : failed ? 'STAR' : 'CONFIRMATION_NUMBER_ICON', '상태', stateText, stateSub))
+    .addWidget(kv_(running ? 'CLOCK' : paused ? 'CLOCK' : failed ? 'STAR' : 'CONFIRMATION_NUMBER_ICON', '상태', stateText, stateSub));
+  if (running && pct != null) st.addWidget(CardService.newTextParagraph().setText('<b>' + '█'.repeat(Math.round(pct / 5)) + '░'.repeat(20 - Math.round(pct / 5)) + '</b> ' + pct + '%' + (p.etaSeconds != null ? ' · 남은 약 ' + Math.max(1, Math.round(p.etaSeconds / 60)) + '분' : '')));
+  if (running && (r.byCategory || []).length) st.addWidget(CardService.newTextParagraph().setText('<font color="#5f6368">' + r.byCategory.slice(0, 4).map(function (c) { return c.name + ' ' + c.count; }).join(' · ') + '</font>'));
+  st
     .addWidget(kv_('BOOKMARK', '저장 위치 (본인 드라이브)', d.folderPath || '내 드라이브 › Mail Backup', '📥 ' + (sum.receivedCount || 0) + ' · 📤 ' + (sum.sentCount || 0) + ' · 📎 ' + (sum.withAttachments || 0) + ' · ' + fmtB_(sum.totalBytes)))
     .addWidget(kv_('EMAIL', '보관 메일', String(sum.total || 0) + '건', sum.oldestDate ? fmtD_(sum.oldestDate).replace(/ \d\d:\d\d$/, '') + ' ~ ' + fmtD_(sum.newestDate).replace(/ \d\d:\d\d$/, '') : ''));
   var rb = CardService.newButtonSet();
-  if (!running) rb.addButton(btn_(failed ? '↻ 다시 시도' : '▶ 지금 백업', 'onAddonRunBackup', true));
+  if (running) rb.addButton(btn_('⏹ 중지', 'onAddonStop'));
+  else if (paused) { rb.addButton(btn_('▶ 이어서', 'onAddonResume', true)); rb.addButton(btn_('✕ 취소', 'onAddonCancel')); }
+  else rb.addButton(btn_(failed ? '↻ 다시 시도' : '▶ 지금 백업', 'onAddonRunBackup', true));
   rb.addButton(btn_('⟳ 새로고침', 'onAddonRefresh'));
+  if (running) st.addWidget(CardService.newTextParagraph().setText('<font color="#5f6368">카드는 자동 갱신되지 않습니다. ⟳ 새로고침으로 진행 상황을 다시 불러오세요.</font>'));
   st.addWidget(rb);
   card.addSection(st);
 

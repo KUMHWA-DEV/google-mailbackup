@@ -161,6 +161,7 @@ function runBackupLocked_() {
       cats: {}, // 라벨(카테고리)별 {count, bytes}
       manual: !!(preview && preview.manual),
     };
+    initWindows_(cursor, preview); // 가장 오래된 메일부터 7일 단위 창으로 진행 (45일 뒤 지워지는 메일을 먼저 확보)
     props_().deleteProperty(PROP.PREVIEW_JSON);
   }
   if (!isNewRun && stopRequested_()) { // 중지 요청 뒤에 뒤늦게 트리거가 돌면 바로 멈춘다
@@ -183,7 +184,7 @@ function runBackupLocked_() {
 
   try {
     while (true) {
-      var page = listMessageIds_(cursor.query, cursor.pageToken);
+      var page = listMessageIds_(windowQuery_(cursor), cursor.pageToken);
       cursor.found += page.ids.length;
       cursor.pageFound = page.ids.length; // 할당량 중단 시 같은 페이지를 다시 세지 않도록 되돌릴 값
       for (var i = 0; i < page.ids.length; i++) {
@@ -210,7 +211,7 @@ function runBackupLocked_() {
       if (cursor.paused) break;
       if (outOfTime || cursor.limitHit) break; // 시간 초과: 같은 pageToken으로 재개 (중복은 id로 걸러짐)
       cursor.pageToken = page.nextPageToken || null;
-      if (!cursor.pageToken) break;
+      if (!cursor.pageToken && !advanceWindow_(cursor)) break; // 이 창이 끝나면 다음(더 최신) 창으로
       if (Date.now() > deadline) { outOfTime = true; break; }
       if (stopRequested_()) { cursor.paused = true; break; }
     }
@@ -455,7 +456,7 @@ function nameOrAddress_(addr) {
   var m = s.match(/^\s*"?([^"<]*)"?\s*<([^>]+)>/);
   return m ? (m[1].trim() || m[2]) : s.trim();
 }
-function savePreview_(p) { props_().setProperty(PROP.PREVIEW_JSON, JSON.stringify({ newCount: p.newCount, bytes: p.bytes, manual: true, previewedAt: p.previewedAt, scope: p.scope, sinceDate: p.sinceDate || '' })); }
+function savePreview_(p) { props_().setProperty(PROP.PREVIEW_JSON, JSON.stringify({ newCount: p.newCount, bytes: p.bytes, manual: true, previewedAt: p.previewedAt, scope: p.scope, sinceDate: p.sinceDate || '', mailFrom: p.mailFrom || '', mailFromExact: !!p.mailFromExact })); }
 function loadPreview_() { try { return JSON.parse(getProp_(PROP.PREVIEW_JSON, '') || 'null'); } catch (e) { return null; } }
 
 // ---------- 커서 / 상태 ----------
@@ -482,4 +483,26 @@ function resetBackupState() {
   props_().deleteProperty(PROP.CURSOR_JSON);
   props_().deleteProperty(PROP.LAST_SYNC_EPOCH);
   setStatus_({ state: 'idle', message: '상태 초기화됨. 다음 실행은 전체 백업.' });
+}
+
+// ---------- 오래된 메일부터: 시간 창 ----------
+// Gmail 목록은 항상 최신순이라, 가장 오래된 메일 날짜부터 WINDOW_DAYS 단위 창(after:/before: epoch초)으로 잘라 오래된 창부터 처리한다.
+var WINDOW_DAYS = 7;
+function initWindows_(cursor, preview) {
+  var oldest = preview && preview.mailFromExact && preview.mailFrom ? new Date(preview.mailFrom).getTime() : null;
+  if (!oldest) { var o = findOldestMailDate_(cursor.query); oldest = o ? new Date(o).getTime() : null; }
+  if (!oldest) { cursor.winStart = null; return; } // 대상이 없거나 탐색 실패: 창 없이 최신순 그대로
+  cursor.winStart = Math.floor(oldest / 1000) - 60;
+  cursor.finalEnd = Math.floor(Date.now() / 1000) + 3600; // 실행 시작 이후 도착분은 다음 실행에서 (LAST_SYNC 겹침으로 누락 없음)
+  cursor.winEnd = Math.min(cursor.winStart + WINDOW_DAYS * 86400, cursor.finalEnd);
+}
+function windowQuery_(cursor) {
+  return cursor.winStart == null ? cursor.query : cursor.query + ' after:' + cursor.winStart + ' before:' + cursor.winEnd;
+}
+function advanceWindow_(cursor) {
+  if (cursor.winStart == null || cursor.winEnd >= cursor.finalEnd) return false;
+  cursor.winStart = cursor.winEnd - 1; // 경계 1초 겹침 (중복은 id로 걸러짐)
+  cursor.winEnd = Math.min(cursor.winEnd + WINDOW_DAYS * 86400, cursor.finalEnd);
+  cursor.pageToken = null;
+  return true;
 }
