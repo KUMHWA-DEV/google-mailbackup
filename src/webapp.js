@@ -31,7 +31,7 @@ function getDashboard() {
     schedule: computeSchedule({ lastSyncEpoch: last || null, intervalDays: settings.intervalDays }),
     currentRun: {
       startedAt: c.startedAt || null, finishedAt: c.finishedAt || null, chunks: c.chunks || 0,
-      chunkStartedAt: c.chunkStartedAt || null, resumeAt: c.resumeAt || null,
+      chunkStartedAt: c.chunkStartedAt || null, resumeAt: c.resumeAt || null, resumeReason: c.resumeReason || null,
       found: c.found || 0, processed: c.processed || 0, skipped: c.skipped || 0, errors: c.errors || 0,
       bytes: c.bytes || 0, mailFrom: c.mailFrom || null, mailTo: c.mailTo || null, limitHit: !!c.limitHit,
       expectedTotal: c.expectedTotal || 0, manual: !!c.manual,

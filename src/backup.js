@@ -22,7 +22,7 @@ function runBackup() {
     var cur = e.cursor || loadCursor_() || (getStatus_().cursor || {});
     if (isQuotaError_(msg)) {
       // Gmail 분당 할당량(사용자당 15,000단위) 초과: 실패가 아니라 잠시 뒤 이어서 실행
-      cur.resumeAt = new Date(Date.now() + QUOTA_BACKOFF_MS).toISOString();
+      cur.resumeAt = new Date(Date.now() + QUOTA_BACKOFF_MS).toISOString(); cur.resumeReason = 'quota';
       cur.quotaHits = (cur.quotaHits || 0) + 1;
       saveCursor_(cur);
       try { scheduleContinuation_(QUOTA_BACKOFF_MS); } catch (e2) { Logger.log('재개 트리거 생성 실패: %s', e2.message); }
@@ -36,7 +36,7 @@ function runBackup() {
     cur.retries = (cur.retries || 0) + 1;
     Logger.log('runBackup 실패(%s회): %s', cur.retries, e && e.stack || e);
     if (cur.startedAt && cur.retries <= RETRY_MAX) {
-      cur.resumeAt = new Date(Date.now() + RETRY_DELAY_MS).toISOString();
+      cur.resumeAt = new Date(Date.now() + RETRY_DELAY_MS).toISOString(); cur.resumeReason = 'retry';
       saveCursor_(cur);
       try { scheduleContinuation_(RETRY_DELAY_MS); } catch (e3) { Logger.log('재시도 트리거 생성 실패: %s', e3.message); }
       setStatus_({ state: 'running', message: '오류 발생 · ' + Math.round(RETRY_DELAY_MS / 60000) + '분 뒤 자동 재시도 (' + cur.retries + '/' + RETRY_MAX + ') · ' + msg, cursor: cur, errorStack: String(e && e.stack || '') });
@@ -57,7 +57,8 @@ function runBackup() {
  */
 function runBackupInline() {
   var c = loadCursor_();
-  if (c && c.resumeAt && new Date(c.resumeAt) > new Date()) return getDashboard(); // 재개 시각 전이면 대기 (클라이언트가 기다림)
+  // 구간 사이 대기(resumeReason=chunk)는 창이 열려 있으면 기다리지 않고 바로 잇는다. 할당량·오류 대기는 지킨다.
+  if (c && c.resumeAt && c.resumeReason !== 'chunk' && new Date(c.resumeAt) > new Date()) return getDashboard();
   try { runBackup(); } catch (e) { /* 상태에 기록됨 */ }
   return getDashboard();
 }
@@ -264,7 +265,7 @@ function runBackupLocked_() {
   }
   if (outOfTime) {
     if (stopRequested_()) { props_().deleteProperty('STOP_REQUESTED'); saveCursor_(cursor); setStatus_({ state: 'paused', message: '중지됨 · ' + cursor.processed + '건 저장', cursor: cursor }); return; }
-    cursor.resumeAt = new Date(Date.now() + CONFIG.CONTINUE_DELAY_MS).toISOString();
+    cursor.resumeAt = new Date(Date.now() + CONFIG.CONTINUE_DELAY_MS).toISOString(); cursor.resumeReason = 'chunk';
     saveCursor_(cursor);
     scheduleContinuation_();
     setStatus_({ state: 'running', message: '구간 ' + cursor.chunks + ' 완료 · 1분 뒤 이어서 실행', cursor: cursor });

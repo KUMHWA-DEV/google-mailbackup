@@ -689,6 +689,8 @@
     $('btnRun').hidden = running || paused;
     var stuck = d.state === 'queued' && d.queuedAt && (Date.now() - new Date(d.queuedAt).getTime() > 120 * 1000);
     if (running && (stuck || d.triggerError) && !state.inlineRunning) startInlineRun('트리거가 실행되지 않아 브라우저에서 직접 진행합니다');
+    // 구간 사이 1분 대기 + 트리거 지연을 건너뛰기: 창이 열려 있으면 다음 구간을 바로 이어서 호출 (백그라운드 트리거는 그대로 예비로 남음)
+    else if (d.state === 'running' && d.currentRun && d.currentRun.resumeAt && d.currentRun.resumeReason === 'chunk' && !state.inlineRunning) startInlineRun('');
     $('hdUser').textContent = d.user || '';
     $('acctSwitch').href = 'https://accounts.google.com/AccountChooser?continue=' + encodeURIComponent(d.webAppUrl || location.href);
     $('hdFolder').hidden = !d.folderUrl; if (d.folderUrl) $('hdFolder').href = d.folderUrl;
