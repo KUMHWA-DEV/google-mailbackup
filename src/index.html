@@ -764,7 +764,12 @@
     $('runBox').innerHTML = runBoxHtml(d, true);
     if (d.currentRun && d.currentRun.startedAt) { var el = secs(liveElapsed(d.currentRun)); document.querySelectorAll('tr.runrow .el').forEach(function (n) { n.textContent = el; }); }
   }
-  function liveElapsed(r) { return r.startedAt ? Math.max(0, Math.round((Date.now() - new Date(r.startedAt).getTime()) / 1000)) : 0; }
+  function liveElapsed(r) {
+    // 서버가 준 실제 작업 시간 + 마지막 폴링 이후 경과 (구간 사이 대기 중이면 멈춤)
+    var p = r.progress || {}, base = Number(p.elapsedSeconds) || 0;
+    var waiting = r.resumeAt && new Date(r.resumeAt) > new Date();
+    return Math.round(base + (waiting ? 0 : Math.max(0, (Date.now() - (state.lastPollAt || Date.now())) / 1000)));
+  }
   function liveProcessed(r, p) {
     // 마지막 폴링 이후 처리율(rate)만큼 보간, 예상 총량은 넘지 않게
     var base = Number(r.processed) || 0, rate = p && p.rate ? p.rate : 0, dt = (Date.now() - (state.lastPollAt || Date.now())) / 1000;
@@ -798,7 +803,7 @@
     var range = h.mailFrom ? fmtDayShort(h.mailFrom) + ' ~ ' + fmtDayShort(h.mailTo) : '-';
     var how = h.manual ? '<span title="수동 실행">🖱</span>' : '<span title="자동 실행">⏱</span>';
     return '<tr' + (h.status === 'cancelled' ? ' class="held"' : '') + '><td>' + ok + ' ' + fmtDate(h.startedAt) + ' ' + how + '</td>' + (full ? '<td>' + fmtDate(h.finishedAt) + '</td>' : '') +
-      '<td>' + dur(h.startedAt, h.finishedAt) + (h.chunks > 1 ? ' <span class="mono" title="이어서 실행 ' + h.chunks + '구간">×' + h.chunks + '</span>' : '') + '</td>' +
+      '<td>' + dur(h.startedAt, h.finishedAt) + '</td>' +
       '<td>' + fmtNum(h.found) + '</td><td><b style="color:var(--blue-ink)">+' + fmtNum(h.processed) + '</b>' + (h.expectedTotal ? ' <small style="color:var(--faint)">/ ' + fmtNum(h.expectedTotal) + '</small>' : '') + '</td><td>' + fmtNum(h.skipped) + '</td>' +
       '<td' + (h.errors ? ' style="color:var(--red);font-weight:700"' : '') + '>' + fmtNum(h.errors) + '</td><td>' + fmtBytes(h.bytes) + '</td>' +
       '<td style="color:var(--muted)">' + range + (h.limitHit ? ' <span class="pill gray" title="회당 최대 건수 도달">⏭</span>' : '') + '</td>' +
@@ -811,7 +816,7 @@
     var pct = p.percent != null ? p.percent : 0;
     var label = queued ? '⏳ 대기열' : d.state === 'paused' ? '⏸ 중지됨' : d.state === 'error' ? '⚠️ 실패' : d.state === 'stopping' ? '⏹ 중지 중' : '⚙️ 진행 중';
     return '<tr class="runrow' + (d.state === 'paused' || d.state === 'error' ? ' held' : '') + '"><td>' + label + (r.startedAt ? ' ' + fmtDate(r.startedAt) : '') + (r.manual ? ' <span title="수동 실행">🖱</span>' : '') + '</td>' + (full ? '<td>–</td>' : '') +
-      '<td>' + (queued ? '–' : '<span class="el">' + secs(p.elapsedSeconds) + '</span>' + (r.chunks > 1 ? ' <span class="mono" title="이어서 실행 ' + r.chunks + '구간">×' + r.chunks + '</span>' : '')) + '</td>' +
+      '<td>' + (queued ? '–' : '<span class="el">' + secs(p.elapsedSeconds) + '</span>') + '</td>' +
       '<td>' + fmtNum(r.found) + '</td><td><span class="minibar"><i style="width:' + pct + '%"></i></span><b style="color:var(--blue-ink)">+' + fmtNum(r.processed) + '</b>' + (exp ? ' <small style="color:var(--faint)">/ ' + fmtNum(exp) + '</small>' : '') + '</td><td>' + fmtNum(r.skipped) + '</td>' +
       '<td' + (r.errors ? ' style="color:var(--red);font-weight:700"' : '') + '>' + fmtNum(r.errors) + '</td><td>' + fmtBytes(r.bytes) + '</td>' +
       '<td style="color:var(--muted)">' + (r.mailFrom ? fmtDayShort(r.mailFrom) + ' ~ ' + fmtDayShort(r.mailTo) : '–') + '</td>' +

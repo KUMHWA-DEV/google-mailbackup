@@ -45,7 +45,17 @@ describe('runProgress', () => {
   it('estimates remaining seconds from throughput', () => {
     const p = runProgress({ processed: 50, expectedTotal: 200, startedAt: '2026-09-14T00:00:00.000Z' }, new Date('2026-09-14T00:01:40.000Z').getTime());
     expect(p.rate).toBeCloseTo(0.5, 2);
-    expect(p.etaSeconds).toBe(300);
+    expect(p.etaSeconds).toBe(345); // 남은 150건 / 0.5 × 1.15 (구간 사이 대기 여유)
+  });
+  it('uses the current chunk rate and active seconds, not wall-clock since start', () => {
+    const now = new Date('2026-09-14T10:00:00.000Z').getTime();
+    const p = runProgress({ processed: 500, expectedTotal: 700, startedAt: '2026-09-13T18:00:00.000Z', activeSeconds: 2000,
+      chunkStartedAt: new Date(now - 100 * 1000).toISOString(), chunkStartProcessed: 450, lastRate: 0.2 }, now);
+    expect(p.elapsedSeconds).toBe(2100);   // 밤새 멈춘 16시간은 소요에 포함되지 않는다
+    expect(p.rate).toBeCloseTo(0.5, 2);    // 이번 구간 50건/100초
+    expect(p.etaSeconds).toBe(460);        // 200 / 0.5 × 1.15
+    const waiting = runProgress({ processed: 500, expectedTotal: 700, activeSeconds: 2000, chunkStartedAt: null, lastRate: 0.25 }, now);
+    expect(waiting.rate).toBe(0.25);       // 구간 사이에는 직전 구간 속도
   });
 });
 

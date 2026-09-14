@@ -153,6 +153,17 @@ function reconcileStatus_() {
   return getStatus_();
 }
 
+/** 구간이 끝날 때 실제 작업 시간과 처리 속도를 누적 (대기·지연 시간은 소요/남은 시간에서 제외). */
+function noteChunkEnd_(cursor) {
+  var started = cursor.chunkStartedAt ? new Date(cursor.chunkStartedAt).getTime() : 0;
+  if (!started) return;
+  var secs = Math.max(0, (Date.now() - started) / 1000);
+  cursor.activeSeconds = (cursor.activeSeconds || 0) + secs;
+  var done = cursor.processed - (cursor.chunkStartProcessed || 0);
+  if (secs >= 20 && done > 0) cursor.lastRate = done / secs;
+  cursor.chunkStartedAt = null;
+}
+
 var QUOTA_BACKOFF_MS = 2 * 60 * 1000;
 var RETRY_MAX = 5, RETRY_DELAY_MS = 5 * 60 * 1000;
 
@@ -204,6 +215,7 @@ function runBackupLocked_() {
   cursor.chunks += 1;
   cursor.retries = 0; // 구간이 시작되면 재시도 횟수 초기화
   cursor.chunkStartedAt = new Date().toISOString();
+  cursor.chunkStartProcessed = cursor.processed; // 남은 시간 계산용: 이번 구간 처리 속도
   setStatus_({ state: 'running', message: (isNewRun ? '새 백업 시작' : '이어서 실행') + ' (' + cursor.chunks + '번째 구간)', cursor: cursor });
   Logger.log('백업 %s: query="%s" pageToken=%s', isNewRun ? '시작' : '재개', cursor.query, cursor.pageToken || '-');
 
@@ -217,13 +229,13 @@ function runBackupLocked_() {
   try {
     while (true) {
       var page = listMessageIds_(windowQuery_(cursor), cursor.pageToken);
-      cursor.found += page.ids.length;
-      cursor.pageFound = page.ids.length; // 할당량 중단 시 같은 페이지를 다시 세지 않도록 되돌릴 값
-      for (var i = 0; i < page.ids.length; i++) {
+      var startAt = cursor.pageOffset || 0; // 구간이 페이지 중간에서 끊겼으면 그 위치부터 (같은 페이지를 다시 세지 않는다)
+      if (!startAt) cursor.found += page.ids.length;
+      for (var i = startAt; i < page.ids.length; i++) {
         var id = page.ids[i];
-        if (i % 3 === 2 && stopRequested_()) { cursor.paused = true; break; } // 사용자가 ⏹ 중지 (건너뛴 메일만 이어져도 확인)
+        if (i % 3 === 2 && stopRequested_()) { cursor.pageOffset = i; cursor.paused = true; break; } // 사용자가 ⏹ 중지 (건너뛴 메일만 이어져도 확인)
         if (backedUp[id]) { cursor.skipped += 1; continue; }
-        if (maxPerRun && cursor.processed >= maxPerRun) { cursor.limitHit = true; break; }
+        if (maxPerRun && cursor.processed >= maxPerRun) { cursor.pageOffset = i; cursor.limitHit = true; break; }
         try {
           var row = backupOne_(id, labelMap, settings);
           pending.push(row);
@@ -231,17 +243,18 @@ function runBackupLocked_() {
           cursor.processed += 1;
           noteRowStats_(cursor, row);
         } catch (e) {
-          if (isQuotaError_(e && e.message)) { cursor.found -= (cursor.pageFound || 0); throw e; } // 할당량: 오류로 세지 않고 대기로 전환
+          if (isQuotaError_(e && e.message)) { cursor.pageOffset = i; throw e; } // 할당량: 오류로 세지 않고 이 메일부터 재개
           cursor.errors += 1;
           cursor.lastError = id + ': ' + e.message;
           Logger.log('메시지 %s 백업 실패: %s', id, e.stack || e.message);
         }
         if (pending.length >= CONFIG.INDEX_FLUSH_EVERY) { appendIndexRows_(sheet, pending); pending = []; }
         if ((cursor.processed + cursor.errors) % CONFIG.STATUS_EVERY === 0) setStatus_({ state: 'running', message: '저장 중 ' + cursor.processed + '건' + (cursor.expectedTotal ? ' / ' + cursor.expectedTotal : ''), cursor: cursor });
-        if (Date.now() > deadline) { outOfTime = true; break; }
+        if (Date.now() > deadline) { cursor.pageOffset = i + 1; outOfTime = true; break; }
       }
       if (cursor.paused) break;
-      if (outOfTime || cursor.limitHit) break; // 시간 초과: 같은 pageToken으로 재개 (중복은 id로 걸러짐)
+      if (outOfTime || cursor.limitHit) break; // 시간 초과: 같은 pageToken + pageOffset 위치에서 재개
+      cursor.pageOffset = 0;
       cursor.pageToken = page.nextPageToken || null;
       if (!cursor.pageToken && !advanceWindow_(cursor)) break; // 이 창이 끝나면 다음(더 최신) 창으로
       if (Date.now() > deadline) { outOfTime = true; break; }
@@ -254,6 +267,7 @@ function runBackupLocked_() {
     throw e;
   } finally {
     appendIndexRows_(sheet, pending);
+    noteChunkEnd_(cursor);
   }
 
   if (cursor.paused) {

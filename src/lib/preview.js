@@ -43,13 +43,23 @@ function aggregatePreview(o) {
 }
 
 /** 실행 중 진행률. expectedTotal이 없으면 percent는 null. */
+/**
+ * 진행률·소요·남은 시간. 소요는 실제 작업 시간(구간 합, 대기·지연 제외), 속도는 현재 구간(30초 이상 진행 시) 또는
+ * 직전 구간의 속도를 쓴다. 시작 이후 전체 시간으로 나누면 중단·대기가 섞여 남은 시간이 엉뚱해진다.
+ */
 function runProgress(run, nowMs) {
   run = run || {};
+  var now = nowMs || Date.now();
   var processed = Number(run.processed) || 0, expected = Number(run.expectedTotal) || 0;
   var percent = expected > 0 ? Math.min(99, Math.floor(processed / expected * 100)) : null;
-  var elapsed = run.startedAt ? Math.max(1, ((nowMs || Date.now()) - new Date(run.startedAt).getTime()) / 1000) : 0;
-  var rate = elapsed > 0 ? processed / elapsed : 0;
-  var eta = (expected > processed && rate > 0) ? Math.round((expected - processed) / rate) : null;
+  var chunkSecs = run.chunkStartedAt ? Math.max(0, (now - new Date(run.chunkStartedAt).getTime()) / 1000) : 0;
+  if (chunkSecs > 400) chunkSecs = 0; // 구간이 끝났는데 기록이 안 된 경우(끊김)
+  var active = (Number(run.activeSeconds) || 0) + chunkSecs;
+  var elapsed = active > 0 ? active : (run.startedAt ? Math.max(1, (now - new Date(run.startedAt).getTime()) / 1000) : 0);
+  var chunkDone = processed - (Number(run.chunkStartProcessed) || 0);
+  var rate = (chunkSecs >= 30 && chunkDone > 0) ? chunkDone / chunkSecs
+    : (Number(run.lastRate) > 0 ? Number(run.lastRate) : (elapsed > 0 ? processed / elapsed : 0));
+  var eta = (expected > processed && rate > 0) ? Math.round((expected - processed) / rate * 1.15) : null; // 구간 사이 대기 여유 15%
   return { percent: percent, elapsedSeconds: Math.round(elapsed), rate: rate, etaSeconds: eta, remaining: expected > processed ? expected - processed : 0 };
 }
 
