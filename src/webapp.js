@@ -89,9 +89,13 @@ function saveSettings(input) {
   return getDashboard();
 }
 
-/** 지금 백업 전 감지: 새 메일 수, 라벨별 건수·용량, 기간. 저장하지 않는다. */
-function previewBackup() {
-  var p = previewBackup_();
+/**
+ * 지금 백업 전 감지: 새 메일 수, 라벨별 건수·용량, 기간. 저장하지 않는다.
+ * @param {{scope?:'incremental'|'all'|'since', sinceDate?:string}} [opt] 범위. 없으면 첫 백업=all, 그 외=incremental
+ */
+function previewBackup(opt) {
+  opt = opt || {};
+  var p = previewBackup_(opt.scope, opt.sinceDate);
   savePreview_(p);
   return p;
 }

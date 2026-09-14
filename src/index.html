@@ -161,13 +161,17 @@
   .first { background: var(--amber-bg); border: 1px solid var(--amber-line); border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; }
   .first .ft { font-weight: 700; color: var(--amber-ink); margin-bottom: 8px; }
   .first .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .first .opts.three { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+  .first.plain { background: var(--soft); border-color: var(--line); }
+  .first.plain .ft, .first.plain .fh { color: var(--ink2); }
   @media (max-width: 600px) { .first .opts { grid-template-columns: 1fr; } }
   .opt { display: flex; gap: 10px; align-items: flex-start; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; }
   .opt.on { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
   .opt input[type=radio] { width: 16px; height: 16px; margin-top: 2px; }
   .opt b { display: block; font-size: 13px; }
   .opt span { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
-  .opt span.row { display: flex; gap: 6px; align-items: center; margin-top: 6px; }
+  .opt span.row { display: flex; gap: 6px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+  .opt span.row input { flex: 1; min-width: 120px; }
   .opt span.row input { padding: 5px 8px; font-size: 12px; }
   .opt span.row button { white-space: nowrap; flex: none; }
   .first .fh { font-size: 12px; color: var(--amber-ink); margin-top: 8px; }
@@ -672,15 +676,14 @@
     var d = state.dash || {}, s = d.settings || {};
     var est = p.estimated ? '<small title="새 메일 ' + fmtNum(p.newCount) + '건 중 ' + fmtNum(p.detailed) + '건 표본으로 추정">≈</small>' : '';
     $('modalPill').hidden = false; $('modalPill').textContent = p.lastSyncAt ? fmtDate(p.lastSyncAt) + ' 이후' : (p.initialStartDate ? p.initialStartDate + ' 이후' : '전체 메일');
-    var firstBlock = '';
-    if (p.isFirst) {
-      var all = !p.initialStartDate;
-      firstBlock = '<div class="first"><div class="ft">🎉 첫 백업이신가요? 범위를 고르세요</div><div class="opts">' +
-        '<label class="opt' + (all ? ' on' : '') + '"><input type="radio" name="firstScope" value="all"' + (all ? ' checked' : '') + '><div><b>📦 지금 있는 메일 전부</b><span>' + (p.mailboxTotal ? '메일함 약 ' + fmtNum(p.mailboxTotal) + '건' : '전체') + ' · 이후엔 새 메일만 추가</span></div></label>' +
-        '<label class="opt' + (!all ? ' on' : '') + '"><input type="radio" name="firstScope" value="since"' + (!all ? ' checked' : '') + '><div><b>📅 특정 날짜부터</b><span class="row"><input type="date" id="firstDate" value="' + esc(p.initialStartDate || '') + '"><button type="button" class="sm" id="firstApply">적용</button></span></div></label>' +
-        '</div><div class="fh">⏱ 예상 소요 약 ' + secs(p.estimatedSeconds) + ' · 백그라운드에서 1분 간격 여러 구간으로 진행 · 창을 닫아도 계속</div></div>';
-    }
-    $('modalBody').innerHTML = firstBlock +
+    var sc = p.scope || (p.isFirst ? 'all' : 'incremental');
+    var opt = function (val, title, sub) { return '<label class="opt' + (sc === val ? ' on' : '') + '"><input type="radio" name="scope" value="' + val + '"' + (sc === val ? ' checked' : '') + '><div><b>' + title + '</b><span>' + sub + '</span></div></label>'; };
+    var scopeBlock = '<div class="first' + (p.isFirst ? '' : ' plain') + '"><div class="ft">' + (p.isFirst ? '🎉 첫 백업이신가요? ' : '') + '범위를 고르세요</div><div class="opts three">' +
+      (p.lastSyncAt ? opt('incremental', '🔄 마지막 백업 이후', fmtDate(p.lastSyncAt) + ' 이후 새 메일') : '') +
+      opt('all', '📦 지금 있는 메일 전부', (p.mailboxTotal ? '메일함 약 ' + fmtNum(p.mailboxTotal) + '건 · ' : '') + '이미 저장된 건 건너뜀') +
+      '<label class="opt' + (sc === 'since' ? ' on' : '') + '"><input type="radio" name="scope" value="since"' + (sc === 'since' ? ' checked' : '') + '><div><b>📅 날짜부터</b><span class="row"><input type="date" id="sinceDate" value="' + esc(p.sinceDate || p.initialStartDate || '') + '"><button type="button" class="sm" id="sinceApply">적용</button></span></div></label>' +
+      '</div><div class="fh">⏱ 예상 소요 약 ' + secs(p.estimatedSeconds) + ' · 백그라운드에서 1분 간격 여러 구간으로 진행 · 창을 닫아도 계속</div></div>';
+    $('modalBody').innerHTML = scopeBlock +
       '<div class="pv-nums">' +
       '<div class="pv-num"><div class="k">📧 새로 저장</div><div class="v">' + fmtNum(p.newCount) + '건' + (s.maxPerRun && p.newCount > s.maxPerRun ? ' <small>이번엔 ' + fmtNum(s.maxPerRun) + '건</small>' : '') + '</div></div>' +
       '<div class="pv-num"><div class="k">💾 용량</div><div class="v">' + est + fmtBytes(p.bytes) + '</div></div>' +
@@ -696,23 +699,20 @@
       '</div>';
     $('modalNote').textContent = '감지 ' + Math.round((p.elapsedMs || 0) / 100) / 10 + '초' + (p.isFirst ? '' : ' · 예상 약 ' + secs(p.estimatedSeconds));
     $('modalOk').disabled = false; $('modalOk').textContent = '▶ 백업 시작' + (p.newCount ? ' · ' + fmtNum(p.newCount) + '건' : '');
-    if (p.isFirst) {
-      var applyScope = function (date) {
-        $('modalOk').disabled = true; $('modalBody').innerHTML = '<div class="pv-loading"><span class="spin dark"></span> 범위를 바꾸고 다시 감지하는 중…</div>';
-        var seq = ++previewSeq;
-        call('saveSettings', Object.assign({}, s, { initialStartDate: date })).then(function (dd) { renderDashboard(dd); return call('previewBackup'); })
-          .then(function (pp) { if (seq === previewSeq) renderPreview(pp); })
-          .catch(function (e) { toast('실패: ' + (e.message || e), true); });
-      };
-      document.querySelectorAll('input[name=firstScope]').forEach(function (r) {
-        r.addEventListener('change', function () {
-          document.querySelectorAll('.opt').forEach(function (o) { o.classList.toggle('on', o.querySelector('input').checked); });
-          if (this.value === 'all' && p.initialStartDate) applyScope('');
-          if (this.value === 'since') $('firstDate').focus();
-        });
+    var rePreview = function (scope, date) {
+      $('modalOk').disabled = true; $('modalBody').innerHTML = '<div class="pv-loading"><span class="spin dark"></span> 범위를 바꾸고 다시 감지하는 중…</div>';
+      var seq = ++previewSeq;
+      call('previewBackup', { scope: scope, sinceDate: date || '' }).then(function (pp) { if (seq === previewSeq) renderPreview(pp); })
+        .catch(function (e) { toast('실패: ' + (e.message || e), true); });
+    };
+    document.querySelectorAll('input[name=scope]').forEach(function (r) {
+      r.addEventListener('change', function () {
+        document.querySelectorAll('.opt').forEach(function (o) { o.classList.toggle('on', o.querySelector('input').checked); });
+        if (this.value === 'since') { $('sinceDate').focus(); return; }
+        rePreview(this.value);
       });
-      $('firstApply').addEventListener('click', function () { var v = $('firstDate').value; if (!v) { toast('날짜를 고르세요', true); return; } applyScope(v); });
-    }
+    });
+    $('sinceApply').addEventListener('click', function () { var v = $('sinceDate').value; if (!v) { toast('날짜를 고르세요', true); return; } rePreview('since', v); });
   }
   $('btnRun').addEventListener('click', function () {
     var seq = ++previewSeq;

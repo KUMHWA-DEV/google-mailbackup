@@ -62,12 +62,16 @@ const api = {
     return { total: hits.length, page, pageSize, items: hits.slice((page - 1) * pageSize, page * pageSize) };
   },
   // 감지(미리보기): 실제 서버는 Gmail을 조회한다. 로컬은 샘플 7건을 "새 메일"로 가정하고 1.2초 지연.
-  previewBackup: async () => {
+  previewBackup: async (opt) => {
+    opt = opt || {};
     await sleep(1200);
+    const scope = opt.scope || (!lastSyncEpoch ? 'all' : 'incremental');
     const metas = fixtures.slice(0, 7).map(r => ({ category: r.category, sizeBytes: r.sizeBytes, date: r.date, from: r.from.replace(/<.*>/, '').trim() || r.from }));
     preview = aggregatePreview({ found: 12, skipped: 5, newCount: 7, metas, detailed: 7 });
     const isFirst = !lastSyncEpoch;
-    if (isFirst) { preview = aggregatePreview({ found: 300, skipped: 0, newCount: settings.initialStartDate ? 420 : 4180, metas, detailed: 7 }); preview.mailboxTotal = 4180; }
+    if (scope === 'all') { preview = aggregatePreview({ found: 300, skipped: isFirst ? 0 : 12, newCount: isFirst ? 4180 : 4168, metas, detailed: 7 }); preview.mailboxTotal = 4180; }
+    if (scope === 'since') { preview = aggregatePreview({ found: 430, skipped: isFirst ? 0 : 10, newCount: 420, metas, detailed: 7 }); }
+    preview.scope = scope; preview.sinceDate = scope === 'since' ? (opt.sinceDate || '') : '';
     preview.isFirst = isFirst; preview.initialStartDate = settings.initialStartDate || ''; preview.estimatedSeconds = estimateRunSeconds(preview.newCount);
     preview.query = '-in:spam -in:trash -in:chats'; preview.truncated = isFirst; preview.lastSyncAt = lastSyncEpoch ? new Date(lastSyncEpoch * 1000).toISOString() : null; preview.previewedAt = new Date().toISOString(); preview.elapsedMs = 1200;
     return preview;

@@ -31,7 +31,9 @@ function runBackupLocked_() {
   if (isNewRun) {
     var preview = loadPreview_();
     cursor = {
-      query: buildQuery(getProp_(PROP.LAST_SYNC_EPOCH, null), settings),
+      // 수동 실행이면 감지 모달에서 고른 범위(전체/날짜부터/증분)를, 자동 실행이면 증분을 쓴다.
+      query: scopeQuery_(preview && preview.manual ? preview.scope : 'incremental', preview && preview.sinceDate, settings),
+      scope: preview && preview.manual ? (preview.scope || 'incremental') : 'incremental',
       pageToken: null,
       runStartEpoch: Math.floor(startedAt / 1000),
       startedAt: new Date(startedAt).toISOString(),
@@ -157,7 +159,7 @@ function appendRunHistory_(cursor) {
     found: cursor.found, processed: cursor.processed, skipped: cursor.skipped, errors: cursor.errors,
     bytes: cursor.bytes, mailFrom: cursor.mailFrom, mailTo: cursor.mailTo, query: cursor.query,
     limitHit: !!cursor.limitHit, notifiedTo: cursor.notifiedTo || null,
-    manual: !!cursor.manual, expectedTotal: cursor.expectedTotal || 0,
+    manual: !!cursor.manual, expectedTotal: cursor.expectedTotal || 0, scope: cursor.scope || 'incremental',
     byCategory: breakdownList(cursor.cats || {}).slice(0, 12),
   });
   props_().setProperty(PROP.RUN_HISTORY_JSON, JSON.stringify(hist.slice(0, RUN_HISTORY_MAX)));
@@ -204,25 +206,38 @@ var PREVIEW_TIME_BUDGET_MS = 40000; // 웹 요청 안에서 끝내기 위한 시
  * 다음 백업에서 저장될 메일을 감지해 라벨별 건수·용량·기간을 돌려준다. 저장은 하지 않는다.
  * 새 메일이 PREVIEW_DETAIL_MAX보다 많으면 표본으로 추정(estimated=true).
  */
-function previewBackup_() {
+/**
+ * 백업 범위 → Gmail 쿼리.
+ *  scope: 'incremental'(마지막 백업 이후, 기본) | 'all'(전체, 저장된 건 id로 건너뜀) | 'since'(sinceDate부터)
+ */
+function scopeQuery_(scope, sinceDate, settings) {
+  var lastSync = getProp_(PROP.LAST_SYNC_EPOCH, null);
+  if (scope === 'all') return buildQuery(null, Object.assign({}, settings, { initialStartDate: '' }));
+  if (scope === 'since' && sinceDate) return buildQuery(null, Object.assign({}, settings, { initialStartDate: sinceDate }));
+  return buildQuery(lastSync, settings);
+}
+
+function previewBackup_(scope, sinceDate) {
   var t0 = Date.now();
   var settings = getSettings_();
   var lastSync = getProp_(PROP.LAST_SYNC_EPOCH, null);
   var isFirst = !lastSync;
-  var query = buildQuery(lastSync, settings);
+  if (!scope) scope = isFirst ? 'all' : 'incremental';
+  var query = scopeQuery_(scope, sinceDate, settings);
   var backedUp = loadBackedUpIds_(indexSheet_());
   var labelMap = fetchLabelMap_();
   // 첫 백업이면 메일함 전체 건수를 프로필에서 즉시 가져온다 (수만 건이어도 1회 호출).
   var mailboxTotal = 0;
-  if (isFirst) { try { mailboxTotal = Number(Gmail.Users.getProfile('me').messagesTotal) || 0; } catch (e) { mailboxTotal = 0; } }
+  var wholeBox = scope === 'all' && !settings.filterQuery; // 메일함 전체가 대상이면 프로필 건수로 보정 가능
+  if (wholeBox) { try { mailboxTotal = Number(Gmail.Users.getProfile('me').messagesTotal) || 0; } catch (e) { mailboxTotal = 0; } }
   var found = 0, skipped = 0, newIds = [], pageToken = null, truncated = false;
   do {
     var page = listMessageIds_(query, pageToken);
     found += page.ids.length;
     page.ids.forEach(function (id) { if (backedUp[id]) skipped += 1; else newIds.push(id); });
     pageToken = page.nextPageToken || null;
-    // 첫 백업은 표본 300건만 있으면 되므로 목록을 끝까지 세지 않는다 (전체 건수는 프로필 값 사용).
-    if (isFirst && mailboxTotal && newIds.length >= PREVIEW_DETAIL_MAX) { truncated = !!pageToken; break; }
+    // 전체 범위는 표본 300건만 있으면 되므로 목록을 끝까지 세지 않는다 (전체 건수는 프로필 값 사용).
+    if (wholeBox && mailboxTotal && skipped === 0 && newIds.length >= PREVIEW_DETAIL_MAX) { truncated = !!pageToken; break; }
     if (Date.now() - t0 > PREVIEW_TIME_BUDGET_MS / 2) { truncated = !!pageToken; break; }
   } while (pageToken);
   var metas = [];
@@ -235,11 +250,13 @@ function previewBackup_() {
   }
   // 목록 조회가 시간 예산에 걸려 잘렸으면(첫 백업·대량), 전체 건수는 프로필 값으로 보정한다.
   var newCount = newIds.length;
-  if (truncated && isFirst && !settings.initialStartDate && !settings.filterQuery && mailboxTotal > found) newCount = Math.max(newCount, mailboxTotal - skipped);
+  if (truncated && wholeBox && mailboxTotal > found) newCount = Math.max(newCount, mailboxTotal - skipped);
   var agg = aggregatePreview({ found: found, skipped: skipped, newCount: newCount, metas: metas, detailed: metas.length });
   agg.query = query;
   agg.truncated = truncated;
   agg.isFirst = isFirst;
+  agg.scope = scope;
+  agg.sinceDate = scope === 'since' ? (sinceDate || '') : '';
   agg.mailboxTotal = mailboxTotal;
   agg.initialStartDate = settings.initialStartDate || '';
   agg.estimatedSeconds = estimateRunSeconds(settings.maxPerRun ? Math.min(newCount, settings.maxPerRun) : newCount);
@@ -253,7 +270,7 @@ function nameOrAddress_(addr) {
   var m = s.match(/^\s*"?([^"<]*)"?\s*<([^>]+)>/);
   return m ? (m[1].trim() || m[2]) : s.trim();
 }
-function savePreview_(p) { props_().setProperty(PROP.PREVIEW_JSON, JSON.stringify({ newCount: p.newCount, bytes: p.bytes, manual: true, previewedAt: p.previewedAt })); }
+function savePreview_(p) { props_().setProperty(PROP.PREVIEW_JSON, JSON.stringify({ newCount: p.newCount, bytes: p.bytes, manual: true, previewedAt: p.previewedAt, scope: p.scope, sinceDate: p.sinceDate || '' })); }
 function loadPreview_() { try { return JSON.parse(getProp_(PROP.PREVIEW_JSON, '') || 'null'); } catch (e) { return null; } }
 
 // ---------- 커서 / 상태 ----------
