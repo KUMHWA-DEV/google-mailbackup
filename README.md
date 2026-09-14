@@ -91,7 +91,16 @@ npx clasp open-script                             # 편집기 열기
 - **퇴사자 처리**: 백업 파일 소유자는 각 직원이므로, 일반 Drive 파일과 같이 관리 콘솔에서 소유권 이전으로 보존합니다.
 - **한도**: 트리거는 사용자당 스크립트별 20개(이 앱은 1~2개 사용), 완료 알림 메일은 사용자당 하루 1,500통(Workspace) 한도 안입니다.
 
-## 2-1. Google Workspace 안에서 "앱"으로 쓰는 방법
+## 2-1. Google Workspace 안에서 "앱"으로 쓰는 방법 · 깔끔한 링크
+
+배포 URL(`https://script.google.com/a/macros/spris.com/s/AKfy…/exec`)은 바꿀 수 없습니다. 짧고 기억하기 쉬운 주소가 필요하면:
+
+- **Google Sites (권장, 관리자 불필요)**: sites.google.com 에서 새 사이트 → 주소를 `spris.com/mail-backup` 처럼 지정 →
+  삽입 > 삽입 코드에 `<iframe src="<웹앱 URL>" style="width:100%;height:100vh;border:0"></iframe>` → 게시(spris.com 사용자).
+  결과 주소는 `https://sites.google.com/spris.com/mail-backup` 이며 그 안에서 앱이 그대로 동작합니다.
+- **애드온 아이콘**: 링크를 외울 필요 없이 Gmail 사이드바에서 시작하는 것이 가장 자연스럽습니다(2-2). 애드온의 "앱 열기" 버튼이 웹앱으로 연결됩니다.
+- **앱 런처**: 아래 3번(Marketplace 비공개 앱)을 하면 9점 메뉴에도 아이콘이 생깁니다.
+
 
 배포가 끝나면 `https://script.google.com/a/macros/spris.com/s/<배포ID>/exec` 형태의 URL이 생깁니다.
 이 URL이 곧 앱이며, spris.com 계정으로 로그인한 사람만 열 수 있습니다(매니페스트 `access: DOMAIN`).
@@ -116,7 +125,9 @@ npx clasp open-script                             # 편집기 열기
 같은 스크립트가 **Google Workspace 애드온**으로도 동작합니다(`appsscript.json`의 `addOns`).
 설치하면 Gmail 오른쪽 사이드바에 ☁️ Mail Backup 아이콘이 생기고,
 
-- 아이콘을 누르면 **홈 카드**: 상태(최신/백업 필요/진행 중 n/m), 보관 메일 수·용량, ▶ 지금 백업, 🌐 앱 열기(전체 웹앱), 📁 Drive, 최근 실행 3건
+- 처음이면 **온보딩 카드**: 한 줄 설명 → 📦 전체 메일 / 📅 날짜부터 선택 → ⏱ 자동 백업 스위치 → ▶ 백업 시작. 소개받은 직원이 아이콘 한 번 눌러 바로 시작하는 흐름
+- 이후 **홈 카드**: 상태(최신/백업 필요/진행 중 n/m), 보관 메일 수·용량, ▶ 지금 백업, **⚙️ 빠른 설정**(자동 백업, 주기, 첨부 저장, 완료 알림 → 저장),
+  최근 실행 3건, 🌐 앱 열기 · 심화 설정(폴더 기준, 검색 조건, 회당 최대, 알림 주소 등은 웹앱에서), 📁 Drive
 - **메일을 열면**: 그 메일이 백업됐는지(✅ 백업 시각 · 폴더 · 용량), ↗ Drive 원본, ⬇ .eml, 첨부파일 목록(클릭하면 다운로드).
   아직 백업 전이면 다음 자동 백업 시각과 ▶ 지금 백업 버튼
 
