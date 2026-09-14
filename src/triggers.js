@@ -39,6 +39,12 @@ function deleteContinuationTriggers_() {
   });
 }
 
-function scheduleContinuation_(delayMs) {
+/**
+ * 이어서 실행 트리거 + 안전망 트리거. 주 트리거(delayMs 뒤)가 지연·유실되거나 구간이 오류로 끝나도
+ * 안전망(SAFETY_DELAY_MS 뒤)이 커서 위치부터 다시 이어간다. 다음 구간이 정상 시작되면 runBackup 첫 줄에서 둘 다 지운다.
+ */
+var SAFETY_DELAY_MS = 15 * 60 * 1000;
+function scheduleContinuation_(delayMs, noSafety) {
   ScriptApp.newTrigger(BACKUP_FN).timeBased().after(delayMs || CONFIG.CONTINUE_DELAY_MS).create();
+  if (!noSafety) ScriptApp.newTrigger(BACKUP_FN).timeBased().after(Math.max(SAFETY_DELAY_MS, (delayMs || 0) + 5 * 60 * 1000)).create();
 }

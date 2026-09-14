@@ -30,12 +30,21 @@ function runBackup() {
       Logger.log('할당량 초과, %s 후 재개', QUOTA_BACKOFF_MS);
       return;
     }
-    // 그 외 예외: 상태에 남겨 대시보드/애드온에서 보이게 한다 (안 그러면 '대기 중'으로 영원히 보임)
+    // 그 외 예외: 저장된 위치부터 자동 재시도 (최대 RETRY_MAX회, 5분 간격). 넘으면 오류 상태로 두고 알림 메일.
     cur.lastError = msg;
     cur.failedAt = new Date().toISOString();
-    saveCursor_(cur); // 다시 시도하면 저장된 위치부터
-    Logger.log('runBackup 실패: %s', e && e.stack || e);
+    cur.retries = (cur.retries || 0) + 1;
+    Logger.log('runBackup 실패(%s회): %s', cur.retries, e && e.stack || e);
+    if (cur.startedAt && cur.retries <= RETRY_MAX) {
+      cur.resumeAt = new Date(Date.now() + RETRY_DELAY_MS).toISOString();
+      saveCursor_(cur);
+      try { scheduleContinuation_(RETRY_DELAY_MS); } catch (e3) { Logger.log('재시도 트리거 생성 실패: %s', e3.message); }
+      setStatus_({ state: 'running', message: '오류 발생 · ' + Math.round(RETRY_DELAY_MS / 60000) + '분 뒤 자동 재시도 (' + cur.retries + '/' + RETRY_MAX + ') · ' + msg, cursor: cur, errorStack: String(e && e.stack || '') });
+      return;
+    }
+    saveCursor_(cur); // ▶ 이어서로 저장된 위치부터 재개 가능
     setStatus_({ state: 'error', message: '실행 실패: ' + msg, cursor: cur, errorStack: String(e && e.stack || '') });
+    sendFailureNotice_(cur, msg);
     throw e;
   } finally {
     lock.releaseLock();
@@ -108,7 +117,7 @@ function cancelBackup() {
  * 대시보드를 읽을 때 상태를 현실과 맞춘다. "중지 중"인데 실제 실행이 없거나(구간 사이·할당량 대기 중에 중지를 누른 경우),
  * running/queued 인데 8분 넘게 아무 갱신이 없고 실행도 없으면(트리거가 안 돈 경우) 중지됨/대기 상태로 바꿔 화면이 영원히 멈추지 않게 한다.
  */
-var STALE_RUN_MS = 8 * 60 * 1000;
+var STALE_RUN_MS = 30 * 60 * 1000; // Google 트리거는 최대 15분 정도 늦게 돌 수 있으므로 넉넉히
 function reconcileStatus_() {
   var st = getStatus_();
   if (!/^(stopping|running|queued)$/.test(st.state || '')) return st;
@@ -123,11 +132,18 @@ function reconcileStatus_() {
   try {
     var cur = loadCursor_();
     props_().deleteProperty('STOP_REQUESTED');
+    if (st.state !== 'stopping' && cur && cur.startedAt) {
+      // 트리거가 끊긴 실행: 멈추지 말고 커서 위치부터 다시 예약한다 (안전망 트리거가 이미 있으면 그대로 둠)
+      var pending = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === BACKUP_FN && t.getUniqueId() !== getProp_(PROP.TRIGGER_ID, ''); });
+      if (!pending) { try { scheduleContinuation_(5 * 1000); } catch (e3) { /* 무시 */ } }
+      cur.resumeAt = new Date(Date.now() + 60 * 1000).toISOString(); saveCursor_(cur);
+      setStatus_({ state: 'running', message: '실행이 끊겨 다시 예약함 · ' + (cur.processed || 0) + '건 저장됨 · 곧 이어서 실행', cursor: cur });
+      return getStatus_();
+    }
     try { deleteContinuationTriggers_(); } catch (e2) { /* 무시 */ }
-    var why = st.state === 'stopping' ? '중지됨' : '실행이 끊겨 멈춤';
     if (cur && cur.startedAt) {
       delete cur.resumeAt; cur.pausedAt = new Date().toISOString(); saveCursor_(cur);
-      setStatus_({ state: 'paused', message: why + ' · ' + (cur.processed || 0) + '건 저장 · "이어서"를 누르면 이 위치부터 계속', cursor: cur });
+      setStatus_({ state: 'paused', message: '중지됨 · ' + (cur.processed || 0) + '건 저장 · "이어서"를 누르면 이 위치부터 계속', cursor: cur });
     } else {
       props_().deleteProperty(PROP.CURSOR_JSON);
       setStatus_({ state: 'idle', message: st.state === 'stopping' ? '중지됨' : '실행이 시작되지 않아 취소됨', cursor: {} });
@@ -137,6 +153,20 @@ function reconcileStatus_() {
 }
 
 var QUOTA_BACKOFF_MS = 2 * 60 * 1000;
+var RETRY_MAX = 5, RETRY_DELAY_MS = 5 * 60 * 1000;
+
+/** 자동 재시도를 다 써도 실패하면 알림 메일. */
+function sendFailureNotice_(cursor, msg) {
+  try {
+    var settings = getSettings_();
+    var to = settings.notifyEmail || Session.getEffectiveUser().getEmail();
+    if (!to) return;
+    var links = appLinks_();
+    MailApp.sendEmail(to, '[Mail Backup] 백업이 중단됐습니다 (' + (cursor.processed || 0) + '건 저장됨)',
+      '백업 실행이 ' + RETRY_MAX + '회 재시도 후에도 실패해 멈췄습니다.\n\n오류: ' + msg + '\n저장된 메일: ' + (cursor.processed || 0) + '건\n\n' +
+      '앱을 열어 "▶ 이어서"를 누르면 저장된 위치부터 다시 진행합니다. 다음 자동 백업 때도 자동으로 이어갑니다.\n' + (links.webAppUrl || ''));
+  } catch (e) { Logger.log('실패 알림 메일 전송 실패: %s', e.message); }
+}
 function isQuotaError_(msg) { return /quota|rate ?limit|too many|429|user-rate/i.test(String(msg || '')); }
 
 function runBackupLocked_() {
@@ -165,12 +195,13 @@ function runBackupLocked_() {
     props_().deleteProperty(PROP.PREVIEW_JSON);
   }
   if (!isNewRun && stopRequested_()) { // 중지 요청 뒤에 뒤늦게 트리거가 돌면 바로 멈춘다
-    delete cursor.resumeAt; saveCursor_(cursor);
+    delete cursor.resumeAt; props_().deleteProperty('STOP_REQUESTED'); saveCursor_(cursor);
     setStatus_({ state: 'paused', message: '중지됨 · ' + cursor.processed + '건 저장 · "이어서"를 누르면 이 위치부터 계속', cursor: cursor });
     return;
   }
   if (!isNewRun && !cursor.processed) { cursor.found = 0; cursor.errors = 0; cursor.skipped = 0; cursor.lastError = null; }
   cursor.chunks += 1;
+  cursor.retries = 0; // 구간이 시작되면 재시도 횟수 초기화
   cursor.chunkStartedAt = new Date().toISOString();
   setStatus_({ state: 'running', message: (isNewRun ? '새 백업 시작' : '이어서 실행') + ' (' + cursor.chunks + '번째 구간)', cursor: cursor });
   Logger.log('백업 %s: query="%s" pageToken=%s', isNewRun ? '시작' : '재개', cursor.query, cursor.pageToken || '-');
@@ -226,12 +257,13 @@ function runBackupLocked_() {
 
   if (cursor.paused) {
     delete cursor.paused; delete cursor.resumeAt;
+    props_().deleteProperty('STOP_REQUESTED'); // 다음 자동 백업 때는 이 위치부터 자동으로 이어간다
     saveCursor_(cursor);
     setStatus_({ state: 'paused', message: '중지됨 · ' + cursor.processed + '건 저장 · "이어서"를 누르면 이 위치부터 계속', cursor: cursor });
     return;
   }
   if (outOfTime) {
-    if (stopRequested_()) { saveCursor_(cursor); setStatus_({ state: 'paused', message: '중지됨 · ' + cursor.processed + '건 저장', cursor: cursor }); return; }
+    if (stopRequested_()) { props_().deleteProperty('STOP_REQUESTED'); saveCursor_(cursor); setStatus_({ state: 'paused', message: '중지됨 · ' + cursor.processed + '건 저장', cursor: cursor }); return; }
     cursor.resumeAt = new Date(Date.now() + CONFIG.CONTINUE_DELAY_MS).toISOString();
     saveCursor_(cursor);
     scheduleContinuation_();

@@ -684,7 +684,7 @@
     var running = d.state === 'running' || d.state === 'queued' || d.state === 'stopping';
     var failed = d.state === 'error', paused = d.state === 'paused';
     $('btnStop').hidden = !running || d.state === 'stopping';
-    $('btnResume').hidden = !paused; $('btnCancel').hidden = !(paused || failed || d.state === 'stopping');
+    $('btnResume').hidden = !(paused || failed); $('btnCancel').hidden = !(paused || failed || d.state === 'stopping');
     document.querySelector('.scopebox').hidden = running || paused;
     $('btnRun').hidden = running || paused;
     var stuck = d.state === 'queued' && d.queuedAt && (Date.now() - new Date(d.queuedAt).getTime() > 120 * 1000);
