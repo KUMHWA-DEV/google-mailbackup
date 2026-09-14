@@ -79,6 +79,7 @@ function runBackupLocked_() {
     };
     props_().deleteProperty(PROP.PREVIEW_JSON);
   }
+  if (!isNewRun && !cursor.processed) { cursor.found = 0; cursor.errors = 0; cursor.skipped = 0; cursor.lastError = null; }
   cursor.chunks += 1;
   cursor.chunkStartedAt = new Date().toISOString();
   setStatus_({ state: 'running', message: (isNewRun ? '새 백업 시작' : '이어서 실행') + ' (' + cursor.chunks + '번째 구간)', cursor: cursor });
@@ -95,6 +96,7 @@ function runBackupLocked_() {
     while (true) {
       var page = listMessageIds_(cursor.query, cursor.pageToken);
       cursor.found += page.ids.length;
+      cursor.pageFound = page.ids.length; // 할당량 중단 시 같은 페이지를 다시 세지 않도록 되돌릴 값
       for (var i = 0; i < page.ids.length; i++) {
         var id = page.ids[i];
         if (backedUp[id]) { cursor.skipped += 1; continue; }
@@ -106,6 +108,7 @@ function runBackupLocked_() {
           cursor.processed += 1;
           noteRowStats_(cursor, row);
         } catch (e) {
+          if (isQuotaError_(e && e.message)) { cursor.found -= (cursor.pageFound || 0); throw e; } // 할당량: 오류로 세지 않고 대기로 전환
           cursor.errors += 1;
           cursor.lastError = id + ': ' + e.message;
           Logger.log('메시지 %s 백업 실패: %s', id, e.stack || e.message);

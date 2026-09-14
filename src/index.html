@@ -750,11 +750,12 @@
     var pct = p.percent, exp = r.expectedTotal || 0;
     var top = queued ? '⏳ 대기열 · 곧 시작' + (exp ? ' (예상 ' + fmtNum(exp) + '건)' : '')
       : '⚙️ 저장 중 ' + fmtNum(r.processed) + (exp ? ' / ' + fmtNum(exp) + '건' : '건') + (pct != null ? ' · ' + pct + '%' : '') + ' · ' + fmtBytes(r.bytes);
-    var right = queued ? '' : '구간 ' + fmtNum(r.chunks) + ' · 경과 ' + secs(p.elapsedSeconds) + (p.etaSeconds != null ? ' · 남은 약 ' + secs(p.etaSeconds) : '') + (r.errors ? ' · ⚠️ ' + r.errors : '');
+    var right = queued ? '' : '구간 ' + fmtNum(r.chunks) + ' · 경과 ' + secs(p.elapsedSeconds) + (p.etaSeconds != null ? ' · 남은 약 ' + secs(p.etaSeconds) : '') + (r.errors ? ' · <span title="' + esc(d.lastError || '') + '">⚠️ 오류 ' + r.errors + '</span>' : '');
     var resume = r.resumeAt && new Date(r.resumeAt) > new Date() ? '⏸ 구간 시간 제한 · ' + fmtDate(r.resumeAt) + ' 재개' : '';
     return '<div class="top"><span>' + top + '</span><span>' + right + '</span></div>' +
       '<div class="bar"><i style="width:' + (pct != null ? pct : (queued ? 0 : 30)) + '%"' + (pct == null && !queued ? ' class="due"' : '') + '></i></div>' +
       (r.byCategory && r.byCategory.length ? '<div class="cats">' + r.byCategory.map(function (c) { return '<span class="pill blue">' + esc(c.name) + ' ' + fmtNum(c.count) + ' <small style="font-weight:400">' + fmtBytes(c.bytes) + '</small></span>'; }).join('') + '</div>' : '') +
+      (r.errors && d.lastError ? '<div class="meta" style="color:var(--red-ink)">마지막 오류: ' + esc(String(d.lastError).slice(0, 160)) + '</div>' : '') +
       '<div class="meta">' + (state.inlineRunning ? '🖥 이 창에서 직접 실행 중 · 창을 닫으면 멈추고 다음에 이어서 진행' : '🖥 백그라운드에서 실행 · 창을 닫아도 계속됩니다') + (resume ? ' · ' + resume : '') + (r.manual ? ' · 🖱 수동' : ' · ⏱ 자동') + '</div>';
   }
   document.addEventListener('click', function (e) {
