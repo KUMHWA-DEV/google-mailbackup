@@ -113,11 +113,15 @@ function backupOne_(id, labelMap, settings) {
   var folder = ensureFolderPath_(buildFolderPath(folderName, m.date, CONFIG.TIME_ZONE, settings.folderLayout));
   var fileName = buildFileName({ date: m.date, subject: m.headers.subject, id: m.id }, CONFIG.TIME_ZONE);
   var saved = saveEml_(folder, fileName, m.rawBytes);
-  var attachmentNames = saveAttachments_(m.id, m.attachments);
+  var attachmentFiles = saveAttachments_(m.id, m.attachments);
+  // 첨부 별도 저장을 껐어도 이름은 기록해 두어 목록/필터에 보이게 한다.
+  var attachmentNames = attachmentFiles.length
+    ? attachmentFiles.map(function (f) { return f.name; })
+    : (m.attachments || []).map(function (a, i) { return a.getName() || ('attachment-' + (i + 1)); });
   return buildIndexRow({
     id: m.id, threadId: m.threadId, date: m.date, category: category, agenda: agenda,
     labelNames: labelNamesOf(m.labelIds, labelMap), headers: m.headers, snippet: m.snippet,
-    sizeEstimate: m.sizeEstimate, attachmentNames: attachmentNames, bodyPreview: m.bodyPreview,
+    sizeEstimate: m.sizeEstimate, attachmentNames: attachmentNames, attachmentFiles: attachmentFiles, bodyPreview: m.bodyPreview,
     driveFileId: saved.fileId, driveUrl: saved.url, backedUpAt: new Date(),
   });
 }

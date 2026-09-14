@@ -105,59 +105,110 @@
   .list b { color: var(--ink); }
 
   /* explorer */
-  .explorer { padding: 0; overflow: hidden; display: flex; flex-direction: column; min-height: 720px; }
-  .exhead { padding: 14px 16px; border-bottom: 1px solid var(--line); background: rgba(248,250,252,.8); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-  .exhead .t { display: flex; align-items: center; gap: 10px; }
-  .exhead .icon { background: var(--blue); color: #fff; }
-  .exhead select { width: auto; padding: 6px 9px; font-size: 12px; }
-  .extools { padding: 10px 16px; border-bottom: 1px solid var(--line); background: rgba(241,245,249,.7); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 12px; }
-  .extools .l { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .extools input { width: 290px; padding: 6px 10px; font-size: 12px; }
-  .seg { display: inline-flex; background: #fff; border: 1px solid #cbd5e1; border-radius: 9px; padding: 2px; gap: 2px; }
-  .seg button { border: 0; border-radius: 6px; padding: 4px 10px; font-size: 11px; color: var(--ink2); background: transparent; }
-  .seg button.active { background: var(--blue); color: #fff; }
-  .counter { color: var(--muted); display: flex; align-items: center; gap: 6px; }
-  .counter b { color: var(--blue-ink); background: var(--blue-bg); border: 1px solid var(--blue-line); border-radius: 6px; padding: 1px 7px; font-family: ui-monospace, monospace; }
-  .chips { padding: 8px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 6px; overflow-x: auto; font-size: 11px; }
-  .chips .lbl { color: var(--faint); font-weight: 700; margin-right: 4px; white-space: nowrap; }
-  .chip { border: 0; background: var(--line2); color: var(--ink2); border-radius: 999px; padding: 4px 10px; font-size: 11px; white-space: nowrap; display: inline-flex; gap: 5px; align-items: center; }
-  .chip.active { background: var(--blue); color: #fff; }
-  .chip.dark.active { background: var(--dark); }
-  .chip i { font-style: normal; background: rgba(255,255,255,.35); border-radius: 999px; padding: 0 6px; font-size: 10px; }
-  .chip:not(.active) i { background: #e2e8f0; color: var(--ink2); }
-  .split { flex: 1; display: flex; min-height: 0; }
-  .mlist { width: 38%; min-width: 280px; border-right: 1px solid var(--line); overflow-y: auto; max-height: 640px; }
-  .mrow { padding: 12px 14px; border-bottom: 1px solid var(--line2); cursor: pointer; display: grid; gap: 4px; border-left: 4px solid transparent; }
-  .mrow:hover { background: var(--soft); }
-  .mrow.active { background: rgba(239,246,255,.8); border-left-color: var(--blue); }
-  .mrow .top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
-  .mrow .who { display: flex; align-items: center; gap: 6px; min-width: 0; text-align: left; }
-  .mrow .who b { font-size: 12px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
-  .mrow .date { font-size: 10px; color: var(--faint); white-space: nowrap; }
-  .mrow .subj { font-size: 12px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .mrow .snip { font-size: 11px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .mrow .foot { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-top: 2px; }
-  .mrow .foot .tags { display: flex; gap: 5px; flex-wrap: wrap; }
-  .tag { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 5px; border: 1px solid; white-space: nowrap; }
-  .tag.in { color: var(--blue-ink); background: var(--blue-bg); border-color: var(--blue-line); }
-  .tag.out { color: var(--purple-ink); background: var(--purple-bg); border-color: var(--purple-line); }
-  .tag.att { color: var(--green-ink); background: var(--green-bg); border-color: var(--green-line); }
-  .tag.cat { color: var(--ink2); background: var(--line2); border-color: var(--line); font-weight: 600; }
-  .reader { flex: 1; overflow-y: auto; max-height: 640px; padding: 22px 24px; min-width: 0; }
-  .reader h2 { font-size: 17px; margin: 0 0 10px; line-height: 1.35; }
-  .reader .meta { background: var(--soft); border: 1px solid var(--line2); border-radius: 12px; padding: 12px 14px; font-size: 12px; color: var(--ink2); display: grid; gap: 4px; }
-  .reader .meta b { color: var(--ink); }
-  .reader .actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
-  .reader pre { white-space: pre-wrap; word-break: break-word; font: 13px/1.6 inherit; background: rgba(248,250,252,.6); border: 1px solid var(--line2); border-radius: 12px; padding: 16px; margin: 0; color: var(--ink2); }
-  .reader .placeholder { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: var(--faint); padding: 80px 20px; }
-  .reader .placeholder b { color: var(--ink2); font-size: 14px; margin-bottom: 4px; }
-  .back { display: none; }
+  .gm { padding: 0; overflow: hidden; display: flex; flex-direction: column; height: calc(100vh - 150px); min-height: 600px; background: #fff; font-family: "Google Sans", Roboto, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif; color: #202124; }
+  .gm-top { display: flex; align-items: center; gap: 12px; padding: 8px 12px 8px 16px; border-bottom: 1px solid #e0e3e7; background: #fff; }
+  .gm-top .brandx { display: flex; align-items: center; gap: 8px; width: 216px; flex: none; font-size: 15px; font-weight: 500; color: #444746; }
+  .gm-top .brandx .m { width: 28px; height: 28px; border-radius: 8px; background: #d93025; color: #fff; display: grid; place-items: center; font-size: 15px; }
+  .gm-search { flex: 1; max-width: 720px; display: flex; align-items: center; gap: 10px; background: #eaf1fb; border-radius: 24px; height: 46px; padding: 0 8px 0 16px; transition: background .15s, box-shadow .15s; }
+  .gm-search:focus-within { background: #fff; box-shadow: 0 1px 1px rgba(0,0,0,.24), 0 0 0 1px rgba(0,0,0,.12); }
+  .gm-search .ic { color: #444746; font-size: 16px; }
+  .gm-search input { border: 0; background: transparent; font-size: 15px; padding: 0; height: 100%; box-shadow: none; color: #202124; }
+  .gm-search input:focus { box-shadow: none; }
+  .gm-search button { border: 0; background: transparent; color: #444746; padding: 6px; border-radius: 50%; font-size: 15px; }
+  .gm-search button:hover { background: rgba(60,64,67,.08); }
+  .gm-top .right { margin-left: auto; display: flex; align-items: center; gap: 4px; color: #444746; font-size: 12px; }
+  .gm-top .right select { width: auto; border: 0; background: transparent; padding: 6px 4px; font-size: 12px; color: #444746; box-shadow: none; }
+  .gm-ib { border: 0; background: transparent; color: #444746; width: 34px; height: 34px; border-radius: 50%; padding: 0; display: grid; place-items: center; font-size: 15px; }
+  .gm-ib:hover { background: rgba(60,64,67,.08); }
+  .gm-ib:disabled { opacity: .35; }
+  .gm-body { flex: 1; display: flex; min-height: 0; }
+  .gm-nav { width: 232px; flex: none; background: #f6f8fc; padding: 10px 12px 10px 0; overflow-y: auto; font-size: 14px; }
+  .gm-nav .sec { color: #444746; font-size: 12px; font-weight: 500; padding: 14px 0 4px 24px; letter-spacing: .02em; }
+  .gm-nav .it { display: flex; align-items: center; gap: 14px; height: 32px; padding: 0 12px 0 24px; border-radius: 0 16px 16px 0; cursor: pointer; color: #202124; user-select: none; }
+  .gm-nav .it:hover { background: rgba(60,64,67,.08); }
+  .gm-nav .it.active { background: #d3e3fd; font-weight: 700; }
+  .gm-nav .it .ic { width: 20px; text-align: center; font-size: 15px; flex: none; }
+  .gm-nav .it .lb { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gm-nav .it .ct { font-size: 12px; color: #444746; }
+  .gm-nav .it.active .ct { color: #202124; }
+  .gm-nav .it .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; margin: 0 5px; }
+  .gm-nav .runsel { margin: 14px 0 0 24px; font-size: 12px; color: #444746; }
+  .gm-nav .runsel select { width: calc(100% - 4px); border: 1px solid #dadce0; border-radius: 8px; padding: 6px 8px; font-size: 12px; background: #fff; margin-top: 4px; }
+  .gm-main { flex: 1; display: flex; min-width: 0; background: #fff; border-radius: 16px 0 0 0; box-shadow: 0 0 0 1px #e0e3e7 inset; }
+  .gm-listwrap { width: 54%; min-width: 380px; display: flex; flex-direction: column; border-right: 1px solid #e0e3e7; min-height: 0; }
+  .gm-tools { display: flex; align-items: center; gap: 4px; padding: 6px 8px 6px 14px; border-bottom: 1px solid #e0e3e7; font-size: 12px; color: #444746; min-height: 48px; }
+  .gm-tools .pg { margin-left: auto; display: flex; align-items: center; gap: 2px; white-space: nowrap; }
+  .gm-tools .chipx { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #dadce0; border-radius: 8px; padding: 3px 10px; font-size: 12px; color: #444746; background: #fff; cursor: pointer; }
+  .gm-tools .chipx:hover { background: #f1f3f4; }
+  .gm-list { flex: 1; overflow-y: auto; min-height: 0; }
+  .gm-row { display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px 0 10px; border-bottom: 1px solid #e8eaed; cursor: pointer; font-size: 14px; color: #202124; position: relative; background: #f2f6fc; }
+  .gm-row:hover { background: #fff; box-shadow: inset 1px 0 0 #dadce0, inset -1px 0 0 #dadce0, 0 1px 2px 0 rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15); z-index: 1; }
+  .gm-row.active { background: #c2e7ff; }
+  .gm-row .star { color: #c4c7c5; font-size: 16px; flex: none; width: 22px; text-align: center; }
+  .gm-row .star.on { color: #f4b400; }
+  .gm-row .sd { width: 150px; flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 400; text-align: left; }
+  .gm-row .sd.sentme { font-weight: 400; color: #444746; }
+  .gm-row .sd .to { color: #444746; font-weight: 400; }
+  .gm-row .txt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
+  .gm-row .txt .lb { flex: none; font-size: 11px; padding: 1px 7px; border-radius: 4px; font-weight: 500; }
+  .gm-row .txt .sj { font-weight: 400; }
+  .gm-row .txt .sn { color: #5f6368; }
+  .gm-row .att { flex: none; color: #5f6368; font-size: 14px; }
+  .gm-row .dt { flex: none; width: 64px; text-align: right; font-size: 12px; color: #5f6368; }
+  .gm-row.active .dt, .gm-row.active .sn { color: #202124; }
+  .gm-empty { padding: 60px 20px; text-align: center; color: #5f6368; font-size: 13px; }
+  .gm-empty b { display: block; color: #202124; font-size: 15px; margin: 10px 0 4px; font-weight: 500; }
+  .gm-reader { flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; }
+  .gm-rt { display: flex; align-items: center; gap: 2px; padding: 6px 12px; border-bottom: 1px solid #e0e3e7; min-height: 48px; }
+  .gm-rt .sp { flex: 1; }
+  .gm-rt a { color: inherit; text-decoration: none; }
+  .gm-msg { padding: 8px 24px 40px; }
+  .gm-msg h2 { font-size: 22px; font-weight: 400; margin: 12px 0 14px; line-height: 1.3; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .gm-msg h2 .lb { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 500; }
+  .gm-hd { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 18px; }
+  .gm-av { width: 40px; height: 40px; border-radius: 50%; color: #fff; display: grid; place-items: center; font-size: 17px; font-weight: 500; flex: none; }
+  .gm-hd .l { flex: 1; min-width: 0; font-size: 12px; color: #5f6368; }
+  .gm-hd .l .fr { font-size: 14px; color: #202124; display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+  .gm-hd .l .fr b { font-weight: 700; }
+  .gm-hd .l details { margin-top: 2px; }
+  .gm-hd .l summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 4px; }
+  .gm-hd .l summary::-webkit-details-marker { display: none; }
+  .gm-hd .l table { font-size: 12px; margin-top: 8px; border: 1px solid #e0e3e7; border-radius: 8px; padding: 8px; border-collapse: separate; }
+  .gm-hd .l table td { padding: 2px 8px 2px 0; border: 0; vertical-align: top; }
+  .gm-hd .l table td:first-child { color: #5f6368; text-align: right; white-space: nowrap; }
+  .gm-hd .r { font-size: 12px; color: #5f6368; white-space: nowrap; display: flex; align-items: center; gap: 2px; }
+  .gm-bd { font-size: 14px; line-height: 1.6; color: #202124; white-space: pre-wrap; word-break: break-word; padding: 4px 0 8px 54px; }
+  .gm-atts { margin: 12px 0 0 54px; border-top: 1px solid #e0e3e7; padding-top: 14px; }
+  .gm-atts .t { font-size: 13px; color: #444746; display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .gm-atts .t a { color: #0b57d0; }
+  .gm-cards { display: flex; flex-wrap: wrap; gap: 12px; }
+  .gm-card { width: 200px; border: 1px solid #dadce0; border-radius: 8px; overflow: hidden; background: #fff; position: relative; }
+  .gm-card .pv { height: 96px; background: #f1f3f4; display: grid; place-items: center; font-size: 36px; overflow: hidden; }
+  .gm-card .pv img { width: 100%; height: 100%; object-fit: cover; }
+  .gm-card .ft { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid #e0e3e7; }
+  .gm-card .ft .ic { font-size: 16px; flex: none; }
+  .gm-card .ft .nm { flex: 1; min-width: 0; font-size: 12px; font-weight: 500; color: #202124; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gm-card .ft .sz { font-size: 11px; color: #5f6368; display: block; font-weight: 400; }
+  .gm-card .ov { position: absolute; inset: 0 0 41px 0; background: rgba(32,33,36,.6); display: flex; align-items: center; justify-content: center; gap: 8px; opacity: 0; transition: opacity .15s; }
+  .gm-card:hover .ov { opacity: 1; }
+  .gm-card .ov a { width: 36px; height: 36px; border-radius: 50%; background: #fff; color: #202124; display: grid; place-items: center; font-size: 16px; text-decoration: none; }
+  .gm-card .ov a:hover { background: #e8eaed; }
+  .gm-card.nodl .pv { opacity: .6; }
+  .gm-note { font-size: 12px; color: #5f6368; margin-top: 8px; }
+  .gm-ph { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: #5f6368; padding: 40px; font-size: 13px; }
+  .gm-ph b { display: block; color: #202124; font-size: 16px; font-weight: 400; margin: 12px 0 4px; }
+  .gm-back { display: none; }
+  @media (max-width: 1000px) { .gm-nav { display: none; } .gm-navchips { display: flex; } }
+  .gm-navchips { display: none; gap: 6px; padding: 8px 12px; overflow-x: auto; border-bottom: 1px solid #e0e3e7; }
   @media (max-width: 760px) {
-    .mlist { width: 100%; border-right: 0; }
-    .split.reading .mlist { display: none; }
-    .split:not(.reading) .reader { display: none; }
-    .back { display: inline-flex; margin-bottom: 10px; }
-    .extools input { width: 100%; }
+    .gm { height: auto; min-height: 640px; }
+    .gm-top .brandx { display: none; }
+    .gm-listwrap { width: 100%; min-width: 0; border-right: 0; }
+    .gm-body.reading .gm-listwrap { display: none; }
+    .gm-body:not(.reading) .gm-reader { display: none; }
+    .gm-back { display: grid; }
+    .gm-row .sd { width: 110px; }
+    .gm-bd, .gm-atts { padding-left: 0; margin-left: 0; }
   }
 
   /* settings */
@@ -270,31 +321,26 @@
 
   <!-- ===== 탐색기 ===== -->
   <section class="page" id="tab-explorer" hidden>
-    <div class="card explorer">
-      <div class="exhead">
-        <div class="t"><div class="icon">🗄</div><div><div style="display:flex;align-items:center;gap:8px"><h3>백업 메일 보관함 탐색기 (Gmail 아카이브 뷰)</h3><span class="pill blue" id="exTotal">0건</span></div><p class="desc" id="exDesc">Drive에 백업된 메일을 열람합니다.</p></div></div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <select id="exRun"><option value="all">전체 백업 메일 보관함</option></select>
-          <button id="exRefresh" class="sm">⟳ 새로고침</button>
-        </div>
+    <div class="card gm">
+      <div class="gm-top">
+        <div class="brandx"><span class="m">M</span><span>백업 보관함</span><span class="pill blue" id="exTotal" style="font-family:inherit">0건</span></div>
+        <div class="gm-search"><span class="ic">🔍</span><input id="exQ" placeholder="백업 메일 검색 (제목, 보낸사람, 본문 요약, 라벨, 첨부…)"><button type="button" id="exClear" title="지우기" hidden>✕</button></div>
+        <div class="right"><button type="button" class="gm-ib" id="exRefresh" title="새로고침">⟳</button></div>
       </div>
-      <div class="extools">
-        <div class="l">
-          <input id="exQ" placeholder="🔍 제목, 본문 요약, 발신/수신자, 라벨, 첨부 검색…">
-          <div class="seg" id="exFolder">
-            <button data-f="" class="active">전체 <span id="cAll"></span></button>
-            <button data-f="inbox">📥 수신함 <span id="cIn"></span></button>
-            <button data-f="sent">📤 보낸편지함 <span id="cOut"></span></button>
-            <button data-f="attachments">📎 첨부문서 <span id="cAtt"></span></button>
+      <div class="gm-navchips" id="exNavChips"></div>
+      <div class="gm-body" id="split">
+        <div class="gm-nav" id="exNav"></div>
+        <div class="gm-main">
+          <div class="gm-listwrap">
+            <div class="gm-tools">
+              <span id="exWhere" style="font-weight:500;color:#202124">전체 메일</span>
+              <span id="exFilterChips" style="display:flex;gap:4px;margin-left:8px"></span>
+              <div class="pg"><span id="exPage">0–0 / 0</span><button type="button" class="gm-ib" id="exPrev" title="이전">‹</button><button type="button" class="gm-ib" id="exNext" title="다음">›</button></div>
+            </div>
+            <div class="gm-list" id="mlist"><div class="gm-empty">불러오는 중…</div></div>
           </div>
+          <div class="gm-reader" id="reader"><div class="gm-ph"><div style="font-size:44px">✉️</div><b>메일을 선택하면 여기에 표시됩니다</b><span>왼쪽 목록에서 메일을 클릭하면 Gmail처럼 본문, 첨부파일, 라벨을 볼 수 있고 첨부파일과 원본(.eml)을 바로 다운로드할 수 있습니다.</span></div></div>
         </div>
-        <div class="counter"><span>검색 결과:</span><b id="exHits">0건</b><span id="exOf"></span></div>
-      </div>
-      <div class="chips" id="exAgenda"><span class="lbl">💼 안건별 분류:</span></div>
-      <div class="chips" id="exCats" style="background:rgba(248,250,252,.6)"><span class="lbl">📁 Drive 폴더:</span></div>
-      <div class="split" id="split">
-        <div class="mlist" id="mlist"><div class="empty">불러오는 중…</div></div>
-        <div class="reader" id="reader"><div class="placeholder"><div style="font-size:38px;margin-bottom:8px">✉️</div><b>열람할 백업 메일을 선택하세요</b><span style="font-size:12px;max-width:340px">왼쪽 목록에서 메일을 클릭하면 안건 분류, 수신/발신, 첨부, 본문을 확인하고 Drive의 원본 .eml을 열 수 있습니다.</span></div></div>
       </div>
     </div>
   </section>
@@ -497,7 +543,7 @@
     var b = e.target.closest('button[data-run]'); if (!b) return;
     state.ex.run = String(b.dataset.run);
     showTab('explorer');
-    if (state.explorer) { $('exRun').value = state.ex.run; renderExplorer(); }
+    state.ex.page = 1; if (state.explorer) renderExplorer();
   });
 
   function loadDashboard() {
@@ -557,15 +603,56 @@
   });
 
   // ---------- explorer ----------
+  var PAGE = 50;
+  state.ex.page = 1;
+  var LABEL_COLORS = ['#e8f0fe:#1967d2', '#fce8e6:#c5221f', '#e6f4ea:#137333', '#fef7e0:#b06000', '#f3e8fd:#7627bb', '#e4f7fb:#007b83', '#fde7f3:#b80672', '#e8eaed:#3c4043'];
+  var AV_COLORS = ['#1a73e8', '#d93025', '#188038', '#f9ab00', '#9334e6', '#12b5cb', '#e52592', '#5f6368'];
+  function hash(s) { var h = 0; s = String(s || ''); for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
+  function labelStyle(name) { var c = LABEL_COLORS[hash(name) % LABEL_COLORS.length].split(':'); return 'background:' + c[0] + ';color:' + c[1]; }
+  function emailOf(addr) { var m = String(addr || '').match(/<([^>]+)>/); return m ? m[1] : String(addr || '').trim(); }
+  function initialOf(addr) { var n = nameOnly(addr).replace(/["']/g, '').trim(); return (n[0] || '?').toUpperCase(); }
+  function gmDate(iso) {
+    if (!iso) return ''; var d = new Date(iso); if (isNaN(d)) return esc(iso);
+    var now = new Date();
+    if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+    if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+    return d.toLocaleDateString('ko-KR', { year: '2-digit', month: 'numeric', day: 'numeric' });
+  }
+  function gmDateLong(iso) { if (!iso) return ''; var d = new Date(iso); return isNaN(d) ? esc(iso) : d.toLocaleString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }); }
+  function parseAtts(r) {
+    var raw = r.attachmentFiles ? String(r.attachmentFiles) : '';
+    if (raw) { try { var a = JSON.parse(raw); if (Array.isArray(a)) return a; } catch (e) { /* ignore */ } }
+    return String(r.attachments || '').split(';').map(function (n) { return n.trim(); }).filter(Boolean).map(function (n) { return { name: n }; });
+  }
+  function dlUrl(fileId) { return fileId ? 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(fileId) : ''; }
+  function viewUrl(fileId) { return fileId ? 'https://drive.google.com/file/d/' + encodeURIComponent(fileId) + '/view' : ''; }
+  function fileIcon(name, mime) {
+    var ext = String(name || '').split('.').pop().toLowerCase(); mime = String(mime || '');
+    if (/^image\//.test(mime) || /^(png|jpe?g|gif|webp|bmp|heic)$/.test(ext)) return '🖼️';
+    if (mime === 'application/pdf' || ext === 'pdf') return '📕';
+    if (/spreadsheet|excel/.test(mime) || /^(xlsx?|csv)$/.test(ext)) return '📗';
+    if (/word|document/.test(mime) || /^(docx?|hwpx?)$/.test(ext)) return '📘';
+    if (/presentation|powerpoint/.test(mime) || /^pptx?$/.test(ext)) return '📙';
+    if (/zip|compressed|tar/.test(mime) || /^(zip|7z|rar|gz|tar)$/.test(ext)) return '🗜️';
+    return '📄';
+  }
+  var FOLDERS = [
+    { key: '', ic: '📧', lb: '전체 메일' }, { key: 'inbox', ic: '📥', lb: '받은편지함' }, { key: 'sent', ic: '📤', lb: '보낸편지함' },
+    { key: 'starred', ic: '⭐', lb: '중요' }, { key: 'draft', ic: '📝', lb: '임시보관함' }, { key: 'attachments', ic: '📎', lb: '첨부파일' },
+  ];
+  function folderMatch(r, key) {
+    if (!key) return true;
+    if (key === 'sent') return isSentRec(r);
+    if (key === 'inbox') return !isSentRec(r) && r.category !== '임시보관함';
+    if (key === 'starred') return /(^|,\s*)(IMPORTANT|STARRED)(\s*,|$)/.test(String(r.labels || ''));
+    if (key === 'draft') return r.category === '임시보관함' || /(^|,\s*)DRAFT(\s*,|$)/.test(String(r.labels || ''));
+    if (key === 'attachments') return !!String(r.attachments || '').trim();
+    return true;
+  }
   function loadExplorer() {
-    $('mlist').innerHTML = '<div class="empty">백업 메일 목록을 불러오는 중…</div>';
-    return call('getExplorerData').then(function (data) {
-      state.explorer = data;
-      var sel = $('exRun'); sel.innerHTML = '<option value="all">전체 백업 메일 보관함 (' + (data.history || []).length + '회차 통합)</option>';
-      (data.history || []).forEach(function (h, i) { var o = document.createElement('option'); o.value = String(i); o.textContent = fmtDay(h.startedAt) + ' 백업 (' + fmtNum(h.processed) + '건)'; sel.appendChild(o); });
-      sel.value = state.ex.run; if (sel.value !== state.ex.run) { state.ex.run = 'all'; sel.value = 'all'; }
-      renderExplorer();
-    }).catch(function (e) { $('mlist').innerHTML = '<div class="empty"><b>불러오기 실패</b>' + esc(e.message || e) + '</div>'; });
+    $('mlist').innerHTML = '<div class="gm-empty">백업 메일 목록을 불러오는 중…</div>';
+    return call('getExplorerData').then(function (data) { state.explorer = data; renderExplorer(); })
+      .catch(function (e) { $('mlist').innerHTML = '<div class="gm-empty"><b>불러오기 실패</b>' + esc(e.message || e) + '</div>'; });
   }
   function sourceRecords() {
     var recs = (state.explorer && state.explorer.records) || [];
@@ -577,64 +664,121 @@
   }
   function matches(r) {
     var x = state.ex;
-    if (x.folder === 'sent' && !isSentRec(r)) return false;
-    if (x.folder === 'inbox' && isSentRec(r)) return false;
-    if (x.folder === 'attachments' && !String(r.attachments || '').trim()) return false;
+    if (!folderMatch(r, x.folder)) return false;
     if (x.agenda && r.agenda !== x.agenda) return false;
     if (x.category && r.category !== x.category) return false;
     if (x.q) { var q = x.q.toLowerCase(); var hay = [r.subject, r.from, r.to, r.cc, r.snippet, r.labels, r.attachments, r.agenda, r.category].join(' | ').toLowerCase(); if (hay.indexOf(q) < 0) return false; }
     return true;
   }
-  function chipRow(container, label, items, current, key, dark) {
-    var html = '<span class="lbl">' + label + '</span>';
-    html += '<button type="button" class="chip dark' + (!current ? ' active' : '') + '" data-' + key + '="">전체 <i>' + fmtNum(items.reduce(function (a, c) { return a + c.count; }, 0)) + '</i></button>';
-    items.forEach(function (c) { html += '<button type="button" class="chip' + (current === c.name ? ' active' : '') + '" data-' + key + '="' + esc(c.name) + '">' + esc(c.name) + ' <i>' + fmtNum(c.count) + '</i></button>'; });
-    container.innerHTML = html;
+  function navItem(key, val, ic, lb, ct, active, swatch) {
+    return '<div class="it' + (active ? ' active' : '') + '" data-k="' + key + '" data-v="' + esc(val) + '">' + (swatch ? '<span class="sw" style="' + swatch + '"></span>' : '<span class="ic">' + ic + '</span>') + '<span class="lb">' + esc(lb) + '</span>' + (ct != null ? '<span class="ct">' + fmtNum(ct) + '</span>' : '') + '</div>';
+  }
+  function renderNav(src) {
+    var x = state.ex, html = '';
+    FOLDERS.forEach(function (f) { html += navItem('folder', f.key, f.ic, f.lb, src.filter(function (r) { return folderMatch(r, f.key); }).length, x.folder === f.key && !x.category && !x.agenda); });
+    var cats = {}, agendas = {};
+    src.forEach(function (r) { if (r.category) cats[r.category] = (cats[r.category] || 0) + 1; if (r.agenda) agendas[r.agenda] = (agendas[r.agenda] || 0) + 1; });
+    html += '<div class="sec">라벨 · Drive 폴더</div>';
+    Object.keys(cats).sort().forEach(function (c) { html += navItem('category', c, '', c, cats[c], x.category === c, 'background:' + LABEL_COLORS[hash(c) % LABEL_COLORS.length].split(':')[1]); });
+    html += '<div class="sec">안건별 분류</div>';
+    Object.keys(agendas).sort().forEach(function (a) { html += navItem('agenda', a, '💼', a, agendas[a], x.agenda === a); });
+    var hist = (state.explorer && state.explorer.history) || [];
+    html += '<div class="runsel">백업 회차<select id="exRun"><option value="all">전체 (' + hist.length + '회차 통합)</option>' + hist.map(function (h, i) { return '<option value="' + i + '"' + (String(i) === x.run ? ' selected' : '') + '>' + fmtDay(h.startedAt) + ' (' + fmtNum(h.processed) + '건)</option>'; }).join('') + '</select></div>';
+    $('exNav').innerHTML = html;
+    var chips = '';
+    FOLDERS.forEach(function (f) { chips += '<button type="button" class="chip' + (x.folder === f.key && !x.category && !x.agenda ? ' active' : '') + '" data-k="folder" data-v="' + f.key + '">' + f.ic + ' ' + f.lb + '</button>'; });
+    Object.keys(cats).sort().forEach(function (c) { chips += '<button type="button" class="chip' + (x.category === c ? ' active' : '') + '" data-k="category" data-v="' + esc(c) + '">' + esc(c) + '</button>'; });
+    Object.keys(agendas).sort().forEach(function (a) { chips += '<button type="button" class="chip' + (x.agenda === a ? ' active' : '') + '" data-k="agenda" data-v="' + esc(a) + '">💼 ' + esc(a) + '</button>'; });
+    $('exNavChips').innerHTML = chips;
+    var where = x.category ? '라벨: ' + x.category : x.agenda ? '안건: ' + x.agenda : (FOLDERS.filter(function (f) { return f.key === x.folder; })[0] || FOLDERS[0]).lb;
+    $('exWhere').textContent = where;
+    var fc = '';
+    if (x.folder && (x.category || x.agenda)) fc += '<span class="chipx" data-k="folder" data-v="">' + (FOLDERS.filter(function (f) { return f.key === x.folder; })[0] || {}).lb + ' ✕</span>';
+    if (x.category && x.agenda) fc += '<span class="chipx" data-k="agenda" data-v="">' + esc(x.agenda) + ' ✕</span>';
+    if (x.q) fc += '<span class="chipx" data-k="q" data-v="">🔍 ' + esc(x.q) + ' ✕</span>';
+    $('exFilterChips').innerHTML = fc;
   }
   function renderExplorer() {
     var src = sourceRecords();
     var hits = src.filter(matches);
-    var sent = src.filter(isSentRec).length, att = src.filter(function (r) { return String(r.attachments || '').trim(); }).length;
     $('exTotal').textContent = fmtNum(src.length) + '건';
-    $('exDesc').textContent = (state.ex.run === 'all' ? '전체 백업 메일' : '선택한 회차의 백업 메일') + '을 Gmail 형식으로 열람합니다.';
-    $('cAll').textContent = '(' + fmtNum(src.length) + ')'; $('cIn').textContent = '(' + fmtNum(src.length - sent) + ')'; $('cOut').textContent = '(' + fmtNum(sent) + ')'; $('cAtt').textContent = '(' + fmtNum(att) + ')';
-    $('exHits').textContent = fmtNum(hits.length) + '건'; $('exOf').textContent = '/ 총 ' + fmtNum(src.length) + '건';
-    document.querySelectorAll('#exFolder button').forEach(function (b) { b.classList.toggle('active', b.dataset.f === state.ex.folder); });
-    var agendas = {}, cats = {};
-    src.forEach(function (r) { if (r.agenda) agendas[r.agenda] = (agendas[r.agenda] || 0) + 1; if (r.category) cats[r.category] = (cats[r.category] || 0) + 1; });
-    chipRow($('exAgenda'), '💼 안건별 분류:', Object.keys(agendas).sort().map(function (k) { return { name: k, count: agendas[k] }; }), state.ex.agenda, 'agenda');
-    chipRow($('exCats'), '📁 Drive 폴더:', Object.keys(cats).sort().map(function (k) { return { name: k, count: cats[k] }; }), state.ex.category, 'category');
-    $('mlist').innerHTML = hits.map(function (r) {
-      var out = isSentRec(r);
-      return '<div class="mrow' + (state.ex.selected === r.id ? ' active' : '') + '" data-id="' + esc(r.id) + '">' +
-        '<div class="top"><div class="who"><span class="tag ' + (out ? 'out' : 'in') + '">' + (out ? '📤 발신' : '📥 수신') + '</span><b>' + esc(out ? 'To: ' + nameOnly(r.to) : nameOnly(r.from)) + '</b></div><span class="date">' + fmtDate(r.date) + '</span></div>' +
-        '<div class="subj">' + esc(r.subject || '(제목 없음)') + '</div><div class="snip">' + esc(r.snippet) + '</div>' +
-        '<div class="foot"><div class="tags">' + (r.agenda ? '<span class="tag cat">' + esc(r.agenda) + '</span>' : '') + '<span class="tag cat">📁 ' + esc(r.category) + '</span>' + (String(r.attachments || '').trim() ? '<span class="tag att">📎 첨부</span>' : '') + '</div><span class="mono" style="color:var(--faint)">' + esc(String(r.id).slice(-6)) + '</span></div></div>';
-    }).join('') || '<div class="empty"><div style="font-size:34px">✉️</div><b>일치하는 백업 메일이 없습니다.</b>검색어 또는 분류 필터를 초기화해 보세요.</div>';
+    renderNav(src);
+    var pages = Math.max(1, Math.ceil(hits.length / PAGE));
+    if (state.ex.page > pages) state.ex.page = pages;
+    var start = (state.ex.page - 1) * PAGE, slice = hits.slice(start, start + PAGE);
+    $('exPage').textContent = hits.length ? (start + 1) + '–' + (start + slice.length) + ' / ' + fmtNum(hits.length) : '0 / 0';
+    $('exPrev').disabled = state.ex.page <= 1; $('exNext').disabled = state.ex.page >= pages;
+    $('exClear').hidden = !state.ex.q;
+    $('mlist').innerHTML = slice.map(function (r) {
+      var out = isSentRec(r), atts = String(r.attachments || '').trim();
+      var star = /(^|,\s*)(IMPORTANT|STARRED)(\s*,|$)/.test(String(r.labels || ''));
+      var who = out ? '<span class="to">받는사람: </span>' + esc(nameOnly(r.to) || emailOf(r.to)) : esc(nameOnly(r.from) || emailOf(r.from));
+      var showCat = r.category && r.category !== '받은편지함' && r.category !== '보낸편지함';
+      return '<div class="gm-row' + (state.ex.selected === r.id ? ' active' : '') + '" data-id="' + esc(r.id) + '" title="' + esc(r.subject) + '">' +
+        '<span class="star' + (star ? ' on' : '') + '">' + (star ? '★' : '☆') + '</span>' +
+        '<span class="sd' + (out ? ' sentme' : '') + '">' + who + '</span>' +
+        '<span class="txt">' + (showCat ? '<span class="lb" style="' + labelStyle(r.category) + '">' + esc(r.category) + '</span>' : '') + '<span class="sj">' + esc(r.subject || '(제목 없음)') + '</span><span class="sn"> – ' + esc(r.snippet) + '</span></span>' +
+        (atts ? '<span class="att" title="' + esc(atts) + '">📎</span>' : '') +
+        '<span class="dt">' + gmDate(r.date) + '</span></div>';
+    }).join('') || '<div class="gm-empty"><div style="font-size:40px">📭</div><b>일치하는 메일이 없습니다</b>검색어나 폴더·라벨 선택을 바꿔 보세요.</div>';
   }
-  $('exQ').addEventListener('input', function () { state.ex.q = this.value.trim(); renderExplorer(); });
-  $('exFolder').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) { state.ex.folder = b.dataset.f; renderExplorer(); } });
-  $('exAgenda').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) { state.ex.agenda = b.dataset.agenda; renderExplorer(); } });
-  $('exCats').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) { state.ex.category = b.dataset.category; renderExplorer(); } });
-  $('exRun').addEventListener('change', function () { state.ex.run = this.value; state.ex.selected = null; renderExplorer(); });
+  function setFilter(k, v) {
+    var x = state.ex;
+    if (k === 'folder') { x.folder = v; x.category = ''; x.agenda = ''; }
+    else if (k === 'category') { x.category = (x.category === v ? '' : v); x.agenda = ''; }
+    else if (k === 'agenda') { x.agenda = (x.agenda === v ? '' : v); x.category = ''; }
+    else if (k === 'q') { x.q = v; $('exQ').value = v; }
+    x.page = 1; renderExplorer();
+  }
+  function onNavClick(e) { var it = e.target.closest('[data-k]'); if (!it || it.tagName === 'SELECT') return; setFilter(it.dataset.k, it.dataset.v); }
+  $('exNav').addEventListener('click', onNavClick);
+  $('exNavChips').addEventListener('click', onNavClick);
+  $('exFilterChips').addEventListener('click', onNavClick);
+  $('exNav').addEventListener('change', function (e) { if (e.target.id === 'exRun') { state.ex.run = e.target.value; state.ex.selected = null; state.ex.page = 1; renderExplorer(); } });
+  var qTimer;
+  $('exQ').addEventListener('input', function () { var v = this.value.trim(); clearTimeout(qTimer); qTimer = setTimeout(function () { state.ex.q = v; state.ex.page = 1; renderExplorer(); }, 150); });
+  $('exClear').addEventListener('click', function () { setFilter('q', ''); });
+  $('exPrev').addEventListener('click', function () { state.ex.page -= 1; renderExplorer(); $('mlist').scrollTop = 0; });
+  $('exNext').addEventListener('click', function () { state.ex.page += 1; renderExplorer(); $('mlist').scrollTop = 0; });
   $('exRefresh').addEventListener('click', function () { state.explorer = null; loadExplorer(); });
   $('mlist').addEventListener('click', function (e) {
-    var row = e.target.closest('.mrow'); if (!row) return;
+    var row = e.target.closest('.gm-row'); if (!row) return;
     var r = (state.explorer.records || []).filter(function (x) { return String(x.id) === row.dataset.id; })[0];
     if (r) openMessage(r);
   });
+  function attCard(a) {
+    var has = !!a.fileId, icon = fileIcon(a.name, a.mime), isImg = icon === '🖼️';
+    return '<div class="gm-card' + (has ? '' : ' nodl') + '" title="' + esc(a.name) + '">' +
+      '<div class="pv">' + (has && isImg ? '<img src="https://drive.google.com/thumbnail?id=' + encodeURIComponent(a.fileId) + '&sz=w400" alt="" onerror="this.replaceWith(document.createTextNode(\'🖼️\'))">' : icon) + '</div>' +
+      (has ? '<div class="ov"><a href="' + esc(dlUrl(a.fileId)) + '" title="다운로드" target="_blank" rel="noopener">⬇</a><a href="' + esc(viewUrl(a.fileId)) + '" title="Drive에서 열기" target="_blank" rel="noopener">↗</a></div>' : '') +
+      '<div class="ft"><span class="ic">' + icon + '</span><span class="nm">' + esc(a.name) + (a.size ? '<span class="sz">' + fmtBytes(a.size) + '</span>' : '') + '</span>' + (has ? '<a href="' + esc(dlUrl(a.fileId)) + '" class="gm-ib" title="다운로드" target="_blank" rel="noopener" style="text-decoration:none">⬇</a>' : '') + '</div></div>';
+  }
   function openMessage(r) {
     state.ex.selected = r.id;
-    document.querySelectorAll('.mrow').forEach(function (el) { el.classList.toggle('active', el.dataset.id === String(r.id)); });
+    document.querySelectorAll('.gm-row').forEach(function (el) { el.classList.toggle('active', el.dataset.id === String(r.id)); });
     $('split').classList.add('reading');
-    var out = isSentRec(r);
+    var out = isSentRec(r), atts = parseAtts(r), av = AV_COLORS[hash(emailOf(r.from)) % AV_COLORS.length];
+    var labels = String(r.labels || '').split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s && !/^(INBOX|SENT|UNREAD|IMPORTANT|STARRED|DRAFT|CATEGORY_\w+)$/.test(s); });
+    var chips = (r.category && r.category !== '받은편지함' && r.category !== '보낸편지함' ? [r.category] : []).concat(labels.filter(function (l) { return l !== r.category; }));
+    var emlDl = dlUrl(r.driveFileId);
     $('reader').innerHTML =
-      '<button type="button" class="back sm" id="readerBack">← 목록으로</button>' +
-      '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><h2>' + esc(r.subject || '(제목 없음)') + '</h2><div style="display:flex;gap:6px;flex-wrap:wrap">' +
-      '<span class="pill ' + (out ? 'purple' : 'blue') + '">' + (out ? '📤 보낸 편지' : '📥 받은 편지') + '</span>' + (r.agenda ? '<span class="pill gray">' + esc(r.agenda) + '</span>' : '') + (String(r.attachments || '').trim() ? '<span class="pill green">📎 첨부 보관됨</span>' : '') + '</div></div>' +
-      '<div class="meta"><div><b>보낸 사람:</b> ' + esc(r.from) + '</div><div><b>받는 사람:</b> ' + esc(r.to) + '</div>' + (r.cc ? '<div><b>참조:</b> ' + esc(r.cc) + '</div>' : '') + '<div><b>일시:</b> ' + fmtDate(r.date) + '</div><div><b>Gmail 라벨:</b> ' + esc(r.labels || '-') + ' · <b>Drive 폴더:</b> ' + esc(r.category) + '</div>' + (String(r.attachments || '').trim() ? '<div><b>첨부파일:</b> ' + esc(r.attachments) + '</div>' : '') + '<div><b>백업 일시:</b> ' + fmtDate(r.backedUpAt) + ' · ' + fmtBytes(r.sizeBytes) + '</div></div>' +
-      '<div class="actions">' + (r.driveUrl ? '<a class="primary" href="' + esc(r.driveUrl) + '" target="_blank" rel="noopener"><button type="button" class="primary sm">📄 Drive에서 원본(.eml) 열기 ↗</button></a>' : '') + '</div>' +
-      '<pre id="readerBody">본문을 불러오는 중…</pre>';
+      '<div class="gm-rt"><button type="button" class="gm-ib gm-back" id="readerBack" title="목록">←</button>' +
+      (out ? '<span class="pill purple">📤 보낸 편지</span>' : '<span class="pill blue">📥 받은 편지</span>') + (r.agenda ? '<span class="pill gray" style="margin-left:4px">💼 ' + esc(r.agenda) + '</span>' : '') +
+      '<span class="sp"></span>' +
+      (emlDl ? '<a class="gm-ib" href="' + esc(emlDl) + '" title="원본(.eml) 다운로드" target="_blank" rel="noopener">⬇</a>' : '') +
+      (r.driveUrl ? '<a class="gm-ib" href="' + esc(r.driveUrl) + '" title="Drive에서 원본 열기" target="_blank" rel="noopener">↗</a>' : '') + '</div>' +
+      '<div class="gm-msg"><h2>' + esc(r.subject || '(제목 없음)') + chips.map(function (c) { return '<span class="lb" style="' + labelStyle(c) + '">' + esc(c) + '</span>'; }).join('') + '</h2>' +
+      '<div class="gm-hd"><div class="gm-av" style="background:' + av + '">' + esc(initialOf(r.from)) + '</div><div class="l">' +
+      '<div class="fr"><b>' + esc(nameOnly(r.from) || emailOf(r.from)) + '</b><span style="color:#5f6368">&lt;' + esc(emailOf(r.from)) + '&gt;</span></div>' +
+      '<details><summary>받는사람: ' + esc(nameOnly(r.to) || emailOf(r.to) || '-') + (r.cc ? ', 참조 ' + esc(nameOnly(r.cc)) : '') + ' ▾</summary><table>' +
+      '<tr><td>보낸사람:</td><td>' + esc(r.from) + '</td></tr><tr><td>받는사람:</td><td>' + esc(r.to || '-') + '</td></tr>' + (r.cc ? '<tr><td>참조:</td><td>' + esc(r.cc) + '</td></tr>' : '') +
+      '<tr><td>날짜:</td><td>' + gmDateLong(r.date) + '</td></tr><tr><td>Gmail 라벨:</td><td>' + esc(r.labels || '-') + '</td></tr><tr><td>Drive 폴더:</td><td>' + esc(r.category) + '</td></tr>' +
+      '<tr><td>백업:</td><td>' + fmtDate(r.backedUpAt) + ' · ' + fmtBytes(r.sizeBytes) + '</td></tr></table></details></div>' +
+      '<div class="r">' + gmDateLong(r.date) + '</div></div>' +
+      '<div class="gm-bd" id="readerBody">본문을 불러오는 중…</div>' +
+      (atts.length ? '<div class="gm-atts"><div class="t">📎 첨부파일 ' + atts.length + '개' + (atts.some(function (a) { return a.fileId; }) ? ' · <a href="' + esc(state.dash && state.dash.folderUrl ? state.dash.folderUrl : '#') + '" target="_blank" rel="noopener">Drive 폴더에서 보기</a>' : '') + '</div><div class="gm-cards">' + atts.map(attCard).join('') + '</div>' +
+        (atts.some(function (a) { return !a.fileId; }) ? '<div class="gm-note">' + (emlDl ? '첨부 별도 저장이 꺼져 있던 메일입니다. 원본(.eml)을 <a href="' + esc(emlDl) + '" target="_blank" rel="noopener">다운로드</a>하면 첨부가 포함되어 있습니다.' : '첨부 파일 ID가 없어 원본(.eml)에서 열어야 합니다.') + '</div>' : '') + '</div>' : '') +
+      '</div>';
     $('readerBack').onclick = function () { $('split').classList.remove('reading'); };
     call('getMessageBody', r.id).then(function (res) { if (state.ex.selected !== r.id) return; $('readerBody').textContent = (res && res.body) ? res.body : (r.snippet || '(본문 미리보기 없음 — Drive의 원본을 열어 확인하세요)'); })
       .catch(function () { $('readerBody').textContent = r.snippet || ''; });

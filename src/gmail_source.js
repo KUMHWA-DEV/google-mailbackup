@@ -34,9 +34,8 @@ function fetchMessage_(id) {
   var date = msg.getDate();
   if (!(date instanceof Date) || isNaN(date.getTime())) date = new Date(Number(api.internalDate));
 
-  var attachments = getSettings_().saveAttachments
-    ? msg.getAttachments({ includeInlineImages: false, includeAttachments: true })
-    : [];
+  // 첨부 목록은 항상 읽고(이름 기록용), 별도 저장 여부는 drive_store에서 설정으로 판단한다.
+  var attachments = msg.getAttachments({ includeInlineImages: false, includeAttachments: true });
 
   var bodyPreview = '';
   try { bodyPreview = msg.getPlainBody() || ''; } catch (e) { bodyPreview = api.snippet || ''; }

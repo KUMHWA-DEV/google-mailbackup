@@ -6,7 +6,7 @@
  */
 var INDEX_HEADERS = [
   'id', 'threadId', 'date', 'category', 'agenda', 'labels', 'from', 'to', 'cc', 'subject', 'snippet',
-  'sizeBytes', 'attachments', 'driveFileId', 'driveUrl', 'backedUpAt', 'bodyPreview',
+  'sizeBytes', 'attachments', 'attachmentFiles', 'driveFileId', 'driveUrl', 'backedUpAt', 'bodyPreview',
 ];
 var INDEX_LIST_COLUMNS = INDEX_HEADERS.length - 1; // bodyPreview 제외
 var BODY_PREVIEW_MAX = 20000;
@@ -34,8 +34,24 @@ function buildIndexRow(m) {
     m.id, m.threadId || '', isoOf(m.date), m.category, m.agenda || '', (m.labelNames || []).join(', '),
     h.from || '', h.to || '', h.cc || '', h.subject || '', m.snippet || '',
     Number(m.sizeEstimate || 0), (m.attachmentNames || []).join('; '),
+    (m.attachmentFiles && m.attachmentFiles.length) ? JSON.stringify(m.attachmentFiles) : '',
     m.driveFileId || '', m.driveUrl || '', isoOf(m.backedUpAt), body,
   ];
+}
+
+/** 인덱스 레코드의 첨부 목록 [{name, fileId?, size?, mime?}]. JSON이 없으면 이름 목록으로 대체. */
+function parseAttachmentFiles(rec) {
+  var raw = rec && rec.attachmentFiles ? String(rec.attachmentFiles) : '';
+  if (raw) {
+    try { var arr = JSON.parse(raw); if (Array.isArray(arr)) return arr; } catch (e) { /* fall through */ }
+  }
+  var names = rec && rec.attachments ? String(rec.attachments).split(';') : [];
+  return names.map(function (n) { return n.trim(); }).filter(Boolean).map(function (n) { return { name: n }; });
+}
+
+/** Drive 파일 직접 다운로드 URL (해당 파일에 접근 권한이 있는 계정으로 로그인된 상태에서 동작). */
+function driveDownloadUrl(fileId) {
+  return fileId ? 'https://drive.google.com/uc?export=download&id=' + encodeURIComponent(String(fileId)) : '';
 }
 
 function rowToRecord(row) {
@@ -136,5 +152,6 @@ if (typeof module !== 'undefined') {
     INDEX_HEADERS: INDEX_HEADERS, INDEX_LIST_COLUMNS: INDEX_LIST_COLUMNS, headersFromPayload: headersFromPayload,
     buildIndexRow: buildIndexRow, rowToRecord: rowToRecord, filterRecords: filterRecords,
     summarizeRecords: summarizeRecords, decodeBase64Url: decodeBase64Url,
+    parseAttachmentFiles: parseAttachmentFiles, driveDownloadUrl: driveDownloadUrl,
   };
 }

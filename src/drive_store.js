@@ -49,21 +49,24 @@ function saveEml_(folder, fileName, rawBytes) {
   return { fileId: file.getId(), url: file.getUrl() };
 }
 
-/** 첨부파일을 <루트>/_attachments/<messageId>/ 에 저장. 파일명 배열 반환. */
+/**
+ * 첨부파일을 <루트>/_attachments/<messageId>/ 에 저장.
+ * @returns {{name:string, fileId:string, size:number, mime:string}[]} 저장된 파일 정보 (다운로드 링크용)
+ */
 function saveAttachments_(messageId, attachments) {
-  var names = [];
-  if (!attachments || !attachments.length) return names;
+  var files = [];
+  if (!attachments || !attachments.length || !getSettings_().saveAttachments) return files;
   var folder = ensureFolderPath_([CONFIG.ATTACHMENT_FOLDER_NAME, messageId]);
   attachments.forEach(function (att, i) {
     var name = att.getName() || ('attachment-' + (i + 1));
     try {
-      folder.createFile(att.copyBlob().setName(name));
-      names.push(name);
+      var f = folder.createFile(att.copyBlob().setName(name));
+      files.push({ name: name, fileId: f.getId(), size: f.getSize(), mime: f.getMimeType() });
     } catch (e) {
       Logger.log('첨부 저장 실패 %s/%s: %s', messageId, name, e.message);
     }
   });
-  return names;
+  return files;
 }
 
 // ---------- 인덱스 시트 ----------

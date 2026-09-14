@@ -118,3 +118,24 @@ describe('extended filters and summary', () => {
     expect(s.agendas).toEqual([{ name: '업무요청/협조', count: 1 }, { name: '회의/일정', count: 2 }]);
   });
 });
+
+describe('attachment files in the index', () => {
+  const { buildIndexRow: bir, rowToRecord: rtr, parseAttachmentFiles, driveDownloadUrl, INDEX_HEADERS: H } = require('../src/lib/index_row.js');
+  it('stores attachment files as JSON and names as text, bodyPreview stays last', () => {
+    const row = bir({ id: 'm1', category: 'x', headers: {}, attachmentNames: ['a.pdf', 'b.png'],
+      attachmentFiles: [{ name: 'a.pdf', fileId: 'F1', size: 1000, mime: 'application/pdf' }, { name: 'b.png', fileId: 'F2', size: 20, mime: 'image/png' }] });
+    const rec = rtr(row);
+    expect(rec.attachments).toBe('a.pdf; b.png');
+    expect(JSON.parse(rec.attachmentFiles)).toEqual([{ name: 'a.pdf', fileId: 'F1', size: 1000, mime: 'application/pdf' }, { name: 'b.png', fileId: 'F2', size: 20, mime: 'image/png' }]);
+    expect(H[H.length - 1]).toBe('bodyPreview');
+  });
+  it('parseAttachmentFiles tolerates empty and bad JSON, falls back to names', () => {
+    expect(parseAttachmentFiles({ attachmentFiles: '', attachments: '' })).toEqual([]);
+    expect(parseAttachmentFiles({ attachmentFiles: '{bad', attachments: 'a.pdf; b.png' })).toEqual([{ name: 'a.pdf' }, { name: 'b.png' }]);
+    expect(parseAttachmentFiles({ attachmentFiles: '[{"name":"a.pdf","fileId":"F1"}]' })).toEqual([{ name: 'a.pdf', fileId: 'F1' }]);
+  });
+  it('driveDownloadUrl builds a direct download link', () => {
+    expect(driveDownloadUrl('F1')).toBe('https://drive.google.com/uc?export=download&id=F1');
+    expect(driveDownloadUrl('')).toBe('');
+  });
+});
