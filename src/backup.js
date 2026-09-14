@@ -259,9 +259,8 @@ function runBackupLocked_() {
 /** 메시지 1건을 저장하고 인덱스 행을 돌려준다. */
 function backupOne_(id, labelMap, settings) {
   var m = fetchMessage_(id);
-  var category = categorize(m.labelIds, labelMap);
-  var agenda = classifyAgenda(m.headers.subject, m.snippet, m.labelIds);
-  var folderName = settings.folderBy === 'agenda' ? agenda.replace(/\//g, '-') : category;
+  var category = categorize(m.labelIds, labelMap, { splitGmailTabs: settings.splitGmailTabs });
+  var folderName = category;
   var folder = ensureFolderPath_(buildFolderPath(folderName, m.date, CONFIG.TIME_ZONE, settings.folderLayout));
   var fileName = buildFileName({ date: m.date, subject: m.headers.subject, id: m.id }, CONFIG.TIME_ZONE);
   var saved = saveEml_(folder, fileName, m.rawBytes);
@@ -271,7 +270,7 @@ function backupOne_(id, labelMap, settings) {
     ? attachmentFiles.map(function (f) { return f.name; })
     : (m.attachments || []).map(function (a, i) { return a.getName() || ('attachment-' + (i + 1)); });
   return buildIndexRow({
-    id: m.id, threadId: m.threadId, date: m.date, category: category, agenda: agenda,
+    id: m.id, threadId: m.threadId, date: m.date, category: category,
     labelNames: labelNamesOf(m.labelIds, labelMap), headers: m.headers, snippet: m.snippet,
     sizeEstimate: m.sizeEstimate, attachmentNames: attachmentNames, attachmentFiles: attachmentFiles, bodyPreview: m.bodyPreview,
     driveFileId: saved.fileId, driveUrl: saved.url, backedUpAt: new Date(),

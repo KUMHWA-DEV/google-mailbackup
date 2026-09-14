@@ -10,7 +10,7 @@ var SETTINGS_DEFAULTS = {
   filterQuery: '',          // 추가 Gmail 검색 조건
   folderId: '',             // 백업 루트 폴더 ID (비우면 자동 생성)
   folderLayout: 'flat',     // flat | yearly | monthly
-  folderBy: 'label',        // label(Gmail 라벨/카테고리) | agenda(안건 분류)
+  splitGmailTabs: false,    // Gmail 탭(프로모션·소셜·업데이트·포럼)을 별도 폴더로 분리
   notifyEmail: '',          // 완료 알림 수신처 (비우면 실행 계정)
   notifyOnComplete: true,   // 완료 시 알림 메일 발송
 };
@@ -24,7 +24,7 @@ var SETTINGS_PROP_KEYS = {
   filterQuery: 'FILTER_QUERY',
   folderId: 'BACKUP_FOLDER_ID',
   folderLayout: 'FOLDER_LAYOUT',
-  folderBy: 'FOLDER_BY',
+  splitGmailTabs: 'SPLIT_GMAIL_TABS',
   notifyEmail: 'NOTIFY_EMAIL',
   notifyOnComplete: 'NOTIFY_ON_COMPLETE',
 };
@@ -57,7 +57,7 @@ function normalizeSettings(input) {
     filterQuery: str_(i.filterQuery),
     folderId: str_(i.folderId),
     folderLayout: oneOf_(i.folderLayout, ['flat', 'yearly', 'monthly'], SETTINGS_DEFAULTS.folderLayout),
-    folderBy: oneOf_(i.folderBy, ['label', 'agenda'], SETTINGS_DEFAULTS.folderBy),
+    splitGmailTabs: toBool_(i.splitGmailTabs, SETTINGS_DEFAULTS.splitGmailTabs),
     notifyEmail: str_(i.notifyEmail),
     notifyOnComplete: toBool_(i.notifyOnComplete, SETTINGS_DEFAULTS.notifyOnComplete),
   };

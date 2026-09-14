@@ -153,8 +153,8 @@ async function main() {
 
   server.registerTool('search_mail', {
     title: '백업 메일 검색',
-    description: `백업된 메일을 검색한다. query는 Gmail식 문법: 자유 단어(AND), "구문", -제외, from: to: cc: subject: label: agenda: filename: has:attachment in:inbox|sent|drafts is:important after:YYYY-MM-DD before:YYYY-MM-DD larger:1M smaller:500K. 예: 'from:partner.co.kr 계약서 has:attachment after:2026-08-01'. 결과는 최신순, 본문은 get_mail로.`,
-    inputSchema: { query: z.string().default(''), folder: z.enum(['all', 'inbox', 'sent', 'attachments', 'starred']).default('all'), category: z.string().optional().describe('라벨/Drive 폴더명으로 한정'), agenda: z.string().optional().describe('안건 분류로 한정'), limit: z.number().int().min(1).max(200).default(20), offset: z.number().int().min(0).default(0) },
+    description: `백업된 메일을 검색한다. query는 Gmail식 문법: 자유 단어(AND), "구문", -제외, from: to: cc: subject: label: filename: has:attachment in:inbox|sent|drafts is:starred after:YYYY-MM-DD before:YYYY-MM-DD larger:1M smaller:500K. 예: 'from:partner.co.kr 계약서 has:attachment after:2026-08-01'. 결과는 최신순, 본문은 get_mail로.`,
+    inputSchema: { query: z.string().default(''), folder: z.enum(['all', 'inbox', 'sent', 'attachments', 'starred']).default('all'), category: z.string().optional().describe('라벨/Drive 폴더명으로 한정'), limit: z.number().int().min(1).max(200).default(20), offset: z.number().int().min(0).default(0) },
   }, async (a) => { try { return j(searchRecords(await loadRecords(ctx), a)); } catch (e) { return err(e.message); } });
 
   server.registerTool('get_mail', {
@@ -197,19 +197,19 @@ async function main() {
 
   server.registerTool('backup_stats', {
     title: '백업 현황',
-    description: '보관 메일 수, 용량, 기간, 라벨별·안건별 건수.',
+    description: '보관 메일 수, 용량, 기간, 라벨별 건수.',
     inputSchema: { refresh: z.boolean().default(false) },
   }, async ({ refresh }) => { try { return j(summarizeRecords(await loadRecords(ctx, refresh))); } catch (e) { return err(e.message); } });
 
   server.registerTool('list_labels', {
-    title: '라벨·안건·보낸사람 목록',
-    description: '검색에 쓸 수 있는 라벨(Drive 폴더), 안건 분류, 보낸사람 상위 목록.',
+    title: '라벨·보낸사람 목록',
+    description: '검색에 쓸 수 있는 라벨(Drive 폴더)과 보낸사람 상위 목록.',
     inputSchema: {},
   }, async () => {
     try {
       const recs = await loadRecords(ctx); const s = summarizeRecords(recs); const senders = {};
       recs.forEach(r => { const k = String(r.from || '').replace(/<.*>/, '').trim() || r.from; if (k) senders[k] = (senders[k] || 0) + 1; });
-      return j({ labels: s.categories, agendas: s.agendas, senders: Object.entries(senders).sort((a, b) => b[1] - a[1]).slice(0, 30).map(([name, count]) => ({ name, count })) });
+      return j({ labels: s.categories, senders: Object.entries(senders).sort((a, b) => b[1] - a[1]).slice(0, 30).map(([name, count]) => ({ name, count })) });
     } catch (e) { return err(e.message); }
   });
 
@@ -234,7 +234,7 @@ async function main() {
     async () => { try { return j(await runScript(ctx, 'getSettings')); } catch (e) { return err(e.message); } });
   server.registerTool('backup_settings_set', {
     title: '설정 변경', description: '지정한 항목만 바꾼다. 주기를 바꾸면 자동 백업이 켜져 있을 때 일정이 갱신된다.',
-    inputSchema: { intervalDays: z.number().int().min(1).optional(), initialStartDate: z.string().optional().describe('YYYY-MM-DD 또는 빈 문자열'), includeSent: z.boolean().optional(), saveAttachments: z.boolean().optional(), maxPerRun: z.number().int().min(0).optional(), filterQuery: z.string().optional(), folderId: z.string().optional(), folderLayout: z.enum(['flat', 'yearly', 'monthly']).optional(), folderBy: z.enum(['label', 'agenda']).optional(), notifyEmail: z.string().optional(), notifyOnComplete: z.boolean().optional() },
+    inputSchema: { intervalDays: z.number().int().min(1).optional(), initialStartDate: z.string().optional().describe('YYYY-MM-DD 또는 빈 문자열'), includeSent: z.boolean().optional(), saveAttachments: z.boolean().optional(), maxPerRun: z.number().int().min(0).optional(), filterQuery: z.string().optional(), folderId: z.string().optional(), folderLayout: z.enum(['flat', 'yearly', 'monthly']).optional(), splitGmailTabs: z.boolean().optional().describe('Gmail 탭(프로모션·소셜 등)을 별도 폴더로'), notifyEmail: z.string().optional(), notifyOnComplete: z.boolean().optional() },
   }, async (a) => { try { const cur = await runScript(ctx, 'getSettings'); const d = await runScript(ctx, 'saveSettings', [Object.assign({}, cur, a)]); return j(d.settings); } catch (e) { return err(e.message); } });
   server.registerTool('backup_auto', { title: '자동 백업 켜기/끄기', description: '설정한 주기마다 새벽 3시 자동 실행 트리거를 설치하거나 제거한다.', inputSchema: { enabled: z.boolean() } },
     async ({ enabled }) => { try { const d = await runScript(ctx, enabled ? 'installScheduledTrigger' : 'uninstallScheduledTrigger'); return j({ triggerInstalled: d.triggerInstalled, schedule: d.schedule }); } catch (e) { return err(e.message); } });

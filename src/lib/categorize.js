@@ -2,7 +2,8 @@
  * 메시지의 labelIds를 하나의 백업 카테고리(폴더명)로 매핑한다.
  * 순수 함수: Apps Script 전역과 Node 양쪽에서 동작.
  *
- * 우선순위: 사용자 라벨 > 보낸편지함 > 임시보관함 > Gmail 카테고리 탭 > 받은편지함 > 보관됨
+ * 우선순위: 사용자 라벨 > 보낸편지함 > 임시보관함 > (옵션) Gmail 카테고리 탭 > 받은편지함 > 보관됨
+ * Gmail 탭(프로모션·소셜·업데이트·포럼)은 Gmail이 자동으로 붙이는 분류라 기본은 받은편지함으로 합친다 (opts.splitGmailTabs=true면 분리).
  */
 var CATEGORY_NAMES = {
   INBOX: '받은편지함',
@@ -23,11 +24,13 @@ var SYSTEM_LABEL_IDS = {
 /**
  * @param {string[]|undefined} labelIds Gmail API labelIds
  * @param {Object<string,string>} labelMap labelId -> 사용자 라벨 이름
+ * @param {{splitGmailTabs?:boolean}} [opts]
  * @returns {string} 카테고리 폴더명
  */
-function categorize(labelIds, labelMap) {
+function categorize(labelIds, labelMap, opts) {
   var ids = labelIds || [];
   var map = labelMap || {};
+  var splitTabs = !!(opts && opts.splitGmailTabs);
   var has = {};
   for (var i = 0; i < ids.length; i++) has[ids[i]] = true;
 
@@ -40,10 +43,12 @@ function categorize(labelIds, labelMap) {
   }
   if (has.SENT) return CATEGORY_NAMES.SENT;
   if (has.DRAFT) return CATEGORY_NAMES.DRAFT;
-  if (has.CATEGORY_PROMOTIONS) return CATEGORY_NAMES.CATEGORY_PROMOTIONS;
-  if (has.CATEGORY_SOCIAL) return CATEGORY_NAMES.CATEGORY_SOCIAL;
-  if (has.CATEGORY_UPDATES) return CATEGORY_NAMES.CATEGORY_UPDATES;
-  if (has.CATEGORY_FORUMS) return CATEGORY_NAMES.CATEGORY_FORUMS;
+  if (splitTabs) {
+    if (has.CATEGORY_PROMOTIONS) return CATEGORY_NAMES.CATEGORY_PROMOTIONS;
+    if (has.CATEGORY_SOCIAL) return CATEGORY_NAMES.CATEGORY_SOCIAL;
+    if (has.CATEGORY_UPDATES) return CATEGORY_NAMES.CATEGORY_UPDATES;
+    if (has.CATEGORY_FORUMS) return CATEGORY_NAMES.CATEGORY_FORUMS;
+  }
   if (has.INBOX) return CATEGORY_NAMES.INBOX;
   return CATEGORY_NAMES.ARCHIVED;
 }

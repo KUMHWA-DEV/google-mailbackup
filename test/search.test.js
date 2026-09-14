@@ -27,7 +27,6 @@ describe('parseSearch', () => {
     expect(p.smaller).toBe(2 * 1024 * 1024);
     expect(p.in).toBe('sent');
     expect(p.filename).toEqual(['pdf']);
-    expect(p.agenda).toEqual(['계약']);
   });
   it('keeps unknown key:value as a free term', () => {
     expect(parseSearch('foo:bar').terms).toEqual(['foo:bar']);
@@ -68,10 +67,9 @@ describe('matchSearch', () => {
     expect(ids('filename:pdf')).toEqual(['3']);
     expect(ids('-has:attachment')).toEqual(['2']);
   });
-  it('label matches category or gmail labels, agenda matches agenda', () => {
+  it('label matches category or gmail labels', () => {
     expect(ids('label:거래처')).toEqual(['3']);
     expect(ids('label:important')).toEqual(['1']);
-    expect(ids('agenda:계약')).toEqual(['2', '3']);
   });
   it('date and size ranges', () => {
     expect(ids('after:2026-09-05')).toEqual(['1', '2']);

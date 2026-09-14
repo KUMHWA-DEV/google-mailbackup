@@ -17,10 +17,12 @@ describe('categorize', () => {
     expect(categorize(['DRAFT'], labelMap)).toBe(CATEGORY_NAMES.DRAFT);
   });
   it('gmail category tabs map to Korean names', () => {
-    expect(categorize(['INBOX', 'CATEGORY_PROMOTIONS'], labelMap)).toBe('프로모션');
-    expect(categorize(['INBOX', 'CATEGORY_SOCIAL'], labelMap)).toBe('소셜');
-    expect(categorize(['INBOX', 'CATEGORY_UPDATES'], labelMap)).toBe('업데이트');
-    expect(categorize(['INBOX', 'CATEGORY_FORUMS'], labelMap)).toBe('포럼');
+    expect(categorize(['INBOX', 'CATEGORY_PROMOTIONS'], labelMap)).toBe('받은편지함'); // 기본: Gmail 탭은 받은편지함으로 합침
+    const split = { splitGmailTabs: true };
+    expect(categorize(['INBOX', 'CATEGORY_PROMOTIONS'], labelMap, split)).toBe('프로모션');
+    expect(categorize(['INBOX', 'CATEGORY_SOCIAL'], labelMap, split)).toBe('소셜');
+    expect(categorize(['INBOX', 'CATEGORY_UPDATES'], labelMap, split)).toBe('업데이트');
+    expect(categorize(['INBOX', 'CATEGORY_FORUMS'], labelMap, split)).toBe('포럼');
   });
   it('plain inbox (primary tab)', () => {
     expect(categorize(['INBOX', 'CATEGORY_PERSONAL', 'UNREAD'], labelMap)).toBe('받은편지함');

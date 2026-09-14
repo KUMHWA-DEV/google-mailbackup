@@ -2,7 +2,7 @@
  * Gmail식 검색 쿼리 파서와 매처. 순수 함수. 서버(Apps Script)와 클라이언트(웹앱) 양쪽에서 같은 코드를 쓴다.
  * 클라이언트에는 webapp.js의 searchClientLib_()가 아래 함수들의 소스를 그대로 넣어 준다.
  *
- * 지원 연산자: from: to: cc: subject: label: agenda: filename: has:attachment in:(inbox|sent|drafts|anywhere)
+ * 지원 연산자: from: to: cc: subject: label: filename: has:attachment in:(inbox|sent|drafts|anywhere)
  *              is:(starred|important) after: before: newer: older: larger: smaller:   "구문"   -제외
  */
 function parseSize(s) {
@@ -29,10 +29,10 @@ function tokenize_(q) {
   return out;
 }
 
-var SEARCH_LIST_KEYS = { from: 1, to: 1, cc: 1, subject: 1, label: 1, agenda: 1, filename: 1 };
+var SEARCH_LIST_KEYS = { from: 1, to: 1, cc: 1, subject: 1, label: 1, filename: 1 };
 
 function parseSearch(q) {
-  var p = { terms: [], not: [], from: [], to: [], cc: [], subject: [], label: [], agenda: [], filename: [],
+  var p = { terms: [], not: [], from: [], to: [], cc: [], subject: [], label: [], filename: [],
     notFrom: [], notTo: [], notSubject: [], notLabel: [], hasAttachment: null, in: '', is: '', after: null, before: null, larger: null, smaller: null };
   tokenize_(String(q || '')).forEach(function (t) {
     var k = t.key, v = t.val;
@@ -64,7 +64,7 @@ function matchSearch(r, p) {
   if (!p) return true;
   var labels = String(r.labels || '') + ', ' + String(r.category || '');
   var atts = String(r.attachments || '');
-  var hay = [r.subject, r.from, r.to, r.cc, r.snippet, labels, atts, r.agenda].join(' | ');
+  var hay = [r.subject, r.from, r.to, r.cc, r.snippet, labels, atts].join(' | ');
   if (p.terms.length && !anyIn_(hay, p.terms)) return false;
   if (p.not.length && !noneIn_(hay, p.not)) return false;
   if (p.from.length && !anyIn_(r.from, p.from)) return false;
@@ -72,7 +72,6 @@ function matchSearch(r, p) {
   if (p.cc.length && !anyIn_(r.cc, p.cc)) return false;
   if (p.subject.length && !anyIn_(r.subject, p.subject)) return false;
   if (p.label.length && !anyIn_(labels, p.label)) return false;
-  if (p.agenda.length && !anyIn_(r.agenda, p.agenda)) return false;
   if (p.filename.length && !anyIn_(atts, p.filename)) return false;
   if (p.notFrom.length && !noneIn_(r.from, p.notFrom)) return false;
   if (p.notTo.length && !noneIn_(r.to, p.notTo)) return false;
@@ -83,7 +82,8 @@ function matchSearch(r, p) {
   if (p.in === 'sent' && !isSentRec_(r)) return false;
   if (p.in === 'inbox' && (isSentRec_(r) || r.category === '임시보관함')) return false;
   if ((p.in === 'drafts' || p.in === 'draft') && r.category !== '임시보관함') return false;
-  if ((p.is === 'starred' || p.is === 'important') && !/(^|,\s*)(IMPORTANT|STARRED)(\s*,|$)/.test(String(r.labels || ''))) return false;
+  if (p.is === 'starred' && !/(^|,\s*)STARRED(\s*,|$)/.test(String(r.labels || ''))) return false; // 별표만 (IMPORTANT는 Gmail 자동 표시라 제외)
+  if (p.is === 'important' && !/(^|,\s*)IMPORTANT(\s*,|$)/.test(String(r.labels || ''))) return false;
   var day = String(r.date || '').slice(0, 10);
   if (p.after && day < p.after) return false;
   if (p.before && day >= p.before) return false;
@@ -110,7 +110,6 @@ function buildSearchQuery(f) {
   if (f.larger) parts.push('larger:' + f.larger);
   if (f.smaller) parts.push('smaller:' + f.smaller);
   if (f.label) parts.push('label:' + quoteVal_(f.label));
-  if (f.agenda) parts.push('agenda:' + quoteVal_(f.agenda));
   if (f.in && f.in !== 'anywhere') parts.push('in:' + f.in);
   return parts.join(' ');
 }

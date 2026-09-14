@@ -11,14 +11,13 @@ const path = require('path');
 const { filterRecords, summarizeRecords } = require('../src/lib/index_row.js');
 const { computeSchedule } = require('../src/lib/schedule.js');
 const { normalizeSettings } = require('../src/lib/settings.js');
-const { classifyAgenda } = require('../src/lib/agenda.js');
 const { aggregatePreview, runProgress, addToBreakdown, breakdownList, estimateRunSeconds } = require('../src/lib/preview.js');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const PORT = Number(process.env.PORT) || 8787;
 const ROOT = path.join(__dirname, '..');
 const fixtures = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'index.json'), 'utf8'))
-  .map(r => ({ ...r, agenda: r.agenda || classifyAgenda(r.subject, r.snippet, r.labels.split(', ')) }));
+  .map(r => ({ ...r, agenda: '' }));
 const listRecords = () => fixtures.map(({ bodyPreview, ...rest }) => rest);
 
 let settings = normalizeSettings({ notifyEmail: 'kumhwa_dev@spris.com' });

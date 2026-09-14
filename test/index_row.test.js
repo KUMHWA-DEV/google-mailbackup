@@ -88,7 +88,7 @@ describe('summarizeRecords', () => {
     expect(s.categories).toEqual([{ name: '받은편지함', count: 2, bytes: 150 }, { name: '보낸편지함', count: 1, bytes: 250 }]);
   });
   it('handles empty index', () => {
-    expect(summarizeRecords([])).toEqual({ total: 0, totalBytes: 0, oldestDate: null, newestDate: null, lastBackedUpAt: null, sentCount: 0, receivedCount: 0, withAttachments: 0, categories: [], agendas: [] });
+    expect(summarizeRecords([])).toEqual({ total: 0, totalBytes: 0, oldestDate: null, newestDate: null, lastBackedUpAt: null, sentCount: 0, receivedCount: 0, withAttachments: 0, categories: [] });
   });
 });
 
@@ -104,18 +104,14 @@ describe('extended filters and summary', () => {
     expect(fr(recs, { folder: 'inbox' }).map(r => r.id)).toEqual(['3', '1']);
     expect(fr(recs, { folder: 'attachments' }).map(r => r.id)).toEqual(['1']);
   });
-  it('agenda filter', () => {
-    expect(fr(recs, { agenda: '회의/일정' }).map(r => r.id)).toEqual(['3', '2']);
-  });
   it('backup run window filter (backedUpAt between)', () => {
     expect(fr(recs, { backedUpFrom: '2026-09-08T03:00:00.000Z', backedUpTo: '2026-09-08T04:00:00.000Z' }).map(r => r.id)).toEqual(['2', '1']);
   });
-  it('summary has sent/received/attachment counts and agenda breakdown', () => {
+  it('summary has sent/received/attachment counts', () => {
     const s = sr(recs);
     expect(s.sentCount).toBe(1);
     expect(s.receivedCount).toBe(2);
     expect(s.withAttachments).toBe(1);
-    expect(s.agendas).toEqual([{ name: '업무요청/협조', count: 1 }, { name: '회의/일정', count: 2 }]);
   });
 });
 

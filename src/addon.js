@@ -161,7 +161,7 @@ function buildAddonMessageCard_(messageId) {
   var card = CardService.newCardBuilder().setHeader(CardService.newCardHeader().setTitle('Mail Backup').setSubtitle('이 메일'));
   var sec = CardService.newCardSection();
   if (rec) {
-    sec.addWidget(kv_('CONFIRMATION_NUMBER_ICON', '백업됨', fmtD_(rec.backedUpAt), '📁 ' + (rec.category || '') + (rec.agenda ? ' · 💼 ' + rec.agenda : '') + ' · ' + fmtB_(rec.sizeBytes)));
+    sec.addWidget(kv_('CONFIRMATION_NUMBER_ICON', '백업됨', fmtD_(rec.backedUpAt), '📁 ' + (rec.category || '') + ' · ' + fmtB_(rec.sizeBytes)));
     var b = CardService.newButtonSet();
     if (rec.driveUrl) b.addButton(link_('↗ Drive 원본', rec.driveUrl));
     if (rec.driveFileId) b.addButton(link_('⬇ .eml', driveDownloadUrl(rec.driveFileId)));

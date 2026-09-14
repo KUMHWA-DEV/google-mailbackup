@@ -445,7 +445,6 @@
 
     <div class="grid3">
       <div class="card"><div class="cardhead"><h3>🏷 라벨별</h3><span class="pill gray" id="distCatN"></span></div><div class="dist" id="distCat"></div></div>
-      <div class="card"><div class="cardhead"><h3>💼 안건별</h3><span class="pill gray" id="distAgN"></span></div><div class="dist" id="distAg"></div></div>
       <div class="card"><div class="cardhead"><h3>⚙️ 현재 정책</h3><button type="button" class="sm" data-goto="settings">변경 ›</button></div><div class="policy" id="policy"></div></div>
     </div>
 
@@ -475,7 +474,7 @@
             <label>제외 단어</label><input name="not">
             <label>크기</label><div class="inl"><select name="sizeOp"><option value="larger">초과</option><option value="smaller">미만</option></select><input name="sizeVal" type="number" min="0" step="0.1" placeholder="0"><select name="sizeUnit"><option value="M">MB</option><option value="K">KB</option></select></div>
             <label>기간</label><div class="inl"><input name="after" type="date"><span>~</span><input name="before" type="date"></div>
-            <label>위치</label><div class="inl"><select name="in"><option value="anywhere">전체 메일</option><option value="inbox">받은편지함</option><option value="sent">보낸편지함</option><option value="drafts">임시보관함</option></select><select name="label" id="advLabel"><option value="">라벨 전체</option></select><select name="agenda" id="advAgenda"><option value="">안건 전체</option></select></div>
+            <label>위치</label><div class="inl"><select name="in"><option value="anywhere">전체 메일</option><option value="inbox">받은편지함</option><option value="sent">보낸편지함</option><option value="drafts">임시보관함</option></select><select name="label" id="advLabel"><option value="">라벨 전체</option></select></div>
             <label></label><div class="chk"><input type="checkbox" name="hasAttachment" id="advAtt"><label for="advAtt" style="text-align:left">📎 첨부파일 있음</label></div>
             <div class="btns"><button type="button" id="advReset">초기화</button><button type="submit" class="primary">🔍 검색</button></div>
           </form>
@@ -514,6 +513,7 @@
       <div class="divider"></div>
       <div class="toggles">
         <label class="sw"><input type="checkbox" name="includeSent"><i></i>📤 보낸편지함 포함</label>
+        <label class="sw"><input type="checkbox" name="splitGmailTabs"><i></i>🗂 Gmail 탭(프로모션·소셜·업데이트·포럼) 별도 폴더</label>
         <label class="sw"><input type="checkbox" name="saveAttachments"><i></i>📎 첨부 별도 저장</label>
         <label class="sw"><input type="checkbox" name="notifyOnComplete"><i></i>📨 완료 알림 메일</label>
       </div>
@@ -524,7 +524,6 @@
       <div class="divider"></div>
       <div class="grid3">
         <div class="field"><label class="t">📁 Drive 폴더 <a id="folderLink" target="_blank" rel="noopener" href="#" hidden>열기 ↗</a></label><input type="text" name="folderId" placeholder="폴더 ID · 비우면 자동 생성"></div>
-        <div class="field"><label class="t">🗂 폴더 기준</label><div class="seg" id="folderByRadios"><button type="button" data-v="label">🏷 Gmail 라벨</button><button type="button" data-v="agenda">💼 안건</button></div></div>
         <div class="field"><label class="t">📆 하위 폴더</label><div class="seg" id="layoutRadios"><button type="button" data-v="flat">없음</button><button type="button" data-v="yearly">연도</button><button type="button" data-v="monthly">연·월</button></div></div>
       </div>
     </form>
@@ -600,7 +599,7 @@
 <script>
 (function () {
   var $ = function (id) { return document.getElementById(id); };
-  var state = { inlineRunning: false, scope: null, sinceDate: '', dash: null, explorer: null, tab: 'overview', ex: { q: '', folder: '', agenda: '', category: '', run: 'all', selected: null, page: 1, sort: 'newest', threads: true }, pollTimer: null };
+  var state = { inlineRunning: false, scope: null, sinceDate: '', dash: null, explorer: null, tab: 'overview', ex: { q: '', folder: '', category: '', run: 'all', selected: null, page: 1, sort: 'newest', threads: true }, pollTimer: null };
 
   // ---------- helpers ----------
   function call(fn, arg) {
@@ -618,6 +617,15 @@
   function isoDay(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   function nameOnly(addr) { var s = String(addr || ''); var m = s.match(/^\s*"?([^"<]*)"?\s*<.*>/); return (m && m[1].trim()) || s; }
   function emailOf(addr) { var m = String(addr || '').match(/<([^>]+)>/); return m ? m[1] : String(addr || '').trim(); }
+  var GMAIL_TAB_NAMES = { '프로모션': 1, '소셜': 1, '업데이트': 1, '포럼': 1 };
+  /** Gmail 자동 탭 폴더명은 설정(Gmail 탭 분리)이 꺼져 있으면 받은편지함으로 취급 */
+  function isTabCat(c) { return !!(c && GMAIL_TAB_NAMES[c] && !(state.dash && state.dash.settings && state.dash.settings.splitGmailTabs)); }
+  function foldCategories(list) {
+    if (state.dash && state.dash.settings && state.dash.settings.splitGmailTabs) return list;
+    var out = [], inbox = null;
+    (list || []).forEach(function (c) { if (GMAIL_TAB_NAMES[c.name] || c.name === '받은편지함') { if (!inbox) { inbox = { name: '받은편지함', count: 0, bytes: 0 }; out.push(inbox); } inbox.count += c.count || 0; inbox.bytes += c.bytes || 0; } else out.push(c); });
+    return out.sort(function (a, b) { return a.name.localeCompare(b.name, 'ko'); });
+  }
   function isSentRec(r) { return r.category === '보낸편지함' || /(^|,\s*)SENT(\s*,|$)/.test(String(r.labels || '')); }
   function dur(a, b) { if (!a || !b) return ''; var s = Math.max(0, Math.round((new Date(b) - new Date(a)) / 1000)); return s < 60 ? s + '초' : Math.round(s / 60) + '분'; }
   var toastTimer;
@@ -657,7 +665,7 @@
   document.querySelectorAll('[data-goto]').forEach(function (b) { b.addEventListener('click', function () { showTab(b.dataset.goto); }); });
   /** 메일함을 특정 필터로 연다 (대시보드 막대/이력 📬에서 호출). */
   function openExplorer(patch) {
-    var x = state.ex; x.q = ''; x.folder = ''; x.category = ''; x.agenda = ''; x.page = 1;
+    var x = state.ex; x.q = ''; x.folder = ''; x.category = ''; x.page = 1;
     Object.keys(patch || {}).forEach(function (k) { x[k] = patch[k]; });
     showTab('explorer');
     if (state.explorer) { $('exQ').value = x.q; renderExplorer(); }
@@ -723,12 +731,12 @@
       $('stRun').textContent = '+' + fmtNum(r.processed) + '건' + (r.errors ? ' ⚠️' + fmtNum(r.errors) : '') + (r.status === 'cancelled' ? ' ✖' : '');
       $('stRunD').textContent = '감지 ' + fmtNum(r.found) + ' · 중복 ' + fmtNum(r.skipped) + ' · ' + fmtBytes(r.bytes) + (r.mailFrom ? ' · ' + fmtDayShort(r.mailFrom) + '~' + fmtDayShort(r.mailTo) : '');
     } else { $('stRun').textContent = '-'; $('stRunD').textContent = ''; }
-    distBars($('distCat'), sum.categories || [], 'category'); $('distCatN').textContent = (sum.categories || []).length + '개';
-    distBars($('distAg'), sum.agendas || [], 'agenda'); $('distAgN').textContent = (sum.agendas || []).length + '개';
+    var catList = foldCategories(sum.categories || []);
+    distBars($('distCat'), catList, 'category'); $('distCatN').textContent = catList.length + '개';
     $('policy').innerHTML = [
       ['blue', '🔁 ' + sch.intervalDays + '일'], ['blue', '📅 ' + (s.initialStartDate || '전체')], ['blue', '🔢 ' + (s.maxPerRun ? fmtNum(s.maxPerRun) + '건' : '무제한')],
       [s.includeSent ? 'green' : 'gray', '📤 ' + (s.includeSent ? '수발신' : '수신만')], [s.saveAttachments ? 'green' : 'gray', '📎 ' + (s.saveAttachments ? '별도 저장' : '.eml만')],
-      ['purple', (s.folderBy === 'agenda' ? '💼 안건별' : '🏷 라벨별') + ' · ' + ({ flat: '누적', yearly: '연도', monthly: '연·월' }[s.folderLayout] || s.folderLayout)],
+      ['purple', '🏷 라벨별' + (s.splitGmailTabs ? ' · Gmail 탭 분리' : '') + ' · ' + ({ flat: '누적', yearly: '연도', monthly: '연·월' }[s.folderLayout] || s.folderLayout)],
       [s.notifyOnComplete ? 'green' : 'gray', '📨 ' + (s.notifyOnComplete ? (s.notifyEmail || '내 계정') : '꺼짐')],
       s.filterQuery ? ['amber', '🔎 ' + esc(s.filterQuery)] : null,
     ].filter(Boolean).map(function (p) { return '<span class="pill ' + p[0] + '" data-goto="settings">' + p[1] + '</span>'; }).join('');
@@ -878,7 +886,7 @@
       (p.newCount ? '<div class="pv-cols"><div><div class="pv-title">🏷 라벨별' + (p.estimated ? ' (추정)' : '') + '</div>' + distSmall(p.byCategory) + '</div>' +
         '<div><div class="pv-title">👤 보낸사람 상위</div>' + distSmall(p.bySender.slice(0, 6)) + '</div></div>' : '<div class="box">📭 새로 저장할 메일이 없습니다. 실행하면 감지만 다시 하고 끝납니다.</div>') +
       '<div class="box" style="margin-top:12px">' +
-      '<div>📁 ' + (d.folderUrl ? '<a href="' + esc(d.folderUrl) + '" target="_blank" rel="noopener">Drive 폴더</a>' : 'Drive / Mail Backup') + ' · ' + (s.folderBy === 'agenda' ? '안건별' : '라벨별') + ' 폴더' + (s.saveAttachments ? ' · 📎 첨부 별도 저장' : '') + '</div>' +
+      '<div>📁 ' + (d.folderUrl ? '<a href="' + esc(d.folderUrl) + '" target="_blank" rel="noopener">Drive 폴더</a>' : 'Drive / Mail Backup') + ' · 라벨별 폴더' + (s.saveAttachments ? ' · 📎 첨부 별도 저장' : '') + '</div>' +
       '<div>' + (s.notifyOnComplete ? '📨 완료 알림 → ' + esc(s.notifyEmail || d.user) : '🔕 완료 알림 없음') + ' · 🖥 백그라운드 실행' + (p.newCount > 150 ? ' · 1분 간격 여러 구간' : '') + '</div>' +
       (p.truncated ? '<div style="color:var(--amber-ink)">⚠️ 메일이 많아 표본만 상세 감지했습니다. 건수·기간은 전체 기준으로 보정됨.</div>' : '') +
       '<div class="mono" style="color:var(--faint)" title="실제 Gmail 검색 조건">🔎 ' + esc(p.query || '') + '</div>' +
@@ -930,19 +938,19 @@
   var form = $('settingsForm');
   function fillSettings(s) {
     ['initialStartDate', 'notifyEmail', 'intervalDays', 'maxPerRun', 'folderId', 'filterQuery'].forEach(function (k) { form.elements[k].value = s[k] == null ? '' : s[k]; });
-    ['notifyOnComplete', 'includeSent', 'saveAttachments'].forEach(function (k) { form.elements[k].checked = !!s[k]; });
-    setRadio('folderByRadios', s.folderBy); setRadio('layoutRadios', s.folderLayout);
+    ['notifyOnComplete', 'includeSent', 'saveAttachments', 'splitGmailTabs'].forEach(function (k) { form.elements[k].checked = !!s[k]; });
+    setRadio('layoutRadios', s.folderLayout);
     $('folderLink').hidden = !(state.dash && state.dash.folderUrl); if (state.dash && state.dash.folderUrl) $('folderLink').href = state.dash.folderUrl;
     $('notifyEmail').placeholder = '비우면 ' + ((state.dash && state.dash.user) || '내 계정');
   }
   function setRadio(id, v) { $(id).dataset.value = v; document.querySelectorAll('#' + id + ' button').forEach(function (b) { b.classList.toggle('active', b.dataset.v === v); }); }
-  ['folderByRadios', 'layoutRadios'].forEach(function (id) { $(id).addEventListener('click', function (e) { var b = e.target.closest('button[data-v]'); if (b) setRadio(id, b.dataset.v); }); });
+  ['layoutRadios'].forEach(function (id) { $(id).addEventListener('click', function (e) { var b = e.target.closest('button[data-v]'); if (b) setRadio(id, b.dataset.v); }); });
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     var s = {};
     ['initialStartDate', 'notifyEmail', 'intervalDays', 'maxPerRun', 'folderId', 'filterQuery'].forEach(function (k) { s[k] = form.elements[k].value; });
-    ['notifyOnComplete', 'includeSent', 'saveAttachments'].forEach(function (k) { s[k] = form.elements[k].checked; });
-    s.folderBy = $('folderByRadios').dataset.value; s.folderLayout = $('layoutRadios').dataset.value;
+    ['notifyOnComplete', 'includeSent', 'saveAttachments', 'splitGmailTabs'].forEach(function (k) { s[k] = form.elements[k].checked; });
+    s.folderLayout = $('layoutRadios').dataset.value;
     $('btnSave').disabled = true; $('btnSave').innerHTML = '<span class="spin"></span>';
     call('saveSettings', s).then(function (d) { renderDashboard(d); fillSettings(d.settings); toast('✔ 저장됨'); })
       .catch(function (err) { toast('저장 실패: ' + (err.message || err), true); })
@@ -989,7 +997,7 @@
     if (!key) return true;
     if (key === 'sent') return isSentRec(r);
     if (key === 'inbox') return !isSentRec(r) && r.category !== '임시보관함';
-    if (key === 'starred') return /(^|,\s*)(IMPORTANT|STARRED)(\s*,|$)/.test(String(r.labels || ''));
+    if (key === 'starred') return /(^|,\s*)STARRED(\s*,|$)/.test(String(r.labels || ''));
     if (key === 'draft') return r.category === '임시보관함' || /(^|,\s*)DRAFT(\s*,|$)/.test(String(r.labels || ''));
     if (key === 'attachments') return !!String(r.attachments || '').trim();
     return true;
@@ -1012,7 +1020,6 @@
   function matches(r) {
     var x = state.ex;
     if (!folderMatch(r, x.folder)) return false;
-    if (x.agenda && r.agenda !== x.agenda) return false;
     if (x.category && r.category !== x.category) return false;
     if (parsedQ && !matchSearch(r, parsedQ)) return false;
     return true;
@@ -1030,15 +1037,14 @@
 
   function fillAdvLists() {
     var cats = {}, ags = {};
-    allRecords().forEach(function (r) { if (r.category) cats[r.category] = 1; if (r.agenda) ags[r.agenda] = 1; });
+    allRecords().forEach(function (r) { if (r.category) cats[r.category] = 1; });
     $('advLabel').innerHTML = '<option value="">라벨 전체</option>' + Object.keys(cats).sort().map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
-    $('advAgenda').innerHTML = '<option value="">안건 전체</option>' + Object.keys(ags).sort().map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('');
   }
 
   // --- 필터 칩 + 팝오버 ---
   var CHIPS = [
     { key: 'from', lb: '보낸사람', re: /^-?from:/i }, { key: 'to', lb: '받는사람', re: /^-?to:/i }, { key: 'date', lb: '날짜', re: /^-?(after|before|newer|older):/i },
-    { key: 'att', lb: '첨부파일', re: /^-?(has|filename):/i }, { key: 'label', lb: '라벨', re: /^-?label:/i }, { key: 'agenda', lb: '안건', re: /^-?agenda:/i },
+    { key: 'att', lb: '첨부파일', re: /^-?(has|filename):/i }, { key: 'label', lb: '라벨', re: /^-?label:/i },
     { key: 'size', lb: '크기', re: /^-?(larger|smaller):/i }, { key: 'sort', lb: '정렬' },
   ];
   function chipValue(c, p) {
@@ -1047,7 +1053,6 @@
     if (c.key === 'date') return (p.after || p.before) ? (p.after || '…') + ' ~ ' + (p.before || '…') : '';
     if (c.key === 'att') return p.hasAttachment === true ? '있음' : p.hasAttachment === false ? '없음' : p.filename.join(', ');
     if (c.key === 'label') return p.label.join(', ') || (p.notLabel.length ? '-' + p.notLabel.join(', ') : '');
-    if (c.key === 'agenda') return p.agenda.join(', ');
     if (c.key === 'size') return p.larger != null ? '> ' + fmtBytes(p.larger) : p.smaller != null ? '< ' + fmtBytes(p.smaller) : '';
     if (c.key === 'sort') return state.ex.sort === 'newest' ? '' : SORTS[state.ex.sort][0];
     return '';
@@ -1057,7 +1062,7 @@
       var v = chipValue(c, p), on = !!v;
       return '<button type="button" class="fchip' + (on ? ' on' : '') + '" data-chip="' + c.key + '">' + (on ? c.lb + ': ' + esc(v) : c.lb) + (on && c.key !== 'sort' ? ' <span class="x" data-clear="' + c.key + '">✕</span>' : ' ▾') + '</button>';
     }).join('');
-    var active = state.ex.q || state.ex.category || state.ex.agenda || state.ex.folder || state.ex.sort !== 'newest';
+    var active = state.ex.q || state.ex.category || state.ex.folder || state.ex.sort !== 'newest';
     if (active) html += '<span class="gm-reset" id="exResetAll">필터 초기화</span>';
     $('gmChips').innerHTML = html;
   }
@@ -1076,7 +1081,6 @@
     if (key === 'from') listPop(counts(function (r) { return nameOnly(r.from) || emailOf(r.from); }), p.from[0], function (v) { toggleOp(/^-?from:/i, 'from:' + qv(v)); }, true);
     else if (key === 'to') listPop(counts(function (r) { return nameOnly(r.to) || emailOf(r.to); }), p.to[0], function (v) { toggleOp(/^-?to:/i, 'to:' + qv(v)); }, true);
     else if (key === 'label') listPop(counts(function (r) { return r.category; }), p.label[0], function (v) { toggleOp(/^-?label:/i, 'label:' + qv(v)); });
-    else if (key === 'agenda') listPop(counts(function (r) { return r.agenda; }), p.agenda[0], function (v) { toggleOp(/^-?agenda:/i, 'agenda:' + qv(v)); });
     else if (key === 'att') {
       var types = [['📎 첨부 있음', 'has:attachment'], ['📭 첨부 없음', '-has:attachment'], ['📕 PDF', 'filename:pdf'], ['🖼️ 이미지', 'filename:png'], ['📗 스프레드시트', 'filename:xls'], ['📘 문서', 'filename:doc'], ['🗜️ 압축', 'filename:zip']];
       pop.innerHTML = types.map(function (t) { return '<div class="it" data-q="' + esc(t[1]) + '">' + t[0] + '</div>'; }).join('');
@@ -1115,10 +1119,10 @@
   function hideAdv() { $('adv').hidden = true; $('gmSearch').classList.remove('open'); $('exAdvBtn').classList.remove('on'); }
   $('exAdvBtn').addEventListener('click', function () {
     var open = $('adv').hidden; $('adv').hidden = !open; $('gmSearch').classList.toggle('open', open); this.classList.toggle('on', open);
-    if (open) { var p = parseSearch(state.ex.q), f = $('adv').elements; f.from.value = p.from[0] || ''; f.to.value = p.to[0] || ''; f.subject.value = p.subject[0] || ''; f.words.value = p.terms.join(' '); f.not.value = p.not.join(' '); f.after.value = p.after || ''; f.before.value = p.before || ''; f.hasAttachment.checked = p.hasAttachment === true; f.in.value = p.in || 'anywhere'; f.label.value = p.label[0] || ''; f.agenda.value = p.agenda[0] || ''; f.sizeVal.value = p.larger != null ? Math.round(p.larger / 1048576 * 10) / 10 : p.smaller != null ? Math.round(p.smaller / 1048576 * 10) / 10 : ''; f.sizeOp.value = p.smaller != null ? 'smaller' : 'larger'; f.sizeUnit.value = 'M'; }
+    if (open) { var p = parseSearch(state.ex.q), f = $('adv').elements; f.from.value = p.from[0] || ''; f.to.value = p.to[0] || ''; f.subject.value = p.subject[0] || ''; f.words.value = p.terms.join(' '); f.not.value = p.not.join(' '); f.after.value = p.after || ''; f.before.value = p.before || ''; f.hasAttachment.checked = p.hasAttachment === true; f.in.value = p.in || 'anywhere'; f.label.value = p.label[0] || ''; f.sizeVal.value = p.larger != null ? Math.round(p.larger / 1048576 * 10) / 10 : p.smaller != null ? Math.round(p.smaller / 1048576 * 10) / 10 : ''; f.sizeOp.value = p.smaller != null ? 'smaller' : 'larger'; f.sizeUnit.value = 'M'; }
   });
   $('adv').addEventListener('submit', function (e) {
-    e.preventDefault(); var f = this.elements, o = { from: f.from.value, to: f.to.value, subject: f.subject.value, words: f.words.value, not: f.not.value, hasAttachment: f.hasAttachment.checked, after: f.after.value, before: f.before.value, in: f.in.value, label: f.label.value, agenda: f.agenda.value };
+    e.preventDefault(); var f = this.elements, o = { from: f.from.value, to: f.to.value, subject: f.subject.value, words: f.words.value, not: f.not.value, hasAttachment: f.hasAttachment.checked, after: f.after.value, before: f.before.value, in: f.in.value, label: f.label.value };
     if (f.sizeVal.value) o[f.sizeOp.value] = f.sizeVal.value + f.sizeUnit.value;
     setQuery(buildSearchQuery(o)); hideAdv();
   });
@@ -1131,21 +1135,18 @@
   function renderNav(src) {
     var x = state.ex, html = '';
     FOLDERS.forEach(function (f) { html += navItem('folder', f.key, f.ic, f.lb, src.filter(function (r) { return folderMatch(r, f.key); }).length, x.folder === f.key && !x.category && !x.agenda); });
-    var cats = {}, agendas = {};
-    src.forEach(function (r) { if (r.category) cats[r.category] = (cats[r.category] || 0) + 1; if (r.agenda) agendas[r.agenda] = (agendas[r.agenda] || 0) + 1; });
+    var cats = {};
+    src.forEach(function (r) { if (r.category && !isTabCat(r.category)) cats[r.category] = (cats[r.category] || 0) + 1; });
     html += '<div class="sec">라벨</div>';
     Object.keys(cats).sort().forEach(function (c) { html += navItem('category', c, '', c, cats[c], x.category === c, 'background:' + LABEL_COLORS[hash(c) % LABEL_COLORS.length].split(':')[1]); });
-    html += '<div class="sec">안건</div>';
-    Object.keys(agendas).sort().forEach(function (a) { html += navItem('agenda', a, '💼', a, agendas[a], x.agenda === a); });
     var hist = (state.explorer && state.explorer.history) || [];
     html += '<div class="runsel">🕘 백업 회차<select id="exRun"><option value="all">전체</option>' + hist.map(function (h, i) { return '<option value="' + i + '"' + (String(i) === x.run ? ' selected' : '') + '>' + fmtDay(h.startedAt) + ' (' + fmtNum(h.processed) + '건)</option>'; }).join('') + '</select></div>';
     $('exNav').innerHTML = html;
     var chips = '';
-    FOLDERS.forEach(function (f) { chips += '<button type="button" class="chip' + (x.folder === f.key && !x.category && !x.agenda ? ' active' : '') + '" data-k="folder" data-v="' + f.key + '">' + f.ic + ' ' + f.lb + '</button>'; });
+    FOLDERS.forEach(function (f) { chips += '<button type="button" class="chip' + (x.folder === f.key && !x.category ? ' active' : '') + '" data-k="folder" data-v="' + f.key + '">' + f.ic + ' ' + f.lb + '</button>'; });
     Object.keys(cats).sort().forEach(function (c) { chips += '<button type="button" class="chip' + (x.category === c ? ' active' : '') + '" data-k="category" data-v="' + esc(c) + '">' + esc(c) + '</button>'; });
-    Object.keys(agendas).sort().forEach(function (a) { chips += '<button type="button" class="chip' + (x.agenda === a ? ' active' : '') + '" data-k="agenda" data-v="' + esc(a) + '">💼 ' + esc(a) + '</button>'; });
     $('exNavChips').innerHTML = chips;
-    $('exWhere').textContent = x.category ? '🏷 ' + x.category : x.agenda ? '💼 ' + x.agenda : (FOLDERS.filter(function (f) { return f.key === x.folder; })[0] || FOLDERS[0]).lb;
+    $('exWhere').textContent = x.category ? '🏷 ' + x.category : (FOLDERS.filter(function (f) { return f.key === x.folder; })[0] || FOLDERS[0]).lb;
   }
   function renderExplorer() {
     parsedQ = state.ex.q ? parseSearch(state.ex.q) : null;
@@ -1183,11 +1184,11 @@
       var me = (state.dash && state.dash.user || '').toLowerCase();
       $('mlist').innerHTML = tslice.map(function (t) {
         var atts = t.msgs.some(function (m) { return String(m.attachments || '').trim(); });
-        var star = t.msgs.some(function (m) { return /(^|,\s*)(IMPORTANT|STARRED)(\s*,|$)/.test(String(m.labels || '')); });
+        var star = t.msgs.some(function (m) { return /(^|,\s*)STARRED(\s*,|$)/.test(String(m.labels || '')); });
         var names = [], seen = {};
         t.msgs.forEach(function (m) { var e = emailOf(m.from).toLowerCase(); var n = (e && e === me) || isSentRec(m) ? '나' : (nameOnly(m.from) || emailOf(m.from)); n = n.split(' ')[0] || n; if (!seen[n]) { seen[n] = 1; names.push(n); } });
         var who = names.length > 3 ? names[0] + ' … ' + names[names.length - 1] : names.join(', ');
-        var cats = {}; t.msgs.forEach(function (m) { if (m.category && m.category !== '받은편지함' && m.category !== '보낸편지함') cats[m.category] = 1; });
+        var cats = {}; t.msgs.forEach(function (m) { if (m.category && m.category !== '받은편지함' && m.category !== '보낸편지함' && !isTabCat(m.category)) cats[m.category] = 1; });
         var cat = Object.keys(cats)[0];
         return '<div class="gm-row' + (state.ex.selected === t.id ? ' active' : '') + '" data-tid="' + esc(t.id) + '" title="' + esc(t.subject) + '">' +
           '<span class="star' + (star ? ' on' : '') + '">' + (star ? '★' : '☆') + '</span>' +
@@ -1202,9 +1203,9 @@
     state.ex.items = hits;
     $('mlist').innerHTML = slice.map(function (r) {
       var out = isSentRec(r), atts = String(r.attachments || '').trim();
-      var star = /(^|,\s*)(IMPORTANT|STARRED)(\s*,|$)/.test(String(r.labels || ''));
+      var star = /(^|,\s*)STARRED(\s*,|$)/.test(String(r.labels || ''));
       var who = out ? '<span class="to">받는사람: </span>' + esc(nameOnly(r.to) || emailOf(r.to)) : esc(nameOnly(r.from) || emailOf(r.from));
-      var showCat = r.category && r.category !== '받은편지함' && r.category !== '보낸편지함';
+      var showCat = r.category && r.category !== '받은편지함' && r.category !== '보낸편지함' && !isTabCat(r.category);
       return '<div class="gm-row' + (state.ex.selected === r.id ? ' active' : '') + '" data-id="' + esc(r.id) + '" title="' + esc(r.subject) + '">' +
         '<span class="star' + (star ? ' on' : '') + '">' + (star ? '★' : '☆') + '</span>' +
         '<span class="sd' + (out ? ' sentme' : '') + '">' + who + '</span>' +
@@ -1216,9 +1217,8 @@
   }
   function setFilter(k, v) {
     var x = state.ex;
-    if (k === 'folder') { x.folder = v; x.category = ''; x.agenda = ''; }
-    else if (k === 'category') { x.category = (x.category === v ? '' : v); x.agenda = ''; }
-    else if (k === 'agenda') { x.agenda = (x.agenda === v ? '' : v); x.category = ''; }
+    if (k === 'folder') { x.folder = v; x.category = ''; }
+    else if (k === 'category') { x.category = (x.category === v ? '' : v); }
     x.page = 1; renderExplorer();
   }
   function onNavClick(e) { var it = e.target.closest('[data-k]'); if (!it || it.tagName === 'SELECT') return; setFilter(it.dataset.k, it.dataset.v); }
@@ -1254,11 +1254,11 @@
     var hits = state.ex.hits || [], idx = hits.indexOf(r);
     var out = isSentRec(r), atts = parseAtts(r), av = AV_COLORS[hash(emailOf(r.from)) % AV_COLORS.length];
     var labels = String(r.labels || '').split(',').map(function (s) { return s.trim(); }).filter(function (s) { return s && !/^(INBOX|SENT|UNREAD|IMPORTANT|STARRED|DRAFT|CATEGORY_\w+)$/.test(s); });
-    var chips = (r.category && r.category !== '받은편지함' && r.category !== '보낸편지함' ? [r.category] : []).concat(labels.filter(function (l) { return l !== r.category; }));
+    var chips = (r.category && r.category !== '받은편지함' && r.category !== '보낸편지함' && !isTabCat(r.category) ? [r.category] : []).concat(labels.filter(function (l) { return l !== r.category; }));
     var emlDl = dlUrl(r.driveFileId);
     $('reader').innerHTML =
       '<div class="gm-rt"><button type="button" class="gm-ib gm-back" id="readerBack" title="목록">←</button>' +
-      (out ? '<span class="pill purple">📤 보낸 편지</span>' : '<span class="pill blue">📥 받은 편지</span>') + (r.agenda ? '<span class="pill gray" style="margin-left:4px">💼 ' + esc(r.agenda) + '</span>' : '') +
+      (out ? '<span class="pill purple">📤 보낸 편지</span>' : '<span class="pill blue">📥 받은 편지</span>') +
       '<span class="sp"></span>' +
       '<button type="button" class="gm-ib" id="rdPrev" title="이전 메일 (k)"' + (idx <= 0 ? ' disabled' : '') + '>‹</button><span style="font-size:12px;color:#5f6368">' + (idx + 1) + ' / ' + hits.length + '</span><button type="button" class="gm-ib" id="rdNext" title="다음 메일 (j)"' + (idx >= hits.length - 1 ? ' disabled' : '') + '>›</button>' +
       '<span style="width:8px"></span>' +
@@ -1289,7 +1289,7 @@
     var emlDl = dlUrl(m.driveFileId);
     return '<div class="gm-th' + (open ? ' open' : '') + (hit ? ' hit' : '') + '" data-mid="' + esc(m.id) + '">' +
       '<div class="hd"><div class="gm-av" style="background:' + av + '">' + esc(initialOf(m.from)) + '</div><div class="l">' +
-      '<div class="fr"><b>' + esc(out ? '나' : (nameOnly(m.from) || emailOf(m.from))) + '</b><span style="color:#5f6368">&lt;' + esc(emailOf(m.from)) + '&gt;</span>' + (m.agenda ? '<span class="pill gray" style="margin-left:4px">💼 ' + esc(m.agenda) + '</span>' : '') + (String(m.attachments || '').trim() ? '<span title="' + esc(m.attachments) + '">📎</span>' : '') + '</div>' +
+      '<div class="fr"><b>' + esc(out ? '나' : (nameOnly(m.from) || emailOf(m.from))) + '</b><span style="color:#5f6368">&lt;' + esc(emailOf(m.from)) + '&gt;</span>' + (String(m.attachments || '').trim() ? '<span title="' + esc(m.attachments) + '">📎</span>' : '') + '</div>' +
       (open ? '<details><summary>받는사람: ' + esc(nameOnly(m.to) || emailOf(m.to) || '-') + (m.cc ? ', 참조 ' + esc(nameOnly(m.cc)) : '') + ' ▾</summary><table><tr><td>보낸사람:</td><td>' + esc(m.from) + '</td></tr><tr><td>받는사람:</td><td>' + esc(m.to || '-') + '</td></tr>' + (m.cc ? '<tr><td>참조:</td><td>' + esc(m.cc) + '</td></tr>' : '') + '<tr><td>날짜:</td><td>' + gmDateLong(m.date) + '</td></tr><tr><td>Gmail 라벨:</td><td>' + esc(m.labels || '-') + '</td></tr><tr><td>Drive 폴더:</td><td>' + esc(m.category) + '</td></tr><tr><td>백업:</td><td>' + fmtDate(m.backedUpAt) + ' · ' + fmtBytes(m.sizeBytes) + '</td></tr></table></details>' : '<div class="sn">' + esc(m.snippet) + '</div>') +
       '</div><div class="r">' + gmDate(m.date) +
       (open ? (emlDl ? '<a class="gm-ib" href="' + esc(emlDl) + '" title="원본(.eml) 다운로드" target="_blank" rel="noopener">⬇</a>' : '') + (m.driveUrl ? '<a class="gm-ib" href="' + esc(m.driveUrl) + '" title="Drive에서 원본 열기" target="_blank" rel="noopener">↗</a>' : '') : '') + '</div></div>' +

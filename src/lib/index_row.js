@@ -5,7 +5,7 @@
  * 메일을 열 때만 해당 행에서 읽는다 (INDEX_LIST_COLUMNS 참고).
  */
 var INDEX_HEADERS = [
-  'id', 'threadId', 'date', 'category', 'agenda', 'labels', 'from', 'to', 'cc', 'subject', 'snippet',
+  'id', 'threadId', 'date', 'category', 'agenda' /* 예전 안건 열, 항상 빈 값 (기존 시트 호환) */, 'labels', 'from', 'to', 'cc', 'subject', 'snippet',
   'sizeBytes', 'attachments', 'attachmentFiles', 'driveFileId', 'driveUrl', 'backedUpAt', 'bodyPreview',
 ];
 var INDEX_LIST_COLUMNS = INDEX_HEADERS.length - 1; // bodyPreview 제외
@@ -37,7 +37,7 @@ function buildIndexRow(m) {
   var body = String(m.bodyPreview || '');
   if (body.length > BODY_PREVIEW_MAX) body = body.slice(0, BODY_PREVIEW_MAX) + '\n…(생략)';
   return [
-    m.id, m.threadId || '', isoOf(m.date), m.category, m.agenda || '', (m.labelNames || []).join(', '),
+    m.id, m.threadId || '', isoOf(m.date), m.category, '', (m.labelNames || []).join(', '),
     h.from || '', h.to || '', h.cc || '', h.subject || '', m.snippet || '',
     Number(m.sizeEstimate || 0), (m.attachmentNames || []).join('; '),
     (m.attachmentFiles && m.attachmentFiles.length) ? JSON.stringify(m.attachmentFiles) : '',
@@ -71,7 +71,7 @@ function isSent(r) { return r.category === '보낸편지함' || /(^|,\s*)SENT(\s
 
 /**
  * @param {Object[]} records rowToRecord 결과 배열
- * @param {{q?:string, category?:string, agenda?:string, folder?:string, from?:string,
+ * @param {{q?:string, category?:string, folder?:string, from?:string,
  *          dateFrom?:string, dateTo?:string, backedUpFrom?:string, backedUpTo?:string}} f
  *   folder: 'inbox' | 'sent' | 'attachments'
  */
@@ -80,7 +80,6 @@ function filterRecords(records, f) {
   var q = lc(f.q).trim();
   var from = lc(f.from).trim();
   var cat = f.category ? String(f.category) : '';
-  var agenda = f.agenda ? String(f.agenda) : '';
   var folder = f.folder ? String(f.folder) : '';
   var dFrom = f.dateFrom ? String(f.dateFrom).slice(0, 10) : '';
   var dTo = f.dateTo ? String(f.dateTo).slice(0, 10) : '';
@@ -90,7 +89,6 @@ function filterRecords(records, f) {
   var parsed = (q && typeof parseSearch === 'function') ? parseSearch(f.q) : null;
   var out = records.filter(function (r) {
     if (cat && r.category !== cat) return false;
-    if (agenda && r.agenda !== agenda) return false;
     if (folder === 'sent' && !isSent(r)) return false;
     if (folder === 'inbox' && isSent(r)) return false;
     if (folder === 'attachments' && !String(r.attachments || '').trim()) return false;
@@ -103,7 +101,7 @@ function filterRecords(records, f) {
     if (bTo && backed > bTo) return false;
     if (parsed) { if (!matchSearch(r, parsed)) return false; }
     else if (q) {
-      var hay = [r.subject, r.from, r.to, r.cc, r.snippet, r.labels, r.attachments, r.agenda].map(lc).join(' | ');
+      var hay = [r.subject, r.from, r.to, r.cc, r.snippet, r.labels, r.attachments].map(lc).join(' | ');
       if (hay.indexOf(q) < 0) return false;
     }
     return true;
@@ -114,12 +112,12 @@ function filterRecords(records, f) {
 
 /**
  * 인덱스 전체 요약: 건수, 총 용량, 가장 오래된/최신 메일, 마지막 백업 시각,
- * 수신/발신/첨부 건수, 카테고리별·안건별 건수.
+ * 수신/발신/첨부 건수, 카테고리별 건수.
  */
 function summarizeRecords(records) {
   var s = { total: 0, totalBytes: 0, oldestDate: null, newestDate: null, lastBackedUpAt: null,
-    sentCount: 0, receivedCount: 0, withAttachments: 0, categories: [], agendas: [] };
-  var cats = {}, agendas = {};
+    sentCount: 0, receivedCount: 0, withAttachments: 0, categories: [] };
+  var cats = {};
   for (var i = 0; i < records.length; i++) {
     var r = records[i];
     var bytes = Number(r.sizeBytes) || 0;
@@ -136,13 +134,8 @@ function summarizeRecords(records) {
     if (!cats[c]) cats[c] = { name: c, count: 0, bytes: 0 };
     cats[c].count += 1;
     cats[c].bytes += bytes;
-    if (r.agenda) {
-      if (!agendas[r.agenda]) agendas[r.agenda] = { name: r.agenda, count: 0 };
-      agendas[r.agenda].count += 1;
-    }
   }
   s.categories = Object.keys(cats).sort().map(function (k) { return cats[k]; });
-  s.agendas = Object.keys(agendas).sort().map(function (k) { return agendas[k]; });
   return s;
 }
 

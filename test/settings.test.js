@@ -20,10 +20,10 @@ describe('normalizeSettings', () => {
     expect(s.saveAttachments).toBe(false);
   });
   it('validates date and enums, trims strings', () => {
-    const s = normalizeSettings({ initialStartDate: '2026-08-01', folderLayout: 'weird', folderBy: 'agenda', filterQuery: '  from:a.com ', notifyEmail: ' me@x.com ' });
+    const s = normalizeSettings({ initialStartDate: '2026-08-01', folderLayout: 'weird', splitGmailTabs: 'true', filterQuery: '  from:a.com ', notifyEmail: ' me@x.com ' });
     expect(s.initialStartDate).toBe('2026-08-01');
     expect(s.folderLayout).toBe('flat');
-    expect(s.folderBy).toBe('agenda');
+    expect(s.splitGmailTabs).toBe(true);
     expect(s.filterQuery).toBe('from:a.com');
     expect(s.notifyEmail).toBe('me@x.com');
     expect(normalizeSettings({ initialStartDate: 'not a date' }).initialStartDate).toBe('');

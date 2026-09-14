@@ -26,7 +26,7 @@ function folderMatch(r, key) {
   if (key === 'sent') return isSent(r);
   if (key === 'inbox') return !isSent(r) && r.category !== '임시보관함';
   if (key === 'attachments') return !!String(r.attachments || '').trim();
-  if (key === 'starred') return /(^|,\s*)(IMPORTANT|STARRED)(\s*,|$)/.test(String(r.labels || ''));
+  if (key === 'starred') return /(^|,\s*)STARRED(\s*,|$)/.test(String(r.labels || ''));
   return true;
 }
 
@@ -36,7 +36,6 @@ function searchRecords(records, o) {
   const parsed = o.query ? parseSearch(o.query) : null;
   let hits = records.filter(r => folderMatch(r, o.folder) && (!parsed || matchSearch(r, parsed)));
   if (o.category) hits = hits.filter(r => r.category === o.category);
-  if (o.agenda) hits = hits.filter(r => r.agenda === o.agenda);
   hits.sort((a, b) => String(b.date).localeCompare(String(a.date)));
   const limit = Math.max(1, Math.min(200, Number(o.limit) || 20));
   const offset = Math.max(0, Number(o.offset) || 0);
@@ -46,7 +45,7 @@ function searchRecords(records, o) {
 /** AI에 돌려줄 요약 레코드 (본문 제외, 첨부는 구조화). */
 function compactRecord(r) {
   return {
-    id: r.id, date: r.date, category: r.category, agenda: r.agenda, labels: r.labels,
+    id: r.id, date: r.date, category: r.category, labels: r.labels,
     from: r.from, to: r.to, cc: r.cc || undefined, subject: r.subject, snippet: r.snippet,
     sizeBytes: Number(r.sizeBytes) || 0,
     attachments: parseAttachmentFiles(r),
