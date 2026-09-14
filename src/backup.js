@@ -17,9 +17,26 @@ function runBackup() {
   try {
     deleteContinuationTriggers_();
     runBackupLocked_();
+  } catch (e) {
+    // 실행이 예외로 끝나면 상태에 남겨 대시보드/애드온에서 보이게 한다 (안 그러면 '대기 중'으로 영원히 보임)
+    var cur = loadCursor_() || (getStatus_().cursor || {});
+    cur.lastError = String(e && e.message || e);
+    cur.failedAt = new Date().toISOString();
+    Logger.log('runBackup 실패: %s', e && e.stack || e);
+    setStatus_({ state: 'error', message: '실행 실패: ' + cur.lastError, cursor: cur, errorStack: String(e && e.stack || '') });
+    throw e;
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * 브라우저에서 직접 이어 실행 (트리거가 안 돌 때의 대체 경로). 한 구간(최대 4분 30초)만 돌고 상태를 돌려준다.
+ * 클라이언트가 running 상태인 동안 반복 호출한다. 같은 사용자의 트리거 실행과 겹치면 사용자 잠금으로 건너뛴다.
+ */
+function runBackupInline() {
+  try { runBackup(); } catch (e) { /* 상태에 기록됨 */ }
+  return getDashboard();
 }
 
 function runBackupLocked_() {

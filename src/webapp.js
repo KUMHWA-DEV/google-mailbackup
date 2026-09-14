@@ -39,6 +39,9 @@ function getDashboard() {
       progress: runProgress(c),
     },
     lastError: c.lastError || null,
+    errorStack: status.errorStack || null,
+    queuedAt: c.queuedAt || null,
+    triggerError: c.triggerError || null,
     history: loadRunHistory_(),
     summary: summarizeRecords(loadIndexRecords_()),
     settings: settings,
@@ -103,9 +106,11 @@ function previewBackup(opt) {
 /** 지금 백업: 웹 요청 시간 제한을 피하려고 5초 뒤 트리거로 백그라운드 실행. */
 function runBackupNow() {
   deleteContinuationTriggers_();
-  scheduleContinuation_(5 * 1000);
   var pv = loadPreview_();
-  setStatus_({ state: 'queued', message: '대기열 등록 · 곧 시작' + (pv && pv.newCount ? ' (예상 ' + pv.newCount + '건)' : ''), cursor: { expectedTotal: pv ? pv.newCount : 0, manual: true, queuedAt: new Date().toISOString() } });
+  var triggerError = '';
+  try { scheduleContinuation_(5 * 1000); } catch (e) { triggerError = String(e && e.message || e); }
+  setStatus_({ state: 'queued', message: triggerError ? '트리거 생성 실패 · 브라우저에서 직접 실행합니다' : '대기열 등록 · 곧 시작' + (pv && pv.newCount ? ' (예상 ' + pv.newCount + '건)' : ''),
+    cursor: { expectedTotal: pv ? pv.newCount : 0, manual: true, queuedAt: new Date().toISOString(), triggerError: triggerError || null } });
   return getDashboard();
 }
 

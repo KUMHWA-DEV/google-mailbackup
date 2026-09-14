@@ -105,6 +105,7 @@ const api = {
   },
   installScheduledTrigger: () => { triggerInstalled = true; return dashboard(); },
   disconnectApp: () => ({ ok: true }),
+  runBackupInline: () => dashboard(),
   installWeeklyTrigger: () => api.installScheduledTrigger(),
   uninstallScheduledTrigger: () => { triggerInstalled = false; return dashboard(); },
 };
