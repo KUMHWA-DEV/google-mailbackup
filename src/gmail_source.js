@@ -40,8 +40,9 @@ function fetchMessageMeta_(id) {
  */
 function fetchMessage_(id) {
   var api = Gmail.Users.Messages.get('me', id, { format: 'raw' });
-  var rawBytes = Utilities.base64DecodeWebSafe(api.raw);
   var msg = GmailApp.getMessageById(id);
+  var rawBytes = decodeRawBytes_(api.raw);
+  if (!rawBytes) rawBytes = Utilities.newBlob(msg.getRawContent(), 'message/rfc822').getBytes(); // API raw를 못 풀면 GmailApp 원문으로
   var date = msg.getDate();
   if (!(date instanceof Date) || isNaN(date.getTime())) date = new Date(Number(api.internalDate));
 
@@ -65,4 +66,16 @@ function fetchMessage_(id) {
     rawBytes: rawBytes,
     attachments: attachments,
   };
+}
+
+/**
+ * Gmail API의 raw(base64url)를 바이트로. 일부 메시지는 base64DecodeWebSafe가 "문자열을 디코딩할 수 없습니다"를 던지므로
+ * 표준 base64로 바꾸고 패딩을 채워 다시 시도한다. 그래도 안 되면 null.
+ */
+function decodeRawBytes_(raw) {
+  if (!raw) return null;
+  try { return Utilities.base64DecodeWebSafe(raw); } catch (e) { /* 아래에서 재시도 */ }
+  var std = String(raw).replace(/\s+/g, '').replace(/-/g, '+').replace(/_/g, '/');
+  while (std.length % 4) std += '=';
+  try { return Utilities.base64Decode(std); } catch (e2) { return null; }
 }
