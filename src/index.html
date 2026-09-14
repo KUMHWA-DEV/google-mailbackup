@@ -679,7 +679,7 @@
     $('btnResume').hidden = !paused; $('btnCancel').hidden = !(paused || failed || d.state === 'stopping');
     document.querySelector('.scopebox').hidden = running || paused;
     $('btnRun').hidden = running || paused;
-    var stuck = d.state === 'queued' && d.queuedAt && (Date.now() - new Date(d.queuedAt).getTime() > 90 * 1000);
+    var stuck = d.state === 'queued' && d.queuedAt && (Date.now() - new Date(d.queuedAt).getTime() > 30 * 1000);
     if (running && (stuck || d.triggerError) && !state.inlineRunning) startInlineRun('트리거가 실행되지 않아 브라우저에서 직접 진행합니다');
     $('hdUser').textContent = d.user || '';
     $('acctSwitch').href = 'https://accounts.google.com/AccountChooser?continue=' + encodeURIComponent(d.webAppUrl || location.href);
