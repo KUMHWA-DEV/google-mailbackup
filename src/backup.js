@@ -60,8 +60,26 @@ function stopBackup() {
   props_().setProperty('STOP_REQUESTED', '1');
   try { deleteContinuationTriggers_(); } catch (e) { /* 무시 */ }
   var st = getStatus_();
-  if (st.state === 'queued') { props_().deleteProperty('STOP_REQUESTED'); setStatus_({ state: 'idle', message: '대기열에서 취소됨' }); }
-  else if (st.state === 'running') setStatus_({ state: 'stopping', message: '중지 중 · 현재 메일까지 저장 후 멈춥니다', cursor: st.cursor });
+  var c = loadCursor_();
+  // 실제로 구간이 실행 중인지 사용자 잠금으로 확인. 잠금이 비어 있으면(구간 사이 1분 대기, 할당량 대기, 대기열) 즉시 중지 상태로 바꾼다.
+  var lock = LockService.getUserLock();
+  var idle = false;
+  try { idle = lock.tryLock(0); } catch (e) { idle = false; }
+  if (idle) {
+    try {
+      props_().deleteProperty('STOP_REQUESTED');
+      if (c && c.startedAt) {
+        delete c.resumeAt; delete c.queuedAt; c.pausedAt = new Date().toISOString();
+        saveCursor_(c);
+        setStatus_({ state: 'paused', message: '중지됨 · ' + (c.processed || 0) + '건 저장 · "이어서"를 누르면 이 위치부터 계속', cursor: c });
+      } else {
+        props_().deleteProperty(PROP.CURSOR_JSON);
+        setStatus_({ state: 'idle', message: '대기열에서 취소됨', cursor: {} });
+      }
+    } finally { lock.releaseLock(); }
+  } else {
+    setStatus_({ state: 'stopping', message: '중지 중 · 현재 메일까지 저장 후 멈춥니다', cursor: st.cursor || c || {} });
+  }
   return getDashboard();
 }
 /** ▶ 이어서: 저장된 커서 위치부터 백그라운드 재개. */
@@ -81,7 +99,8 @@ function cancelBackup() {
   try { deleteContinuationTriggers_(); } catch (e) { /* 무시 */ }
   var c = loadCursor_();
   props_().deleteProperty(PROP.CURSOR_JSON);
-  setStatus_({ state: 'idle', message: '취소됨' + (c && c.processed ? ' · ' + c.processed + '건은 저장됨' : ''), cursor: c || {} });
+  if (c && c.startedAt) { c.finishedAt = new Date().toISOString(); c.status = 'cancelled'; appendRunHistory_(c); } // 취소한 실행도 이력에 남긴다
+  setStatus_({ state: 'idle', message: '취소됨' + (c && c.processed ? ' · ' + c.processed + '건은 저장됨' : ''), cursor: {} });
   return getDashboard();
 }
 
@@ -112,6 +131,11 @@ function runBackupLocked_() {
     };
     props_().deleteProperty(PROP.PREVIEW_JSON);
   }
+  if (!isNewRun && stopRequested_()) { // 중지 요청 뒤에 뒤늦게 트리거가 돌면 바로 멈춘다
+    delete cursor.resumeAt; saveCursor_(cursor);
+    setStatus_({ state: 'paused', message: '중지됨 · ' + cursor.processed + '건 저장 · "이어서"를 누르면 이 위치부터 계속', cursor: cursor });
+    return;
+  }
   if (!isNewRun && !cursor.processed) { cursor.found = 0; cursor.errors = 0; cursor.skipped = 0; cursor.lastError = null; }
   cursor.chunks += 1;
   cursor.chunkStartedAt = new Date().toISOString();
@@ -132,6 +156,7 @@ function runBackupLocked_() {
       cursor.pageFound = page.ids.length; // 할당량 중단 시 같은 페이지를 다시 세지 않도록 되돌릴 값
       for (var i = 0; i < page.ids.length; i++) {
         var id = page.ids[i];
+        if (i % 3 === 2 && stopRequested_()) { cursor.paused = true; break; } // 사용자가 ⏹ 중지 (건너뛴 메일만 이어져도 확인)
         if (backedUp[id]) { cursor.skipped += 1; continue; }
         if (maxPerRun && cursor.processed >= maxPerRun) { cursor.limitHit = true; break; }
         try {
@@ -149,13 +174,13 @@ function runBackupLocked_() {
         if (pending.length >= CONFIG.INDEX_FLUSH_EVERY) { appendIndexRows_(sheet, pending); pending = []; }
         if ((cursor.processed + cursor.errors) % CONFIG.STATUS_EVERY === 0) setStatus_({ state: 'running', message: '저장 중 ' + cursor.processed + '건' + (cursor.expectedTotal ? ' / ' + cursor.expectedTotal : ''), cursor: cursor });
         if (Date.now() > deadline) { outOfTime = true; break; }
-        if ((cursor.processed + cursor.errors) % 3 === 0 && stopRequested_()) { cursor.paused = true; break; } // 사용자가 ⏹ 중지
       }
       if (cursor.paused) break;
       if (outOfTime || cursor.limitHit) break; // 시간 초과: 같은 pageToken으로 재개 (중복은 id로 걸러짐)
       cursor.pageToken = page.nextPageToken || null;
       if (!cursor.pageToken) break;
       if (Date.now() > deadline) { outOfTime = true; break; }
+      if (stopRequested_()) { cursor.paused = true; break; }
     }
   } catch (e) {
     // 루프 중 예외(할당량 등): 지금까지 저장한 행을 기록하고 커서를 예외에 실어 올린다
@@ -242,6 +267,7 @@ function appendRunHistory_(cursor) {
     bytes: cursor.bytes, mailFrom: cursor.mailFrom, mailTo: cursor.mailTo, query: cursor.query,
     limitHit: !!cursor.limitHit, notifiedTo: cursor.notifiedTo || null,
     manual: !!cursor.manual, expectedTotal: cursor.expectedTotal || 0, scope: cursor.scope || 'incremental',
+    status: cursor.status || 'done', // done | cancelled
     byCategory: breakdownList(cursor.cats || {}).slice(0, 12),
   });
   props_().setProperty(PROP.RUN_HISTORY_JSON, JSON.stringify(hist.slice(0, RUN_HISTORY_MAX)));

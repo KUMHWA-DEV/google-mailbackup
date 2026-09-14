@@ -48,6 +48,26 @@ function dashboard() {
   };
 }
 
+let mockStart = null, mockTick = null, mockCats = {};
+function mockTicking() {
+  clearInterval(mockTick);
+  const expected = currentRun.expectedTotal || 7;
+  let i = currentRun.processed || 0;
+  mockTick = setInterval(() => {
+    const r = fixtures[i % fixtures.length], step = expected > 50 ? Math.ceil(expected / 40) : 1;
+    currentRun.processed = Math.min(expected, currentRun.processed + step); currentRun.bytes += r.sizeBytes * step; addToBreakdown(mockCats, r.category, r.sizeBytes); currentRun.byCategory = breakdownList(mockCats);
+    if (!currentRun.mailFrom || r.date < currentRun.mailFrom) currentRun.mailFrom = r.date; if (!currentRun.mailTo || r.date > currentRun.mailTo) currentRun.mailTo = r.date;
+    status = { state: 'running', message: '저장 중 ' + currentRun.processed + '건 / ' + expected, updatedAt: new Date().toISOString() };
+    i += 1;
+    if (currentRun.processed >= expected) {
+      clearInterval(mockTick);
+      lastSyncEpoch = Math.floor(Date.now() / 1000);
+      currentRun.finishedAt = new Date().toISOString();
+      history.unshift({ ...currentRun, status: 'done', notifiedTo: settings.notifyOnComplete ? (settings.notifyEmail || 'kumhwa_dev@spris.com') : null });
+      status = { state: 'idle', message: '완료: 감지 12건, 새로 ' + expected + '건 저장, 5건 이미 있음, 오류 0건 (로컬 모의)', updatedAt: new Date().toISOString() };
+    }
+  }, 1500);
+}
 const api = {
   getDashboard: dashboard,
   getStatus: dashboard,
@@ -82,25 +102,12 @@ const api = {
     const expected = preview ? preview.newCount : 7;
     status = { state: 'queued', message: '대기열 등록 · 곧 시작 (예상 ' + expected + '건)', updatedAt: new Date().toISOString() };
     currentRun = { startedAt: null, expectedTotal: expected, manual: true, processed: 0, found: 0, skipped: 0, errors: 0, bytes: 0, chunks: 0, byCategory: [] };
-    setTimeout(() => {
-      const cats = {};
+    mockCats = {};
+    clearTimeout(mockStart); clearInterval(mockTick);
+    mockStart = setTimeout(() => {
       currentRun = { startedAt: new Date().toISOString(), chunkStartedAt: new Date().toISOString(), chunks: 1, found: 12, processed: 0, skipped: 5, errors: 0, bytes: 0, mailFrom: null, mailTo: null, limitHit: false, expectedTotal: expected, manual: true, byCategory: [] };
       status = { state: 'running', message: '새 백업 시작 (1번째 구간)', updatedAt: new Date().toISOString() };
-      let i = 0;
-      const tick = setInterval(() => {
-        const r = fixtures[i % fixtures.length], step = expected > 50 ? Math.ceil(expected / 40) : 1;
-        currentRun.processed = Math.min(expected, currentRun.processed + step); currentRun.bytes += r.sizeBytes * step; addToBreakdown(cats, r.category, r.sizeBytes); currentRun.byCategory = breakdownList(cats);
-        if (!currentRun.mailFrom || r.date < currentRun.mailFrom) currentRun.mailFrom = r.date; if (!currentRun.mailTo || r.date > currentRun.mailTo) currentRun.mailTo = r.date;
-        status = { state: 'running', message: '저장 중 ' + currentRun.processed + '건 / ' + expected, updatedAt: new Date().toISOString() };
-        i += 1;
-        if (currentRun.processed >= expected) {
-          clearInterval(tick);
-          lastSyncEpoch = Math.floor(Date.now() / 1000);
-          currentRun.finishedAt = new Date().toISOString();
-          history.unshift({ ...currentRun, notifiedTo: settings.notifyOnComplete ? (settings.notifyEmail || 'kumhwa_dev@spris.com') : null });
-          status = { state: 'idle', message: '완료: 감지 12건, 새로 ' + expected + '건 저장, 5건 이미 있음, 오류 0건 (로컬 모의)', updatedAt: new Date().toISOString() };
-        }
-      }, 1500);
+      mockTicking();
     }, 3000);
     return dashboard();
   },
@@ -108,9 +115,9 @@ const api = {
   disconnectApp: () => ({ ok: true }),
   runBackupInline: () => dashboard(),
   saveOauthClientJson: (j) => { oauthJson = j ? JSON.stringify({ installed: JSON.parse(j).installed || JSON.parse(j) }) : null; return dashboard(); },
-  stopBackup: () => { status = { state: 'paused', message: '중지됨 · ' + currentRun.processed + '건 저장', updatedAt: new Date().toISOString() }; return dashboard(); },
-  resumeBackup: () => { status = { state: 'running', message: '이어서 실행', updatedAt: new Date().toISOString() }; return dashboard(); },
-  cancelBackup: () => { status = { state: 'idle', message: '취소됨', updatedAt: new Date().toISOString() }; return dashboard(); },
+  stopBackup: () => { clearTimeout(mockStart); clearInterval(mockTick); if (!currentRun.startedAt) { status = { state: 'idle', message: '대기열에서 취소됨', updatedAt: new Date().toISOString() }; currentRun = {}; } else status = { state: 'paused', message: '중지됨 · ' + currentRun.processed + '건 저장 · "이어서"를 누르면 이 위치부터 계속', updatedAt: new Date().toISOString() }; return dashboard(); },
+  resumeBackup: () => { currentRun.chunks = (currentRun.chunks || 0) + 1; currentRun.chunkStartedAt = new Date().toISOString(); status = { state: 'running', message: '이어서 실행 (' + currentRun.chunks + '번째 구간)', updatedAt: new Date().toISOString() }; mockTicking(); return dashboard(); },
+  cancelBackup: () => { clearTimeout(mockStart); clearInterval(mockTick); if (currentRun.startedAt) history.unshift({ ...currentRun, finishedAt: new Date().toISOString(), status: 'cancelled', notifiedTo: null }); status = { state: 'idle', message: '취소됨 · ' + (currentRun.processed || 0) + '건은 저장됨', updatedAt: new Date().toISOString() }; currentRun = {}; return dashboard(); },
   installWeeklyTrigger: () => api.installScheduledTrigger(),
   uninstallScheduledTrigger: () => { triggerInstalled = false; return dashboard(); },
 };
