@@ -147,6 +147,12 @@
   .divider { border-top: 1px solid var(--line2); margin: 16px 0; }
 
   /* AI tab */
+  .qa { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+  .qa .item { background: var(--soft); border: 1px solid var(--line2); border-radius: 14px; padding: 12px; display: grid; gap: 8px; }
+  .qa .u { background: var(--blue); color: #fff; border-radius: 14px 14px 4px 14px; padding: 9px 12px; font-size: 14px; font-weight: 600; justify-self: end; max-width: 92%; }
+  .qa .a { background: #fff; border: 1px solid var(--line); border-radius: 14px 14px 14px 4px; padding: 9px 12px; font-size: 12.5px; color: var(--ink2); white-space: pre-line; line-height: 1.55; }
+  .qa .a b { color: var(--ink); }
+  .ai-opt p { margin: 0 0 12px; color: var(--ink2); font-size: 13px; }
   .ai-hero { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; }
   @media (max-width: 900px) { .ai-hero { grid-template-columns: 1fr; } }
   .ai-steps { display: grid; gap: 10px; counter-reset: s; }
@@ -519,55 +525,32 @@
 
   <!-- ===== AI 연결 ===== -->
   <section class="page" id="tab-ai" hidden>
+    <div class="card">
+      <div class="cardhead"><h3>💬 AI에 이렇게 물어보세요</h3><span class="pill blue">내 백업 메일 기준으로 답합니다</span></div>
+      <div class="qa" id="aiQa"></div>
+    </div>
+
     <div class="ai-hero">
-      <div class="card">
-        <div class="cardhead"><h3>🤖 AI에서 내 백업 메일 쓰기</h3><span class="pill blue">MCP</span></div>
-        <p style="margin:0 0 12px;color:var(--ink2)">MCP(Model Context Protocol)를 지원하는 AI 앱에 이 백업을 연결하면, AI가 <b>내 계정으로만</b> 백업된 메일을 검색하고 첨부파일(PDF·Word·Excel 포함)을 읽어 답합니다. 데이터는 내 드라이브 밖으로 나가지 않고, AI 앱은 내 PC에서 실행되는 작은 프로그램을 통해 읽기만 합니다.</p>
-        <div class="ai-steps">
-          <div class="ai-step"><div class="n">1</div><div><b>준비 파일 받기</b><span>GitHub 저장소를 내 PC에 받고 <code>npm install</code> 한 번. OAuth 클라이언트 JSON은 관리자(kumhwa_dev)가 배포합니다.</span></div></div>
-          <div class="ai-step"><div class="n">2</div><div><b>AI 앱에 등록</b><span>아래에서 쓰는 AI 앱을 고르고 설정을 붙여넣습니다. <code>/절대경로/</code>는 저장소를 받은 위치로 바꿉니다.</span></div></div>
-          <div class="ai-step"><div class="n">3</div><div><b>첫 실행 때 로그인</b><span>브라우저가 열리면 <b id="aiUser" style="display:inline">회사 계정</b>으로 로그인. 이후엔 자동입니다. 백업이 한 번 이상 실행된 계정이어야 합니다.</span></div></div>
+      <div class="card ai-opt">
+        <div class="cardhead"><h3>🚀 AI에게 맡기기</h3><span class="pill green">초보자 · 2분</span></div>
+        <p>아래 프롬프트를 복사해 <b>Claude Code</b>(터미널) 또는 명령 실행이 가능한 AI 앱에 붙여넣으면, 설치와 등록을 AI가 대신 합니다. 물어보면 답만 하면 됩니다.</p>
+        <button type="button" class="primary" id="aiCopyPrompt" style="width:100%;justify-content:center;padding:12px">📋 설정 프롬프트 복사</button>
+        <details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:12px">프롬프트 내용 보기</summary><div class="codewrap" style="margin-top:8px"><pre class="code" id="aiPromptPre" style="white-space:pre-wrap"></pre></div></details>
+        <p class="note" style="margin-top:10px">준비물 1개: 관리자(<span id="aiAdmin">kumhwa_dev@spris.com</span>)에게 받은 OAuth JSON 파일. AI가 위치를 물어봅니다.</p>
+      </div>
+      <div class="card ai-opt">
+        <div class="cardhead"><h3>🛠 직접 설정</h3><span class="pill gray">매뉴얼</span></div>
+        <p>저장소를 받아 <code>npm install</code> 후, 쓰는 앱에 아래 설정을 넣습니다. <code>/절대경로/</code>는 받은 위치로 바꿉니다.</p>
+        <div class="ai-clients" id="aiClients">
+          <button type="button" data-c="claude-desktop" class="active">Claude Desktop</button>
+          <button type="button" data-c="claude-code">Claude Code</button>
+          <button type="button" data-c="chatgpt">ChatGPT</button>
+          <button type="button" data-c="gemini">Gemini CLI</button>
+          <button type="button" data-c="cursor">Cursor / VS Code</button>
         </div>
+        <div id="aiClientBody"></div>
+        <p style="font-size:12px;color:var(--muted);margin:10px 0 0">저장소: <a href="https://github.com/KUMHWA-DEV/google-mailbackup" target="_blank" rel="noopener">github.com/KUMHWA-DEV/google-mailbackup</a> · OAuth JSON은 <code>~/.config/mail-backup-mcp/oauth_client.json</code> · 첫 실행 때 회사 계정으로 로그인</p>
       </div>
-      <div class="card">
-        <div class="cardhead"><h3>💬 이렇게 물어보면 됩니다</h3></div>
-        <div class="ai-q">
-          <div class="q">"지난달 거래처(partner.co.kr)에서 온 계약서 첨부 내용 요약해줘"<small>search_mail → get_mail → get_attachment_text</small></div>
-          <div class="q">"9월 정산 관련 메일 시간순으로 정리하고 금액 뽑아줘"<small>대화 단위로 찾아 본문에서 숫자 추출</small></div>
-          <div class="q">"박민수 님이 보낸 메일 중 엑셀 첨부만 목록으로"<small>from: + filename:xls 검색</small></div>
-          <div class="q">"이번 주 백업 상태 알려주고 안 됐으면 지금 실행해"<small>backup_status → backup_run (실행 모드 연결 시)</small></div>
-          <div class="q">"회의록 첨부 PDF들 모아서 결정사항만 정리해줘"<small>agenda:회의 + get_attachment_text 반복</small></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="cardhead"><h3>🔌 AI 앱별 연결</h3><span class="pill gray" id="aiScriptPill"></span></div>
-      <div class="ai-clients" id="aiClients">
-        <button type="button" data-c="claude-desktop" class="active">Claude Desktop</button>
-        <button type="button" data-c="claude-code">Claude Code</button>
-        <button type="button" data-c="chatgpt">ChatGPT</button>
-        <button type="button" data-c="gemini">Gemini CLI</button>
-        <button type="button" data-c="cursor">Cursor / VS Code</button>
-        <button type="button" data-c="other">그 외 MCP 앱</button>
-      </div>
-      <div id="aiClientBody"></div>
-    </div>
-
-    <div class="card">
-      <div class="cardhead"><h3>🧰 AI가 쓸 수 있는 도구</h3><span class="pill gray">14개</span></div>
-      <div class="tools">
-        <div class="tool"><b>search_mail</b> — 웹앱과 같은 검색 문법(from: subject: has:attachment after: -제외…)</div>
-        <div class="tool"><b>get_mail</b> — 본문 미리보기·첨부 목록</div>
-        <div class="tool"><b>get_mail_raw</b> — .eml 원문</div>
-        <div class="tool"><b>get_attachment_text</b> — PDF·DOCX·PPTX·XLSX 텍스트 추출(OCR 포함)</div>
-        <div class="tool"><b>download_attachment</b> — 첨부·원문 로컬 저장</div>
-        <div class="tool"><b>backup_stats · list_labels</b> — 보관 현황, 라벨·안건·보낸사람</div>
-        <div class="tool"><b>backup_status · backup_history</b> — 상태·이력 <small>(실행 모드)</small></div>
-        <div class="tool"><b>backup_preview · backup_run</b> — 감지·백업 시작 <small>(실행 모드)</small></div>
-        <div class="tool"><b>backup_settings_get/set · backup_auto</b> — 설정·자동 백업 <small>(실행 모드)</small></div>
-      </div>
-      <p class="note" style="margin:12px 0 0">실행 모드(백업 시작·설정 변경)는 관리자가 Apps Script API 실행 배포를 켠 뒤 <code>MAIL_BACKUP_SCRIPT_ID</code>를 넣으면 활성화됩니다. 조회 도구 7개는 그 없이도 동작합니다.</p>
     </div>
   </section>
 
@@ -731,8 +714,11 @@
     ].filter(Boolean).map(function (p) { return '<span class="pill ' + p[0] + '" data-goto="settings">' + p[1] + '</span>'; }).join('');
     renderHistory(d.history || []);
     banner(failed ? '백업 실패: ' + (d.lastError || d.message) + (d.errorStack ? '\n' + d.errorStack.split('\n').slice(0, 3).join(' · ') : '') + ' — "지금 백업"으로 다시 시도하면 저장된 위치부터 이어갑니다' : (d.lastError && !running ? d.lastError : ''));
-    if (running && !state.pollTimer) state.pollTimer = setInterval(loadDashboard, 8000);
+    if (running && !state.pollTimer) state.pollTimer = setInterval(loadDashboard, 4000);
     if (!running && state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
+    if (running && !state.tickTimer) state.tickTimer = setInterval(tickRun, 1000);
+    if (!running && state.tickTimer) { clearInterval(state.tickTimer); state.tickTimer = null; }
+    state.lastPollAt = Date.now();
   }
   function catChips(list, max) {
     list = list || []; max = max || 3;
@@ -742,8 +728,25 @@
     return '<span class="catchips">' + (shown || '<span style="color:var(--faint)">–</span>') + '</span>';
   }
   function secs(s) { if (s == null) return ''; return s < 60 ? s + '초' : s < 3600 ? Math.round(s / 60) + '분' : Math.round(s / 360) / 10 + '시간'; }
-  function runBoxHtml(d) {
+  /** 1초마다: 서버 값 사이를 보간해 경과 시간·처리 건수가 부드럽게 올라가게 */
+  function tickRun() {
+    var d = state.dash; if (!d || !(d.state === 'running' || d.state === 'queued')) return;
+    $('runBox').innerHTML = runBoxHtml(d, true);
+    var rr = document.querySelector('#histMini tr.runrow td:nth-child(2)'); if (rr && d.currentRun && d.currentRun.startedAt) rr.textContent = secs(liveElapsed(d.currentRun));
+  }
+  function liveElapsed(r) { return r.startedAt ? Math.max(0, Math.round((Date.now() - new Date(r.startedAt).getTime()) / 1000)) : 0; }
+  function liveProcessed(r, p) {
+    // 마지막 폴링 이후 처리율(rate)만큼 보간, 예상 총량은 넘지 않게
+    var base = Number(r.processed) || 0, rate = p && p.rate ? p.rate : 0, dt = (Date.now() - (state.lastPollAt || Date.now())) / 1000;
+    var est = Math.floor(base + rate * dt); if (r.expectedTotal) est = Math.min(est, r.expectedTotal); return Math.max(base, est);
+  }
+  function runBoxHtml(d, live) {
     var r = d.currentRun || {}, p = r.progress || {}, queued = d.state === 'queued';
+    if (live && !queued && r.startedAt) {
+      var lp = liveProcessed(r, p), el = liveElapsed(r);
+      r = Object.assign({}, r, { processed: lp });
+      p = Object.assign({}, p, { elapsedSeconds: el, percent: r.expectedTotal ? Math.min(99, Math.floor(lp / r.expectedTotal * 100)) : p.percent, etaSeconds: (r.expectedTotal > lp && p.rate) ? Math.round((r.expectedTotal - lp) / p.rate) : p.etaSeconds });
+    }
     var pct = p.percent, exp = r.expectedTotal || 0;
     var top = queued ? '⏳ 대기열 · 곧 시작' + (exp ? ' (예상 ' + fmtNum(exp) + '건)' : '')
       : '⚙️ 저장 중 ' + fmtNum(r.processed) + (exp ? ' / ' + fmtNum(exp) + '건' : '건') + (pct != null ? ' · ' + pct + '%' : '') + ' · ' + fmtBytes(r.bytes);
@@ -1314,43 +1317,50 @@
   // ---------- AI 연결 ----------
   var AI_REPO = 'https://github.com/KUMHWA-DEV/google-mailbackup';
   var AI_SCRIPT_ID = '1GRe3TOJy2G-riYt3TzWcAjF3B_roXbt27cjuuEZhip-8sk4FzJaWFkwF';
-  function codeBlock(code) { return '<div class="codewrap"><pre class="code">' + esc(code) + '</pre><button type="button" class="copy" data-copy="' + esc(code) + '">복사</button></div>'; }
+  var AI_QA = [
+    ['지난주에 받은 메일 중 첨부파일 있는 것만 보여줘', '<b>지난주(9/7~9/13) 첨부 있는 메일 4건</b>\n1. 9/12 박○○ — "회의록 공유" · 회의록_0912.pdf\n2. 9/11 ○○물산 — "견적서 송부" · 견적서.xlsx\n3. 9/9 Google Cloud — "Invoice" · invoice.pdf\n4. 9/8 김○○ — "사진 전달" · IMG_2231.jpg\n원하는 첨부를 말하면 내용을 읽어드릴게요.'],
+    ['○○물산에서 온 메일 중 PDF 첨부 내용 요약해줘', '<b>견적서.pdf (9/11) 요약</b>\n· 품목 3종, 총액 12,400,000원(VAT 별도)\n· 납기 발주 후 3주, 유효기간 9/30까지\n· 특이사항: 2차 발주 시 5% 할인 조건\n메일 본문에는 "검토 후 회신 요청"이 있었습니다.'],
+    ['이 사람과 주고받은 메일 대화를 시간순으로 정리해줘', '<b>김○○ 님과의 대화 (8/28 ~ 9/10, 6건)</b>\n8/28 (나) 일정 제안 → 8/29 (김) 9/5 가능 회신 → 9/4 (나) 자료 첨부 전달 → 9/5 (김) 검토 의견 3가지 → 9/9 (나) 수정본 → 9/10 (김) 확인 완료\n마지막 상태: 확인 완료, 남은 요청 없음.'],
+    ['지난달 메일에서 마감일이나 기한이 언급된 것 뽑아줘', '<b>기한이 언급된 메일 3건</b>\n· 9/30 — 견적 유효기간 (○○물산, 9/11 메일)\n· 9/20 — 자료 제출 요청 (인사팀, 9/3 메일)\n· 10/5 — 계약 갱신 회신 기한 (법무, 9/13 메일)\n각 메일 원문 링크도 드릴 수 있어요.'],
+    ['내 메일 백업 상태 알려줘. 안 됐으면 지금 실행해', '<b>백업 상태</b>: 최신 · 마지막 9/14 03:02 · 보관 1,204건 (2.3 GB)\n다음 자동 백업은 9/21 03:00입니다. 지금은 새 메일이 없어 실행할 게 없습니다.\n<span style="color:var(--muted)">(실행 모드 연결 시 감지·시작까지 대신 합니다)</span>'],
+    ['"계약" 단어가 들어간 메일 최근 것부터 5개만', '<b>"계약" 검색 결과 5건 (최신순)</b>\n1. 9/13 법무팀 — 계약 갱신 안내 📎\n2. 9/11 ○○물산 — 계약서 초안 송부 📎\n3. 9/2 (나) — Re: 계약 조건 문의\n4. 8/30 김○○ — 계약 조건 문의\n5. 8/21 총무 — 임대 계약 관련\n전체 12건 중 5건입니다.'],
+  ];
+  function codeBlock(code, wrap) { return '<div class="codewrap"><pre class="code"' + (wrap ? ' style="white-space:pre-wrap"' : '') + '>' + esc(code) + '</pre><button type="button" class="copy" data-copy="' + esc(code) + '">복사</button></div>'; }
+  var mcpJson = function () { return JSON.stringify({ mcpServers: { 'mail-backup': { command: 'node', args: ['/절대경로/google-mailbackup/mcp/server.js'], env: { MAIL_BACKUP_SCRIPT_ID: AI_SCRIPT_ID } } } }, null, 2); };
   var AI_CLIENTS = {
-    'claude-desktop': function () { return '<p><b>Claude Desktop</b> (Mac/Windows 앱) — 설정 → 개발자 → 구성 편집, 또는 아래 파일을 직접 엽니다.</p>' +
-      '<p style="color:var(--muted);font-size:12px">macOS: <code>~/Library/Application Support/Claude/claude_desktop_config.json</code> · Windows: <code>%APPDATA%\\Claude\\claude_desktop_config.json</code></p>' +
-      codeBlock(JSON.stringify({ mcpServers: { 'mail-backup': { command: 'node', args: ['/절대경로/google-mailbackup/mcp/server.js'], env: { MAIL_BACKUP_SCRIPT_ID: AI_SCRIPT_ID } } } }, null, 2)) +
-      '<p style="font-size:12px;color:var(--muted)">저장 후 Claude Desktop을 완전히 종료했다가 다시 실행하면 대화창 🔌 아이콘에 mail-backup이 보입니다.</p>'; },
-    'claude-code': function () { return '<p><b>Claude Code</b> (터미널) — 한 줄로 등록합니다.</p>' +
-      codeBlock('claude mcp add mail-backup -e MAIL_BACKUP_SCRIPT_ID=' + AI_SCRIPT_ID + ' -- node /절대경로/google-mailbackup/mcp/server.js') +
-      '<p style="font-size:12px;color:var(--muted)"><code>claude mcp list</code>로 확인하고, 세션에서 <code>/mcp</code>를 치면 도구 목록이 보입니다.</p>'; },
-    'chatgpt': function () { return '<p><b>ChatGPT</b> — ChatGPT는 로컬(stdio) MCP를 직접 열지 못하고 <b>HTTPS 주소</b>의 원격 MCP만 연결됩니다(설정 → 커넥터 → 개발자 모드). 아래처럼 내 PC의 서버를 HTTPS로 노출해 등록합니다.</p>' +
-      codeBlock('# 1) 로컬 MCP를 HTTP로 감싸기 (포트 8788)\nnpx -y supergateway --stdio "node /절대경로/google-mailbackup/mcp/server.js" --port 8788 --outputTransport streamableHttp\n\n# 2) HTTPS 터널 (다른 터미널)\nnpx -y localtunnel --port 8788     # 또는 ngrok http 8788\n\n# 3) ChatGPT → 설정 → 커넥터 → 만들기 → MCP 서버 URL에\n#    https://<터널주소>/mcp  입력, 인증 없음') +
-      '<p class="note">회사 보안 정책상 터널이 막혀 있으면 ChatGPT 연결은 어렵습니다. 이 경우 Claude Desktop·Claude Code·Gemini CLI·Cursor처럼 로컬 MCP를 지원하는 앱을 권합니다.</p>'; },
-    'gemini': function () { return '<p><b>Gemini CLI</b> — <code>~/.gemini/settings.json</code>에 추가합니다.</p>' +
-      codeBlock(JSON.stringify({ mcpServers: { 'mail-backup': { command: 'node', args: ['/절대경로/google-mailbackup/mcp/server.js'], env: { MAIL_BACKUP_SCRIPT_ID: AI_SCRIPT_ID } } } }, null, 2)) +
-      '<p style="font-size:12px;color:var(--muted)">Gemini CLI에서 <code>/mcp</code>로 연결 상태를 확인합니다. Gemini 웹/앱은 아직 MCP를 지원하지 않습니다.</p>'; },
-    'cursor': function () { return '<p><b>Cursor</b>: 설정 → MCP → Add new global MCP server. <b>VS Code (Copilot)</b>: <code>.vscode/mcp.json</code> 또는 사용자 설정의 <code>mcp.servers</code>. 형식은 같습니다.</p>' +
-      codeBlock(JSON.stringify({ mcpServers: { 'mail-backup': { command: 'node', args: ['/절대경로/google-mailbackup/mcp/server.js'], env: { MAIL_BACKUP_SCRIPT_ID: AI_SCRIPT_ID } } } }, null, 2)) +
-      '<p style="font-size:12px;color:var(--muted)">VS Code는 최상위 키가 <code>servers</code>입니다: <code>{ "servers": { "mail-backup": { "type": "stdio", "command": "node", "args": [...] } } }</code></p>'; },
-    'other': function () { return '<p>MCP <b>stdio</b> 전송을 지원하는 앱이면 모두 됩니다. 실행 명령은 다음 하나입니다.</p>' +
-      codeBlock('node /절대경로/google-mailbackup/mcp/server.js') +
-      '<p style="font-size:12px;color:var(--muted)">환경변수 <code>MAIL_BACKUP_SCRIPT_ID</code>(실행 도구), <code>MAIL_BACKUP_OAUTH_CLIENT</code>(OAuth JSON 경로), <code>MAIL_BACKUP_SHEET_ID</code>(인덱스 시트 직접 지정). 원격(HTTP) 연결만 되는 앱은 ChatGPT 탭의 방법으로 감쌉니다.</p>'; },
+    'claude-desktop': function () { return '<p style="font-size:12px">설정 파일에 추가 후 앱 재시작 · macOS <code>~/Library/Application Support/Claude/claude_desktop_config.json</code> · Windows <code>%APPDATA%\\Claude\\claude_desktop_config.json</code></p>' + codeBlock(mcpJson()); },
+    'claude-code': function () { return codeBlock('claude mcp add mail-backup -e MAIL_BACKUP_SCRIPT_ID=' + AI_SCRIPT_ID + ' -- node /절대경로/google-mailbackup/mcp/server.js'); },
+    'chatgpt': function () { return '<p style="font-size:12px">ChatGPT는 HTTPS 원격 MCP만 연결됩니다. 로컬 서버를 HTTP로 감싸고 터널 주소를 설정 → 커넥터에 등록합니다. 회사망에서 터널이 막히면 다른 앱을 쓰세요.</p>' + codeBlock('npx -y supergateway --stdio "node /절대경로/google-mailbackup/mcp/server.js" --port 8788 --outputTransport streamableHttp\nnpx -y localtunnel --port 8788   # 표시된 https 주소 + /mcp 를 ChatGPT 커넥터 URL에 입력'); },
+    'gemini': function () { return '<p style="font-size:12px"><code>~/.gemini/settings.json</code>에 추가 (Gemini CLI 전용, 웹 Gemini는 미지원)</p>' + codeBlock(mcpJson()); },
+    'cursor': function () { return '<p style="font-size:12px">Cursor: 설정 → MCP → 추가 · VS Code: <code>.vscode/mcp.json</code> (최상위 키는 <code>servers</code>, 항목에 <code>"type":"stdio"</code>)</p>' + codeBlock(mcpJson()); },
   };
   var aiClient = 'claude-desktop';
-  function renderAi() {
-    $('aiUser').textContent = (state.dash && state.dash.user) || '회사 계정';
-    $('aiScriptPill').textContent = '스크립트 ID ' + AI_SCRIPT_ID.slice(0, 8) + '…';
-    document.querySelectorAll('#aiClients button').forEach(function (b) { b.classList.toggle('active', b.dataset.c === aiClient); });
-    $('aiClientBody').innerHTML = AI_CLIENTS[aiClient]() +
-      '<p style="font-size:12px;color:var(--muted);margin-top:10px">준비 파일: <a href="' + AI_REPO + '" target="_blank" rel="noopener">GitHub 저장소</a> → <code>git clone</code> 후 <code>npm install</code>. OAuth JSON은 <code>~/.config/mail-backup-mcp/oauth_client.json</code>에 둡니다. 자세한 절차는 <a href="' + AI_REPO + '#7-aimcp로-백업-메일-조회하기" target="_blank" rel="noopener">README 7</a>.</p>';
+  function aiPrompt() {
+    return '아래 작업을 내 컴퓨터에서 대신 해줘. 회사 Gmail 백업(Mail Backup)을 AI에서 검색할 수 있게 MCP 서버를 설치하고 등록하는 일이야. 각 단계가 끝나면 한 줄로 보고하고, 파일을 덮어쓰기 전에는 백업본(.bak)을 만들어.\n\n' +
+      '1) 저장소 받기: git clone ' + AI_REPO + ' 를 홈 폴더 아래(예: ~/google-mailbackup)에 받고, 그 폴더에서 npm install 실행. Node.js 18 이상이 없으면 설치 방법을 알려줘.\n' +
+      '2) OAuth 파일: ~/.config/mail-backup-mcp/oauth_client.json 이 없으면 나에게 "관리자에게 받은 OAuth JSON 파일이 어디 있나요?"라고 물어보고, 알려준 파일을 그 경로로 복사해줘 (폴더가 없으면 만들어).\n' +
+      '3) 앱 등록: 내가 쓰는 AI 앱을 물어보거나 설치된 것을 확인해서 등록해줘. 실행 명령은 node <clone한 절대경로>/mcp/server.js 이고 환경변수 MAIL_BACKUP_SCRIPT_ID=' + AI_SCRIPT_ID + ' 을 함께 넣어.\n' +
+      '   - Claude Code: claude mcp add mail-backup -e MAIL_BACKUP_SCRIPT_ID=' + AI_SCRIPT_ID + ' -- node <절대경로>/mcp/server.js\n' +
+      '   - Claude Desktop: 설정 파일(macOS ~/Library/Application Support/Claude/claude_desktop_config.json, Windows %APPDATA%\\Claude\\claude_desktop_config.json)의 mcpServers에 "mail-backup" 항목을 추가(command "node", args [<절대경로>/mcp/server.js], env {MAIL_BACKUP_SCRIPT_ID}). 기존 항목은 그대로 두고 JSON이 깨지지 않게.\n' +
+      '   - Gemini CLI: ~/.gemini/settings.json 의 mcpServers에 같은 형식. Cursor/VS Code: 각 MCP 설정에 같은 형식.\n' +
+      '4) 첫 로그인: node <절대경로>/mcp/server.js 를 실행해 브라우저 로그인 창이 열리면 나에게 "회사 계정으로 로그인하세요"라고 알려주고, 로그인이 끝나 "ready" 로그가 보이면 프로세스를 종료해.\n' +
+      '5) 마무리: 등록한 앱을 완전히 종료 후 다시 실행하라고 안내하고, 테스트 질문 "내 백업 메일 상태 알려줘"를 보내보라고 알려줘.\n' +
+      '<절대경로>는 실제 clone 위치의 절대경로로 치환해. 문제가 생기면 오류 메시지를 그대로 보여주고 해결 방법을 제안해.';
   }
+  function renderAi() {
+    $('aiQa').innerHTML = AI_QA.map(function (q) { return '<div class="item"><div class="u">' + esc(q[0]) + '</div><div class="a">' + q[1] + '</div></div>'; }).join('');
+    $('aiPromptPre').textContent = aiPrompt();
+    document.querySelectorAll('#aiClients button').forEach(function (b) { b.classList.toggle('active', b.dataset.c === aiClient); });
+    $('aiClientBody').innerHTML = AI_CLIENTS[aiClient]();
+  }
+  function copyText(text, msg) {
+    (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () { toast(msg || '📋 복사됨'); }, function () { var ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); toast(msg || '📋 복사됨'); } catch (err) { toast('복사 실패', true); } ta.remove(); });
+  }
+  $('aiCopyPrompt').addEventListener('click', function () { copyText(aiPrompt(), '📋 프롬프트 복사됨 · Claude Code 등에 붙여넣으세요'); });
   $('aiClients').addEventListener('click', function (e) { var b = e.target.closest('button[data-c]'); if (b) { aiClient = b.dataset.c; renderAi(); } });
-  $('aiClientBody').addEventListener('click', function (e) {
-    var b = e.target.closest('button[data-copy]'); if (!b) return;
-    var text = b.dataset.copy;
-    (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () { toast('📋 복사됨'); }, function () { var ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); toast('📋 복사됨'); } catch (err) { toast('복사 실패', true); } ta.remove(); });
-  });
+  $('tab-ai').addEventListener('click', function (e) { var b = e.target.closest('button[data-copy]'); if (b) copyText(b.dataset.copy); });
   if (location.hash === '#ai') setTimeout(function () { showTab('ai'); }, 0);
+  window.addEventListener('hashchange', function () { if (location.hash === '#ai') showTab('ai'); });
 
   // ---------- init ----------
   loadDashboard();

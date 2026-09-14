@@ -110,10 +110,8 @@ function runBackupLocked_() {
           cursor.lastError = id + ': ' + e.message;
           Logger.log('메시지 %s 백업 실패: %s', id, e.stack || e.message);
         }
-        if (pending.length >= CONFIG.INDEX_FLUSH_EVERY) {
-          appendIndexRows_(sheet, pending); pending = [];
-          setStatus_({ state: 'running', message: '저장 중 ' + cursor.processed + '건' + (cursor.expectedTotal ? ' / ' + cursor.expectedTotal : ''), cursor: cursor });
-        }
+        if (pending.length >= CONFIG.INDEX_FLUSH_EVERY) { appendIndexRows_(sheet, pending); pending = []; }
+        if ((cursor.processed + cursor.errors) % CONFIG.STATUS_EVERY === 0) setStatus_({ state: 'running', message: '저장 중 ' + cursor.processed + '건' + (cursor.expectedTotal ? ' / ' + cursor.expectedTotal : ''), cursor: cursor });
         if (Date.now() > deadline) { outOfTime = true; break; }
       }
       if (outOfTime || cursor.limitHit) break; // 시간 초과: 같은 pageToken으로 재개 (중복은 id로 걸러짐)

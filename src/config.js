@@ -11,6 +11,7 @@ var CONFIG = {
   DEFAULT_MAX_RUN_SECONDS: 270,
   PAGE_SIZE: 100,
   INDEX_FLUSH_EVERY: 20,
+  STATUS_EVERY: 5,        // 진행 상태(건수·용량) 기록 주기 — 대시보드 실시간 표시용
   CONTINUE_DELAY_MS: 60 * 1000,
   TRIGGER_HOUR: 3,
 };
