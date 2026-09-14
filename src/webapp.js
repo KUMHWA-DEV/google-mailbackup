@@ -31,8 +31,12 @@ function getDashboard() {
     schedule: computeSchedule({ lastSyncEpoch: last || null, intervalDays: settings.intervalDays }),
     currentRun: {
       startedAt: c.startedAt || null, finishedAt: c.finishedAt || null, chunks: c.chunks || 0,
+      chunkStartedAt: c.chunkStartedAt || null, resumeAt: c.resumeAt || null,
       found: c.found || 0, processed: c.processed || 0, skipped: c.skipped || 0, errors: c.errors || 0,
       bytes: c.bytes || 0, mailFrom: c.mailFrom || null, mailTo: c.mailTo || null, limitHit: !!c.limitHit,
+      expectedTotal: c.expectedTotal || 0, manual: !!c.manual,
+      byCategory: breakdownList(c.cats || {}).slice(0, 12),
+      progress: runProgress(c),
     },
     lastError: c.lastError || null,
     history: loadRunHistory_(),
@@ -85,11 +89,19 @@ function saveSettings(input) {
   return getDashboard();
 }
 
-/** 지금 백업: 웹 요청 시간 제한을 피하려고 5초 뒤 트리거로 실행. */
+/** 지금 백업 전 감지: 새 메일 수, 라벨별 건수·용량, 기간. 저장하지 않는다. */
+function previewBackup() {
+  var p = previewBackup_();
+  savePreview_(p);
+  return p;
+}
+
+/** 지금 백업: 웹 요청 시간 제한을 피하려고 5초 뒤 트리거로 백그라운드 실행. */
 function runBackupNow() {
   deleteContinuationTriggers_();
   scheduleContinuation_(5 * 1000);
-  setStatus_({ state: 'queued', message: '수동 실행 요청됨, 잠시 후 시작' });
+  var pv = loadPreview_();
+  setStatus_({ state: 'queued', message: '대기열 등록 · 곧 시작' + (pv && pv.newCount ? ' (예상 ' + pv.newCount + '건)' : ''), cursor: { expectedTotal: pv ? pv.newCount : 0, manual: true, queuedAt: new Date().toISOString() } });
   return getDashboard();
 }
 

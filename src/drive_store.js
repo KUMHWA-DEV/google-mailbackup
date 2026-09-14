@@ -129,6 +129,19 @@ function loadIndexRecords_() {
   });
 }
 
+/** 메시지 id로 인덱스 레코드 1건(본문 제외)을 읽는다. 없으면 null. */
+function loadRecordById_(id) {
+  var sheet = indexSheet_();
+  var last = sheet.getLastRow();
+  if (last < 2) return null;
+  var hit = sheet.getRange(2, 1, last - 1, 1).createTextFinder(String(id)).matchEntireCell(true).findNext();
+  if (!hit) return null;
+  var rec = rowToRecord(sheet.getRange(hit.getRow(), 1, 1, INDEX_LIST_COLUMNS).getValues()[0]);
+  if (rec.date instanceof Date) rec.date = rec.date.toISOString();
+  if (rec.backedUpAt instanceof Date) rec.backedUpAt = rec.backedUpAt.toISOString();
+  return rec;
+}
+
 /** 메시지 id로 해당 행의 본문 미리보기만 읽는다. */
 function loadBodyPreview_(id) {
   var sheet = indexSheet_();

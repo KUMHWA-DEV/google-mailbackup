@@ -9,6 +9,8 @@
   "runtimeVersion": "V8",
   "oauthScopes": [
     "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.addons.execute",
+    "https://www.googleapis.com/auth/gmail.addons.current.message.metadata",
     "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/script.scriptapp",
@@ -18,5 +20,18 @@
   "webapp": {
     "executeAs": "USER_DEPLOYING",
     "access": "DOMAIN"
+  },
+  "addOns": {
+    "common": {
+      "name": "Mail Backup",
+      "logoUrl": "https://www.gstatic.com/images/icons/material/system/2x/cloud_upload_black_24dp.png",
+      "useLocaleFromApp": true,
+      "homepageTrigger": { "runFunction": "onAddonHomepage", "enabled": true }
+    },
+    "gmail": {
+      "contextualTriggers": [
+        { "unconditional": {}, "onTriggerFunction": "onAddonMessageOpen" }
+      ]
+    }
   }
 }

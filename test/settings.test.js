@@ -10,7 +10,7 @@ describe('normalizeSettings', () => {
     const s = normalizeSettings({ intervalDays: '30', maxPerRun: '-5' });
     expect(s.intervalDays).toBe(30);
     expect(s.maxPerRun).toBe(0);
-    expect(normalizeSettings({ intervalDays: 400 }).intervalDays).toBe(30);
+    expect(normalizeSettings({ intervalDays: 400 }).intervalDays).toBe(400); // 상한 없음
     expect(normalizeSettings({ intervalDays: 0 }).intervalDays).toBe(1);
   });
   it('coerces booleans from strings', () => {

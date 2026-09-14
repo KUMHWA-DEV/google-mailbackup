@@ -118,3 +118,18 @@ JSON/MD 파일 1개를 Drive에 올리는 구조였고, 본 앱은 Apps Script �
 
 가져오지 않은 것: 브라우저 OAuth 로그인(Apps Script가 대신), JSON/MD 패키지 파일(개별 .eml이 더 유용),
 localStorage 이력(스크립트 속성으로 대체), 45일 고정 주기(설정으로 일반화).
+
+## 2026-09-14 추가: 감지 미리보기, 백그라운드 진행률, Gmail 애드온
+
+- **감지(previewBackup)**: 실제 백업과 같은 쿼리로 새 메일 id를 세고(인덱스 중복 제거), 최대 300건은
+  `format=metadata`로 라벨·크기·날짜·보낸사람을 읽어 `lib/preview.js` `aggregatePreview`로 라벨별·보낸사람별
+  집계. 300건 초과면 비율로 추정(`estimated`). 결과의 newCount를 `PREVIEW_JSON`에 저장해 실행 시
+  `expectedTotal`로 쓴다. 시간 예산 40초.
+- **진행률**: 커서에 `expectedTotal`, `cats`(라벨별 분포), `chunkStartedAt`, `resumeAt`, `manual`을 두고
+  20건 저장마다 STATUS_JSON을 갱신. `getDashboard.currentRun.progress`(`runProgress`: %, 경과, 처리율, ETA).
+  웹앱은 실행 중 8초마다 폴링해 상태 카드와 이력 맨 위 "진행 중" 행을 갱신. 이력 항목에 `byCategory`,
+  `manual`, `expectedTotal` 저장.
+- **주기 상한 제거**: intervalDays 1 이상 (트리거는 7일이면 주간, 아니면 everyDays(n)).
+- **Gmail 애드온**(`src/addon.js`, 매니페스트 `addOns`): 홈 카드(상태·보관 현황·지금 백업·앱 열기·Drive·최근 3회),
+  메일 열람 시 컨텍스트 카드(백업 여부, Drive 원본, .eml, 첨부 다운로드). 스코프
+  `gmail.addons.execute`, `gmail.addons.current.message.metadata` 추가. 배포 절차는 README 2-2.

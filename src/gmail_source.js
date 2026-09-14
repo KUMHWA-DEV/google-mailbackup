@@ -23,6 +23,17 @@ function listMessageIds_(query, pageToken) {
   };
 }
 
+/** 미리보기용 가벼운 메타데이터 (라벨, 크기, 날짜, 보낸사람). */
+function fetchMessageMeta_(id) {
+  var api = Gmail.Users.Messages.get('me', id, { format: 'metadata', metadataHeaders: ['From'] });
+  var headers = headersFromPayload(api.payload);
+  return {
+    id: api.id, labelIds: api.labelIds || [], sizeBytes: api.sizeEstimate || 0,
+    date: api.internalDate ? new Date(Number(api.internalDate)).toISOString() : '',
+    from: headers.from || '',
+  };
+}
+
 /**
  * 메시지 1건의 백업에 필요한 모든 정보.
  * raw는 Gmail API(정확한 원본 바이트), 헤더/본문/첨부는 GmailApp(디코딩된 값).

@@ -2,7 +2,7 @@
  * 사용자 설정 스키마. 스크립트 속성 <-> 설정 객체 변환과 검증. 순수 함수.
  */
 var SETTINGS_DEFAULTS = {
-  intervalDays: 7,          // 백업 주기(일) 1..30
+  intervalDays: 7,          // 백업 주기(일) 1 이상 (상한 없음)
   initialStartDate: '',     // 첫 실행 시 이 날짜 이후만 (YYYY-MM-DD). 비우면 전체
   includeSent: true,        // 보낸편지함 포함
   saveAttachments: true,    // 첨부 별도 저장
@@ -49,7 +49,7 @@ function normalizeSettings(input) {
   var date = str_(i.initialStartDate);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(date + 'T00:00:00Z').getTime())) date = '';
   return {
-    intervalDays: toInt_(i.intervalDays, SETTINGS_DEFAULTS.intervalDays, 1, 30),
+    intervalDays: toInt_(i.intervalDays, SETTINGS_DEFAULTS.intervalDays, 1, 100000),
     initialStartDate: date,
     includeSent: toBool_(i.includeSent, SETTINGS_DEFAULTS.includeSent),
     saveAttachments: toBool_(i.saveAttachments, SETTINGS_DEFAULTS.saveAttachments),
