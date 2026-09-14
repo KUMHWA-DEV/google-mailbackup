@@ -255,20 +255,17 @@ function previewBackup_(scope, sinceDate) {
   // 표본은 최신 메일부터라 mailFrom이 표본(300건)의 최소 날짜가 된다. 새 메일이 표본보다 많으면 실제 가장 오래된 날짜로 바꾼다.
   //  - 목록을 끝까지 셌으면(잘리지 않음): 목록은 최신순이므로 마지막 id가 가장 오래된 메일 → 1회 조회
   //  - 목록이 잘렸으면: before: 이진 탐색
-  if (newIds.length > metas.length) {
-    var oldest = null;
-    try {
-      if (!truncated) {
-        var lastMeta = fetchMessageMeta_(newIds[newIds.length - 1]);
-        oldest = lastMeta.date || null;
-      } else if (Date.now() - t0 < PREVIEW_TIME_BUDGET_MS) {
-        oldest = findOldestMailDate_(query);
-      }
-    } catch (e) { Logger.log('가장 오래된 메일 조회 실패: %s', e.message); }
-    if (oldest) { agg.mailFrom = oldest; agg.mailFromExact = true; }
-  } else {
-    agg.mailFromExact = true; // 전부 상세를 읽었으므로 정확
-  }
+  var oldest = null;
+  try {
+    if (truncated) {
+      oldest = findOldestMailDate_(query); // 목록이 잘렸으면 표본 밖에 더 오래된 메일이 있으므로 항상 탐색 (호출 약 13회)
+    } else if (newIds.length > metas.length) {
+      oldest = fetchMessageMeta_(newIds[newIds.length - 1]).date || null; // 목록은 최신순 → 마지막 id가 가장 오래된 메일
+    }
+  } catch (e) { Logger.log('가장 오래된 메일 조회 실패: %s', e.message); }
+  if (oldest) { agg.mailFrom = oldest; agg.mailFromExact = true; }
+  else if (!truncated && newIds.length === metas.length) agg.mailFromExact = true; // 전부 상세를 읽었으므로 정확
+  else agg.mailFromExact = false;
   agg.query = query;
   agg.truncated = truncated;
   agg.isFirst = isFirst;
