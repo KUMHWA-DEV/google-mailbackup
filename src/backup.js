@@ -252,6 +252,11 @@ function previewBackup_(scope, sinceDate) {
   var newCount = newIds.length;
   if (truncated && wholeBox && mailboxTotal > found) newCount = Math.max(newCount, mailboxTotal - skipped);
   var agg = aggregatePreview({ found: found, skipped: skipped, newCount: newCount, metas: metas, detailed: metas.length });
+  // 표본은 최신 메일부터라 mailFrom이 표본의 최소 날짜가 된다. 목록이 잘렸으면 실제 가장 오래된 메일 날짜를 찾아 넣는다.
+  if (truncated && Date.now() - t0 < PREVIEW_TIME_BUDGET_MS) {
+    var oldest = findOldestMailDate_(query);
+    if (oldest) { agg.mailFrom = oldest; agg.mailFromExact = true; }
+  }
   agg.query = query;
   agg.truncated = truncated;
   agg.isFirst = isFirst;
@@ -265,6 +270,36 @@ function previewBackup_(scope, sinceDate) {
   agg.elapsedMs = Date.now() - t0;
   return agg;
 }
+/**
+ * 쿼리에 해당하는 가장 오래된 메일의 날짜(ISO)를 이진 탐색으로 찾는다 (하루 단위, 목록 호출 약 13회).
+ * Gmail 목록은 최신순만 지원해 최소 날짜를 바로 얻을 수 없기 때문.
+ */
+function findOldestMailDate_(query) {
+  var hasBefore = function (day) {
+    var res = Gmail.Users.Messages.list('me', { q: query + ' before:' + day, maxResults: 1 });
+    return !!(res.messages && res.messages.length);
+  };
+  var fmt = function (ms) { return Utilities.formatDate(new Date(ms), 'UTC', 'yyyy/MM/dd'); };
+  var DAY = 86400000;
+  var lo = Date.UTC(2004, 3, 1), hi = Date.now() + DAY; // [lo, hi): lo 이전엔 없음, hi 이전엔 있음
+  try {
+    if (!hasBefore(fmt(hi))) return null;
+    while (hi - lo > DAY) {
+      var mid = lo + Math.floor((hi - lo) / 2 / DAY) * DAY;
+      if (mid <= lo) break;
+      if (hasBefore(fmt(mid))) hi = mid; else lo = mid;
+    }
+    var res = Gmail.Users.Messages.list('me', { q: query + ' before:' + fmt(hi), maxResults: 1 });
+    var id = res.messages && res.messages[0] && res.messages[0].id;
+    if (!id) return null;
+    var m = Gmail.Users.Messages.get('me', id, { format: 'minimal' });
+    return m.internalDate ? new Date(Number(m.internalDate)).toISOString() : null;
+  } catch (e) {
+    Logger.log('가장 오래된 메일 탐색 실패: %s', e.message);
+    return null;
+  }
+}
+
 function nameOrAddress_(addr) {
   var s = String(addr || '');
   var m = s.match(/^\s*"?([^"<]*)"?\s*<([^>]+)>/);

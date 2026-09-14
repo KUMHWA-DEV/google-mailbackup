@@ -19,7 +19,12 @@ const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio
 const { rowsToRecords, searchRecords, compactRecord, textKind, truncateText, summarizeRecords } = require('./lib.js');
 const { parseAttachmentFiles } = require('../src/lib/index_row.js');
 
+const SCRIPT_ID = process.env.MAIL_BACKUP_SCRIPT_ID || ''; // 설정되면 Apps Script API 실행 도구(백업 실행·설정)도 켠다
 const SCOPES = ['https://www.googleapis.com/auth/drive.readonly', 'https://www.googleapis.com/auth/spreadsheets.readonly', 'https://www.googleapis.com/auth/drive.file'];
+// Apps Script API로 스크립트 함수를 실행하려면 스크립트가 요구하는 스코프를 토큰이 모두 가져야 한다 (appsscript.json과 동일)
+const SCRIPT_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.addons.execute', 'https://www.googleapis.com/auth/gmail.addons.current.message.metadata',
+  'https://www.googleapis.com/auth/drive', 'https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/script.scriptapp', 'https://www.googleapis.com/auth/script.send_mail', 'https://www.googleapis.com/auth/userinfo.email'];
+const ALL_SCOPES = SCRIPT_ID ? SCOPES.concat(SCRIPT_SCOPES) : SCOPES;
 const CONFIG_DIR = process.env.MAIL_BACKUP_MCP_DIR || path.join(os.homedir(), '.config', 'mail-backup-mcp');
 const TOKEN_PATH = path.join(CONFIG_DIR, 'token.json');
 const CLIENT_PATH = process.env.MAIL_BACKUP_OAUTH_CLIENT || path.join(CONFIG_DIR, 'oauth_client.json');
@@ -60,7 +65,7 @@ function loginInteractive(oauth) {
       } catch (e) { res.writeHead(500); res.end(String(e.message)); server.close(); reject(e); }
     }).listen(0, '127.0.0.1', () => {
       oauth.redirectUri = `http://127.0.0.1:${server.address().port}`;
-      const url = oauth.generateAuthUrl({ access_type: 'offline', prompt: 'consent', scope: SCOPES });
+      const url = oauth.generateAuthUrl({ access_type: 'offline', prompt: 'consent', scope: ALL_SCOPES });
       log('브라우저에서 로그인하세요:', url);
       const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start ""' : 'xdg-open';
       require('child_process').exec(`${opener} "${url}"`);
@@ -111,6 +116,15 @@ async function convertToText(ctx, fileId, kind) {
   }
 }
 const j = (obj) => ({ content: [{ type: 'text', text: JSON.stringify(obj, null, 2) }] });
+
+/** Apps Script API로 웹앱과 같은 서버 함수를 실행한다 (호출자 계정 = 웹앱 사용자와 동일한 사용자별 상태). */
+async function runScript(ctx, fn, args) {
+  if (!ctx.script) throw new Error('MAIL_BACKUP_SCRIPT_ID 가 설정되지 않아 백업 실행/설정 도구를 쓸 수 없습니다 (README 7-2)');
+  const res = await ctx.script.scripts.run({ scriptId: SCRIPT_ID, requestBody: { function: fn, parameters: args || [], devMode: false } });
+  if (res.data.error) { const d = res.data.error.details && res.data.error.details[0]; throw new Error((d && d.errorMessage) || JSON.stringify(res.data.error)); }
+  return res.data.response ? res.data.response.result : null;
+}
+const slimDashboard = (d) => d && ({ state: d.state, message: d.message, user: d.user, lastSyncAt: d.lastSyncAt, schedule: d.schedule, currentRun: d.currentRun, triggerInstalled: d.triggerInstalled, settings: d.settings, summary: d.summary, folderUrl: d.folderUrl, indexSheetUrl: d.indexSheetUrl, webAppUrl: d.webAppUrl, lastError: d.lastError });
 const err = (msg) => ({ content: [{ type: 'text', text: `오류: ${msg}` }], isError: true });
 
 // ---------- server ----------
@@ -124,7 +138,7 @@ async function main() {
     ctx = { drive: { files: { get: off, copy: off, export: off, delete: off, list: off } }, sheets: { spreadsheets: { values: { get: off } } } };
   } else {
     const auth = await getAuth();
-    ctx = { drive: google.drive({ version: 'v3', auth }), sheets: google.sheets({ version: 'v4', auth }) };
+    ctx = { drive: google.drive({ version: 'v3', auth }), sheets: google.sheets({ version: 'v4', auth }), script: SCRIPT_ID ? google.script({ version: 'v1', auth }) : null };
   }
   const server = new McpServer({ name: 'mail-backup', version: '1.0.0' });
 
@@ -189,6 +203,32 @@ async function main() {
       return j({ labels: s.categories, agendas: s.agendas, senders: Object.entries(senders).sort((a, b) => b[1] - a[1]).slice(0, 30).map(([name, count]) => ({ name, count })) });
     } catch (e) { return err(e.message); }
   });
+
+  // ---- 백업 실행·설정 (Apps Script API, MAIL_BACKUP_SCRIPT_ID 필요) ----
+  server.registerTool('backup_status', {
+    title: '백업 상태', description: '상태(최신/백업 필요/진행 중 n/m), 마지막·다음 백업, 자동 백업 여부, 설정, 보관 현황. 진행 중이면 processed/expectedTotal/progress.',
+    inputSchema: {},
+  }, async () => { try { return j(slimDashboard(await runScript(ctx, 'getDashboard'))); } catch (e) { return err(e.message); } });
+  server.registerTool('backup_history', {
+    title: '백업 실행 이력', description: '최근 12회 실행: 시작/종료, 감지/신규/중복/오류, 용량, 메일 기간, 라벨별 분포, 수동/자동, 알림.',
+    inputSchema: {},
+  }, async () => { try { const d = await runScript(ctx, 'getDashboard'); return j({ running: d.state === 'running' || d.state === 'queued' ? d.currentRun : null, history: d.history || [] }); } catch (e) { return err(e.message); } });
+  server.registerTool('backup_preview', {
+    title: '백업 감지', description: '저장 전에 대상 메일을 감지한다: 새 메일 수, 용량, 기간, 라벨별·보낸사람별. scope: incremental(마지막 이후) | all(전체) | since(sinceDate부터).',
+    inputSchema: { scope: z.enum(['incremental', 'all', 'since']).optional(), sinceDate: z.string().optional().describe('YYYY-MM-DD') },
+  }, async (a) => { try { return j(await runScript(ctx, 'previewBackup', [{ scope: a.scope, sinceDate: a.sinceDate }])); } catch (e) { return err(e.message); } });
+  server.registerTool('backup_run', {
+    title: '백업 실행', description: '감지 후 백그라운드 백업을 시작한다(5초 뒤 트리거, 창 없이 진행). 진행 상황은 backup_status로. scope 생략 시 마지막 백업 이후(첫 백업이면 전체).',
+    inputSchema: { scope: z.enum(['incremental', 'all', 'since']).optional(), sinceDate: z.string().optional() },
+  }, async (a) => { try { const p = await runScript(ctx, 'previewBackup', [{ scope: a.scope, sinceDate: a.sinceDate }]); const d = await runScript(ctx, 'runBackupNow'); cache.at = 0; return j({ queued: true, expected: p.newCount, bytes: p.bytes, estimatedSeconds: p.estimatedSeconds, state: d.state, message: d.message }); } catch (e) { return err(e.message); } });
+  server.registerTool('backup_settings_get', { title: '설정 조회', description: '주기, 시작일, 보낸편지함 포함, 첨부 저장, 회당 최대, 추가 검색 조건, 폴더, 폴더 기준, 하위 폴더, 알림.', inputSchema: {} },
+    async () => { try { return j(await runScript(ctx, 'getSettings')); } catch (e) { return err(e.message); } });
+  server.registerTool('backup_settings_set', {
+    title: '설정 변경', description: '지정한 항목만 바꾼다. 주기를 바꾸면 자동 백업이 켜져 있을 때 일정이 갱신된다.',
+    inputSchema: { intervalDays: z.number().int().min(1).optional(), initialStartDate: z.string().optional().describe('YYYY-MM-DD 또는 빈 문자열'), includeSent: z.boolean().optional(), saveAttachments: z.boolean().optional(), maxPerRun: z.number().int().min(0).optional(), filterQuery: z.string().optional(), folderId: z.string().optional(), folderLayout: z.enum(['flat', 'yearly', 'monthly']).optional(), folderBy: z.enum(['label', 'agenda']).optional(), notifyEmail: z.string().optional(), notifyOnComplete: z.boolean().optional() },
+  }, async (a) => { try { const cur = await runScript(ctx, 'getSettings'); const d = await runScript(ctx, 'saveSettings', [Object.assign({}, cur, a)]); return j(d.settings); } catch (e) { return err(e.message); } });
+  server.registerTool('backup_auto', { title: '자동 백업 켜기/끄기', description: '설정한 주기마다 새벽 3시 자동 실행 트리거를 설치하거나 제거한다.', inputSchema: { enabled: z.boolean() } },
+    async ({ enabled }) => { try { const d = await runScript(ctx, enabled ? 'installScheduledTrigger' : 'uninstallScheduledTrigger'); return j({ triggerInstalled: d.triggerInstalled, schedule: d.schedule }); } catch (e) { return err(e.message); } });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

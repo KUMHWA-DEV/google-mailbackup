@@ -54,7 +54,12 @@
   .pulse { position: absolute; top: 8px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--amber); animation: pulse 1.4s infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
   .hright { margin-left: auto; display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; }
-  .hright .user { margin-left: 6px; }
+  .acct { position: relative; margin-left: 6px; }
+  .acctbtn { border: 1px solid transparent; background: transparent; color: var(--muted); font-weight: 500; padding: 6px 10px; border-radius: 999px; }
+  .acctbtn:hover { background: var(--line2); }
+  .acctmenu { position: absolute; right: 0; top: 40px; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 30px rgba(15,23,42,.15); min-width: 220px; padding: 6px; z-index: 30; display: grid; gap: 2px; }
+  .acctmenu a, .acctmenu button { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 9px 12px; border-radius: 8px; color: var(--ink); font-weight: 500; font-size: 13px; }
+  .acctmenu a:hover, .acctmenu button:hover { background: var(--line2); text-decoration: none; }
 
   /* blocks */
   .page { padding-top: 16px; display: flex; flex-direction: column; gap: 14px; }
@@ -344,7 +349,11 @@
     <div class="hright">
       <a id="hdFolder" hidden title="Drive 백업 폴더" target="_blank" rel="noopener"><button type="button" class="ib">📁</button></a>
       <a id="hdSheet" hidden title="인덱스 시트" target="_blank" rel="noopener"><button type="button" class="ib">📊</button></a>
-      <span class="user" id="hdUser"></span>
+      <div class="acct"><button type="button" class="acctbtn" id="acctBtn"><span id="hdUser"></span> ▾</button>
+        <div class="acctmenu" id="acctMenu" hidden>
+          <a id="acctSwitch" href="#" target="_top">🔄 다른 계정으로 전환</a>
+          <button type="button" id="acctDisconnect">🔌 앱 연결 끊기 (권한 해제)</button>
+        </div></div>
     </div>
   </div>
 </header>
@@ -483,6 +492,13 @@
     <div class="btns"><span class="note" id="modalNote"></span><button type="button" id="modalCancel">취소</button><button type="button" class="primary" id="modalOk" disabled>백업 시작</button></div>
   </div>
 </div>
+<div class="modalbg" id="discModal" hidden>
+  <div class="modal">
+    <h3>🔌 앱 연결 끊기</h3>
+    <div class="box"><div>권한 승인이 취소되고 자동 백업이 꺼집니다.</div><div>백업 파일·인덱스·설정은 그대로 남습니다.</div><div>다음 접속 때 다시 승인하면 이어서 쓸 수 있습니다.</div></div>
+    <div class="btns"><button type="button" id="discCancel">취소</button><button type="button" class="warn" id="discOk">연결 끊기</button></div>
+  </div>
+</div>
 <div class="toast" id="toast" hidden></div>
 
 <!-- DEV_SHIM -->
@@ -521,6 +537,21 @@
     if (msg) $('bannerClose').onclick = function () { slot.hidden = true; };
   }
 
+  // ---------- account menu ----------
+  $('acctBtn').addEventListener('click', function (e) { e.stopPropagation(); $('acctMenu').hidden = !$('acctMenu').hidden; });
+  document.addEventListener('click', function (e) { if (!e.target.closest('.acct')) $('acctMenu').hidden = true; });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { $('acctMenu').hidden = true; $('modal').hidden = true; $('discModal').hidden = true; } });
+  $('acctDisconnect').addEventListener('click', function () {
+    $('acctMenu').hidden = true;
+    $('discModal').hidden = false;
+  });
+  $('discCancel').addEventListener('click', function () { $('discModal').hidden = true; });
+  $('discOk').addEventListener('click', function () {
+    $('discOk').disabled = true;
+    call('disconnectApp').then(function () { document.body.innerHTML = '<div style="padding:60px;text-align:center;font-size:15px">🔌 앱 연결이 해제되었습니다.<br><br><a href="' + location.href + '" target="_top">다시 연결하기</a></div>'; })
+      .catch(function (e) { toast('실패: ' + (e.message || e), true); });
+  });
+
   // ---------- tabs ----------
   function showTab(name) {
     state.tab = name;
@@ -551,6 +582,7 @@
     var s = d.settings || {}, sch = d.schedule || {}, sum = d.summary || {}, r = d.currentRun || {};
     var running = d.state === 'running' || d.state === 'queued';
     $('hdUser').textContent = d.user || '';
+    $('acctSwitch').href = 'https://accounts.google.com/AccountChooser?continue=' + encodeURIComponent(d.webAppUrl || location.href);
     $('hdFolder').hidden = !d.folderUrl; if (d.folderUrl) $('hdFolder').href = d.folderUrl;
     $('hdSheet').hidden = !d.indexSheetUrl; if (d.indexSheetUrl) $('hdSheet').href = d.indexSheetUrl;
     $('dueDot').hidden = !sch.isDue || running;
@@ -687,7 +719,7 @@
       '<div class="pv-nums">' +
       '<div class="pv-num"><div class="k">📧 새로 저장</div><div class="v">' + fmtNum(p.newCount) + '건' + (s.maxPerRun && p.newCount > s.maxPerRun ? ' <small>이번엔 ' + fmtNum(s.maxPerRun) + '건</small>' : '') + '</div></div>' +
       '<div class="pv-num"><div class="k">💾 용량</div><div class="v">' + est + fmtBytes(p.bytes) + '</div></div>' +
-      '<div class="pv-num"><div class="k">📅 메일 기간</div><div class="v" style="font-size:14px">' + (p.mailFrom ? fmtDayShort(p.mailFrom) + ' ~ ' + fmtDayShort(p.mailTo) : '–') + '</div></div>' +
+      '<div class="pv-num"><div class="k">📅 메일 기간' + (p.truncated && !p.mailFromExact ? ' <small title="최신 표본 기준. 실제 실행은 더 오래된 메일도 포함">(표본)</small>' : '') + '</div><div class="v" style="font-size:14px">' + (p.mailFrom ? fmtDay(p.mailFrom).slice(0, 12) + ' ~ ' + fmtDayShort(p.mailTo) : '–') + '</div></div>' +
       '<div class="pv-num"><div class="k">🔍 감지 / 이미 있음</div><div class="v">' + fmtNum(p.found) + ' <small>/ ' + fmtNum(p.skipped) + '</small></div></div>' +
       '</div>' +
       (p.newCount ? '<div class="pv-cols"><div><div class="pv-title">🏷 라벨별' + (p.estimated ? ' (추정)' : '') + '</div>' + distSmall(p.byCategory) + '</div>' +
@@ -695,7 +727,8 @@
       '<div class="box" style="margin-top:12px">' +
       '<div>📁 ' + (d.folderUrl ? '<a href="' + esc(d.folderUrl) + '" target="_blank" rel="noopener">Drive 폴더</a>' : 'Drive / Mail Backup') + ' · ' + (s.folderBy === 'agenda' ? '안건별' : '라벨별') + ' 폴더' + (s.saveAttachments ? ' · 📎 첨부 별도 저장' : '') + '</div>' +
       '<div>' + (s.notifyOnComplete ? '📨 완료 알림 → ' + esc(s.notifyEmail || d.user) : '🔕 완료 알림 없음') + ' · 🖥 백그라운드 실행' + (p.newCount > 150 ? ' · 1분 간격 여러 구간' : '') + '</div>' +
-      (p.truncated ? '<div style="color:var(--amber-ink)">⚠️ 메일이 많아 일부만 감지했습니다. 실제 건수는 더 많을 수 있습니다.</div>' : '') +
+      (p.truncated ? '<div style="color:var(--amber-ink)">⚠️ 메일이 많아 표본만 상세 감지했습니다. 건수·기간은 전체 기준으로 보정됨.</div>' : '') +
+      '<div class="mono" style="color:var(--faint)" title="실제 Gmail 검색 조건">🔎 ' + esc(p.query || '') + '</div>' +
       '</div>';
     $('modalNote').textContent = '감지 ' + Math.round((p.elapsedMs || 0) / 100) / 10 + '초' + (p.isFirst ? '' : ' · 예상 약 ' + secs(p.estimatedSeconds));
     $('modalOk').disabled = false; $('modalOk').textContent = '▶ 백업 시작' + (p.newCount ? ' · ' + fmtNum(p.newCount) + '건' : '');
@@ -1057,7 +1090,7 @@
     if (e.key === 'j' && idx < hits.length - 1) openMessage(hits[idx + 1]);
     if (e.key === 'k' && idx > 0) openMessage(hits[idx - 1]);
     if (e.key === '/') { e.preventDefault(); $('exQ').focus(); }
-    if (e.key === 'Escape') { closePop(); hideAdv(); }
+    if (e.key === 'Escape') { closePop(); hideAdv(); $('acctMenu').hidden = true; }
   });
 
   // ---------- init ----------

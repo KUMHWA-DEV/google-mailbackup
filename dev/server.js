@@ -69,7 +69,7 @@ const api = {
     const metas = fixtures.slice(0, 7).map(r => ({ category: r.category, sizeBytes: r.sizeBytes, date: r.date, from: r.from.replace(/<.*>/, '').trim() || r.from }));
     preview = aggregatePreview({ found: 12, skipped: 5, newCount: 7, metas, detailed: 7 });
     const isFirst = !lastSyncEpoch;
-    if (scope === 'all') { preview = aggregatePreview({ found: 300, skipped: isFirst ? 0 : 12, newCount: isFirst ? 4180 : 4168, metas, detailed: 7 }); preview.mailboxTotal = 4180; }
+    if (scope === 'all') { preview = aggregatePreview({ found: 300, skipped: isFirst ? 0 : 12, newCount: isFirst ? 4180 : 4168, metas, detailed: 7 }); preview.mailboxTotal = 4180; preview.mailFrom = '2026-07-30T02:11:00.000Z'; preview.mailFromExact = true; }
     if (scope === 'since') { preview = aggregatePreview({ found: 430, skipped: isFirst ? 0 : 10, newCount: 420, metas, detailed: 7 }); }
     preview.scope = scope; preview.sinceDate = scope === 'since' ? (opt.sinceDate || '') : '';
     preview.isFirst = isFirst; preview.initialStartDate = settings.initialStartDate || ''; preview.estimatedSeconds = estimateRunSeconds(preview.newCount);
@@ -104,6 +104,7 @@ const api = {
     return dashboard();
   },
   installScheduledTrigger: () => { triggerInstalled = true; return dashboard(); },
+  disconnectApp: () => ({ ok: true }),
   installWeeklyTrigger: () => api.installScheduledTrigger(),
   uninstallScheduledTrigger: () => { triggerInstalled = false; return dashboard(); },
 };

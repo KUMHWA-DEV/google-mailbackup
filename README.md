@@ -95,9 +95,16 @@ npx clasp open-script                             # 편집기 열기
 
 배포 URL(`https://script.google.com/a/macros/spris.com/s/AKfy…/exec`)은 바꿀 수 없습니다. 짧고 기억하기 쉬운 주소가 필요하면:
 
-- **Google Sites (권장, 관리자 불필요)**: sites.google.com 에서 새 사이트 → 주소를 `spris.com/mail-backup` 처럼 지정 →
-  삽입 > 삽입 코드에 `<iframe src="<웹앱 URL>" style="width:100%;height:100vh;border:0"></iframe>` → 게시(spris.com 사용자).
-  결과 주소는 `https://sites.google.com/spris.com/mail-backup` 이며 그 안에서 앱이 그대로 동작합니다.
+- **Google Sites (권장, 관리자 불필요, 10분)**
+  1. https://sites.google.com/new 에서 "빈 사이트" → 왼쪽 위 제목을 `Mail Backup` 으로.
+  2. 오른쪽 패널 **삽입 → 삽입 코드** → 두 번째 탭 "코드 삽입"에 아래를 붙여넣고 "다음" → "삽입".
+     ```html
+     <iframe src="https://script.google.com/a/macros/spris.com/s/AKfycbyHHD3JBlGToPseolLRWcZiEZeliQGihOdXHoHquHBoN9r7qWtMXEH2xn30PQeKhbWYvw/exec" style="width:100%;height:100vh;border:0"></iframe>
+     ```
+     삽입된 블록을 페이지 폭에 맞게 늘리고, 페이지 설정(⚙)에서 상단 배너를 "제목 없음"으로 바꾸면 앱만 보입니다.
+  3. 오른쪽 위 **게시** → 웹 주소 칸에 `mail-backup` 입력 → "누가 내 사이트를 볼 수 있나요"에서 **spris.com 사용자** → 게시.
+  4. 주소 `https://sites.google.com/spris.com/mail-backup` 을 공지합니다. 앱은 iframe 안에서 그대로 동작하며 로그인은 Workspace 세션을 씁니다.
+  5. 더 짧게 쓰려면 사내 링크 단축(예: `go/mailbackup`)이나 Chrome 북마크 폴더를 함께 배포합니다.
 - **애드온 아이콘**: 링크를 외울 필요 없이 Gmail 사이드바에서 시작하는 것이 가장 자연스럽습니다(2-2). 애드온의 "앱 열기" 버튼이 웹앱으로 연결됩니다.
 - **앱 런처**: 아래 3번(Marketplace 비공개 앱)을 하면 9점 메뉴에도 아이콘이 생깁니다.
 
@@ -133,15 +140,15 @@ npx clasp open-script                             # 편집기 열기
 
 ### A. 내 계정에서 바로 써보기 (테스트 배포, 5분)
 
-```bash
-npm run push            # addon.js 와 매니페스트 업로드
-npx clasp open-script
-```
+코드는 이미 올라가 있습니다(`npm run deploy`가 addon.js와 매니페스트를 함께 올림).
 
-1. 편집기 오른쪽 위 **배포 ▾ > 테스트 배포** → "설치" 클릭 (애플리케이션: Gmail).
-2. Gmail 새로고침 → 오른쪽 사이드바 맨 아래에 애드온 아이콘이 보입니다. 처음 클릭 시 권한 승인
-   (Gmail 읽기, 애드온 실행, Drive, Sheets, 메일 발송).
-3. 테스트 배포는 **설치한 계정에만** 보이며, 코드를 `npm run push` 할 때마다 즉시 반영됩니다.
+1. `npx clasp open-script` 로 편집기를 엽니다 (또는 https://script.google.com/d/1GRe3TOJy2G-riYt3TzWcAjF3B_roXbt27cjuuEZhip-8sk4FzJaWFkwF/edit).
+2. 오른쪽 위 **배포 ▾ → 테스트 배포**. 대화상자에서 "애플리케이션: Gmail"이 보이면 **설치** → **완료**.
+   (안 보이면 매니페스트에 `addOns`가 있는지, 방금 push한 버전인지 확인.)
+3. https://mail.google.com 을 새로고침 → **오른쪽 사이드바 맨 아래**에 ☁️ 아이콘이 생깁니다. 사이드바가 접혀 있으면 오른쪽 아래 `>` 로 펼칩니다.
+4. 아이콘 클릭 → "액세스 승인" → 계정 선택 → 허용. 웹앱에서 이미 승인했다면 바로 카드가 뜹니다.
+5. 첫 카드는 온보딩(전체/날짜부터 → ▶ 백업 시작). 메일을 하나 열면 그 메일의 백업 여부 카드로 바뀝니다.
+6. 테스트 배포는 **설치한 계정에만** 보이고, 이후 `npm run deploy` 할 때마다 즉시 반영됩니다. 제거는 배포 ▾ → 테스트 배포 → 제거.
 
 ### B. spris.com 전체에 배포 (관리자 1회)
 
@@ -240,7 +247,25 @@ claude mcp add mail-backup -- node /절대경로/google-mailbackup/mcp/server.js
 
 이후 "지난달 partner.co.kr에서 온 계약서 첨부 내용 요약해줘" 같은 요청이 `search_mail → get_mail → get_attachment_text` 순으로 처리됩니다.
 
-환경변수: `MAIL_BACKUP_SHEET_ID`(인덱스 시트 직접 지정), `MAIL_BACKUP_DOWNLOAD_DIR`, `MAIL_BACKUP_MCP_DIR`.
+### 7-2. AI로 백업 실행·설정까지 (Apps Script API 모드)
+
+조회 도구만으로는 부족하고 AI가 **백업 실행, 감지, 설정 변경, 자동 백업 켜기/끄기, 이력 조회**까지 하게 하려면
+MCP 서버가 Apps Script API로 웹앱의 서버 함수를 호출하게 합니다. 도구: `backup_status`, `backup_history`,
+`backup_preview`, `backup_run`, `backup_settings_get`, `backup_settings_set`, `backup_auto` (실행은 호출자 본인 계정 = 웹앱과 같은 사용자별 상태).
+
+1. **GCP 표준 프로젝트에 스크립트 연결** (kumhwa_dev, 1회): Apps Script 편집기 → ⚙ 프로젝트 설정 → "Google Cloud Platform(GCP) 프로젝트" →
+   7-1에서 OAuth 클라이언트를 만든 프로젝트의 **번호** 입력. 그 프로젝트에서 **Apps Script API** 사용 설정.
+2. **API 실행 파일로 배포**: 편집기 → 배포 → 새 배포 → 유형 "API 실행 파일" → 액세스 "도메인 내 모든 사용자" → 배포.
+3. 각 사용자: 환경변수 `MAIL_BACKUP_SCRIPT_ID`에 스크립트 ID(`.clasp.json`의 scriptId, 편집기 URL의 `/d/…/edit` 부분)를 넣고
+   `~/.config/mail-backup-mcp/token.json`을 지운 뒤 다시 로그인(스코프가 늘어나므로). 예:
+
+```bash
+claude mcp add mail-backup -e MAIL_BACKUP_SCRIPT_ID=1GRe3TOJy2G-riYt3TzWcAjF3B_roXbt27cjuuEZhip-8sk4FzJaWFkwF -- node /절대경로/google-mailbackup/mcp/server.js
+```
+
+OAuth 클라이언트와 스크립트가 **같은 GCP 프로젝트**에 있어야 Apps Script API 호출이 허용됩니다. 설정하지 않으면 조회 도구 7개만 동작합니다.
+
+환경변수: `MAIL_BACKUP_SHEET_ID`(인덱스 시트 직접 지정), `MAIL_BACKUP_SCRIPT_ID`(실행 모드), `MAIL_BACKUP_DOWNLOAD_DIR`, `MAIL_BACKUP_MCP_DIR`.
 Google 없이 시험하려면 `npm run mcp:demo`(샘플 데이터, 첨부 도구는 비활성). `node dev/mcp_smoke.js` 가 도구 호출을 자동 검증합니다.
 
 ## 5. 개발 명령

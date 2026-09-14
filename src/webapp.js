@@ -109,6 +109,16 @@ function runBackupNow() {
   return getDashboard();
 }
 
+/**
+ * 앱 연결 끊기: 이 사용자의 권한 승인을 취소한다. 자동 백업 트리거도 제거한다(권한이 없으면 실행 실패하므로).
+ * 백업 파일·인덱스·설정은 남는다. 다음 접속 때 다시 승인하면 그대로 이어서 쓸 수 있다.
+ */
+function disconnectApp() {
+  try { removeScheduledTrigger(); deleteContinuationTriggers_(); } catch (e) { /* 무시 */ }
+  ScriptApp.invalidateAuth();
+  return { ok: true };
+}
+
 function installWeeklyTrigger() { return installScheduledTrigger(); }
 function installScheduledTrigger() {
   setupScheduledTrigger();
