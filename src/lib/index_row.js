@@ -13,7 +13,7 @@ var INDEX_LIST_COLUMNS = INDEX_HEADERS.length - 1; // bodyPreview 제외
 // Node에서는 search.js를 명시적으로 불러온다 (Apps Script에서는 전역으로 이미 존재).
 if (typeof module !== 'undefined' && typeof parseSearch === 'undefined') {
   var searchLib_ = require('./search.js');
-  var parseSearch = searchLib_.parseSearch, matchSearch = searchLib_.matchSearch;
+  var parseSearch = searchLib_.parseSearch, matchSearch = searchLib_.matchSearch, setSearchAliases = searchLib_.setSearchAliases;
 }
 var BODY_PREVIEW_MAX = 20000;
 
@@ -87,6 +87,7 @@ function filterRecords(records, f) {
   var bTo = f.backedUpTo ? String(f.backedUpTo) : '';
   // q는 Gmail식 연산자(from: subject: has:attachment after: …)를 지원하는 search.js 파서로 처리한다.
   var parsed = (q && typeof parseSearch === 'function') ? parseSearch(f.q) : null;
+  if (parsed && typeof setSearchAliases === 'function') setSearchAliases(records); // 같은 사람(이름/주소 변형) 묶음
   var out = records.filter(function (r) {
     if (cat && r.category !== cat) return false;
     if (folder === 'sent' && !isSent(r)) return false;

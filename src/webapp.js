@@ -12,7 +12,7 @@ function doGet() {
 
 /** lib/search.js의 함수 소스를 클라이언트 스크립트로 내보낸다 (서버와 같은 검색 문법). */
 function searchClientLib_() {
-  return 'var SEARCH_LIST_KEYS = ' + JSON.stringify(SEARCH_LIST_KEYS) + ';\n' +
+  return 'var SEARCH_LIST_KEYS = ' + JSON.stringify(SEARCH_LIST_KEYS) + ';\nvar SEARCH_ALIASES = null;\nvar ALIAS_GENERIC_LOCAL = ' + JSON.stringify(ALIAS_GENERIC_LOCAL) + ';\n' +
     SEARCH_CLIENT_FUNCS.map(function (f) { return f.toString(); }).join('\n');
 }
 

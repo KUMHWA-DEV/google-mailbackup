@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseSearch, matchSearch, parseSize, buildSearchQuery } from '../src/lib/search.js';
+import { parseSearch, matchSearch, parseSize, buildSearchQuery, setSearchAliases } from '../src/lib/search.js';
 
 const recs = [
   { id: '1', category: '받은편지함', agenda: '업무요청/협조', labels: 'INBOX, IMPORTANT', from: '박민수 <minsu.park@partner.co.kr>', to: 'kumhwa_dev@spris.com', cc: '', subject: '[요청] 9월 정산 자료 확인', snippet: '정산 자료 첨부', attachments: '정산자료_2026-09.xlsx', sizeBytes: 184320, date: '2026-09-10T01:12:00.000Z' },
@@ -66,6 +66,22 @@ describe('matchSearch', () => {
     expect(ids('has:attachment')).toEqual(['1', '3']);
     expect(ids('filename:pdf')).toEqual(['3']);
     expect(ids('-has:attachment')).toEqual(['2']);
+  });
+  it('groups the same person across name and address variants', () => {
+    const people = [
+      { id: 'a', from: '김태훈 <thkim@spris.com>', to: 'x@y.com', cc: '', subject: 's1', snippet: '', labels: 'INBOX', category: '받은편지함', attachments: '', date: '2026-09-01T00:00:00.000Z' },
+      { id: 'b', from: 'thkim@kumhwa.com', to: 'x@y.com', cc: '', subject: 's2', snippet: '', labels: 'INBOX', category: '받은편지함', attachments: '', date: '2026-09-02T00:00:00.000Z' },
+      { id: 'c', from: 'x@y.com', to: 'thkim@kumhwa.com', cc: '', subject: 's3', snippet: '', labels: 'SENT', category: '보낸편지함', attachments: '', date: '2026-09-03T00:00:00.000Z' },
+      { id: 'd', from: 'info@spris.com', to: 'info@other.com', cc: '', subject: 's4', snippet: '', labels: 'INBOX', category: '받은편지함', attachments: '', date: '2026-09-04T00:00:00.000Z' },
+    ];
+    setSearchAliases(people);
+    const hit = q => people.filter(r => matchSearch(r, parseSearch(q))).map(r => r.id);
+    expect(hit('from:김태훈')).toEqual(['a', 'b']);      // 이름 없이 주소만 있는 메일도 같은 사람
+    expect(hit('to:김태훈')).toEqual(['c']);
+    expect(hit('김태훈')).toEqual(['a', 'b', 'c']);       // 자유 단어도 보낸/받는 사람 묶음으로
+    expect(hit('from:thkim')).toEqual(['a', 'b']);
+    expect(hit('from:info@spris.com')).toEqual(['d']);   // info 같은 공용 계정은 도메인이 달라도 묶지 않음
+    setSearchAliases([]);
   });
   it('label matches category or gmail labels', () => {
     expect(ids('label:거래처')).toEqual(['3']);

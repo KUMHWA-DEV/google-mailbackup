@@ -55,6 +55,62 @@ function parseSearch(q) {
 }
 
 function lc_(v) { return String(v == null ? '' : v).toLowerCase(); }
+
+/**
+ * 같은 사람 묶기. "김태훈 <thkim@spris.com>"과 "thkim@kumhwa.com"처럼 이름이 같거나 @ 앞부분이 같은 주소를 한 사람으로 본다.
+ * setSearchAliases(records)로 인덱스 전체에서 한 번 만들고, from:/to:/cc:/자유 단어 검색 때 이름·주소 어느 쪽으로 찾아도 전부 나온다.
+ */
+var SEARCH_ALIASES = null;
+var ALIAS_GENERIC_LOCAL = { info: 1, admin: 1, noreply: 1, 'no-reply': 1, support: 1, sales: 1, contact: 1, hello: 1, team: 1, mail: 1, help: 1, office: 1, notice: 1, news: 1, newsletter: 1, notification: 1, notifications: 1, service: 1, master: 1, webmaster: 1, postmaster: 1 };
+function parseAddrs_(field) {
+  var out = [], s = String(field || ''), re = /"?([^"<,;]*?)"?\s*<([^>]+)>|([^\s,;<>"]+@[^\s,;<>"]+)/g, m;
+  while ((m = re.exec(s))) {
+    var email = lc_(m[2] || m[3]).trim(), name = lc_(m[1] || '').replace(/^["'\s]+|["'\s]+$/g, '');
+    if (email) out.push({ email: email, name: name, local: email.split('@')[0] });
+  }
+  return out;
+}
+function setSearchAliases(records) {
+  var parent = {}, keys = {};
+  function find(x) { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
+  function add(x) { if (!(x in parent)) parent[x] = x; }
+  function union(a, b) { add(a); add(b); var ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; }
+  var byName = {}, byLocal = {}, emails = {};
+  (records || []).forEach(function (r) {
+    ['from', 'to', 'cc'].forEach(function (k) {
+      parseAddrs_(r[k]).forEach(function (a) {
+        add(a.email); emails[a.email] = 1;
+        if (a.name && a.name.length >= 2 && !/@/.test(a.name)) { if (byName[a.name]) union(a.email, byName[a.name]); else byName[a.name] = a.email; }
+        if (a.local && a.local.length >= 4 && !ALIAS_GENERIC_LOCAL[a.local] && !/^\d+$/.test(a.local)) { if (byLocal[a.local]) union(a.email, byLocal[a.local]); else byLocal[a.local] = a.email; }
+      });
+    });
+  });
+  var cluster = {};
+  Object.keys(emails).forEach(function (e) { var root = find(e); cluster[e] = root; if (!keys[root]) keys[root] = {}; keys[root][e] = 1; keys[root][e.split('@')[0]] = 1; });
+  Object.keys(byName).forEach(function (n) { keys[find(byName[n])][n] = 1; });
+  SEARCH_ALIASES = { cluster: cluster, keys: keys, cache: {} };
+  return SEARCH_ALIASES;
+}
+/** 검색어(이름·주소 일부)에 해당하는 사람 묶음(클러스터) 집합. */
+function aliasClusters_(term) {
+  var A = SEARCH_ALIASES; if (!A) return null;
+  var t = lc_(term).trim(); if (!t) return null;
+  if (A.cache[t]) return A.cache[t];
+  var hit = {};
+  Object.keys(A.keys).forEach(function (root) { var ks = Object.keys(A.keys[root]); for (var i = 0; i < ks.length; i++) if (ks[i].indexOf(t) >= 0) { hit[root] = 1; break; } });
+  A.cache[t] = hit; return hit;
+}
+/** 필드(from/to/cc 문자열)가 검색어와 문자열로 맞거나, 같은 사람 묶음에 속하는 주소를 포함하면 true. */
+function personIn_(field, needles) {
+  var hay = lc_(field);
+  return needles.every(function (n) {
+    if (hay.indexOf(lc_(n)) >= 0) return true;
+    var clusters = aliasClusters_(n); if (!clusters) return false;
+    var addrs = parseAddrs_(field);
+    for (var i = 0; i < addrs.length; i++) if (clusters[SEARCH_ALIASES.cluster[addrs[i].email]]) return true;
+    return false;
+  });
+}
 function anyIn_(hay, needles) { hay = lc_(hay); return needles.every(function (n) { return hay.indexOf(lc_(n)) >= 0; }); }
 function noneIn_(hay, needles) { hay = lc_(hay); return needles.every(function (n) { return hay.indexOf(lc_(n)) < 0; }); }
 function isSentRec_(r) { return r.category === '보낸편지함' || /(^|,\s*)SENT(\s*,|$)/.test(String(r.labels || '')); }
@@ -65,11 +121,11 @@ function matchSearch(r, p) {
   var labels = String(r.labels || '') + ', ' + String(r.category || '');
   var atts = String(r.attachments || '');
   var hay = [r.subject, r.from, r.to, r.cc, r.snippet, labels, atts].join(' | ');
-  if (p.terms.length && !anyIn_(hay, p.terms)) return false;
+  if (p.terms.length && !p.terms.every(function (t) { return lc_(hay).indexOf(lc_(t)) >= 0 || personIn_(r.from, [t]) || personIn_(r.to, [t]) || personIn_(r.cc, [t]); })) return false;
   if (p.not.length && !noneIn_(hay, p.not)) return false;
-  if (p.from.length && !anyIn_(r.from, p.from)) return false;
-  if (p.to.length && !anyIn_(r.to, p.to)) return false;
-  if (p.cc.length && !anyIn_(r.cc, p.cc)) return false;
+  if (p.from.length && !personIn_(r.from, p.from)) return false;
+  if (p.to.length && !personIn_(r.to, p.to)) return false;
+  if (p.cc.length && !personIn_(r.cc, p.cc)) return false;
   if (p.subject.length && !anyIn_(r.subject, p.subject)) return false;
   if (p.label.length && !anyIn_(labels, p.label)) return false;
   if (p.filename.length && !anyIn_(atts, p.filename)) return false;
@@ -115,8 +171,8 @@ function buildSearchQuery(f) {
 }
 
 /** 클라이언트에 그대로 내보낼 함수 목록 (순서 중요: 의존 함수 먼저). */
-var SEARCH_CLIENT_FUNCS = [parseSize, normDate_, tokenize_, parseSearch, lc_, anyIn_, noneIn_, isSentRec_, matchSearch, quoteVal_, buildSearchQuery];
+var SEARCH_CLIENT_FUNCS = [parseSize, normDate_, tokenize_, parseSearch, lc_, anyIn_, noneIn_, isSentRec_, parseAddrs_, setSearchAliases, aliasClusters_, personIn_, matchSearch, quoteVal_, buildSearchQuery];
 
 if (typeof module !== 'undefined') {
-  module.exports = { parseSearch: parseSearch, matchSearch: matchSearch, parseSize: parseSize, buildSearchQuery: buildSearchQuery, SEARCH_CLIENT_FUNCS: SEARCH_CLIENT_FUNCS, SEARCH_LIST_KEYS: SEARCH_LIST_KEYS };
+  module.exports = { ALIAS_GENERIC_LOCAL: ALIAS_GENERIC_LOCAL, parseSearch: parseSearch, matchSearch: matchSearch, setSearchAliases: setSearchAliases, parseSize: parseSize, buildSearchQuery: buildSearchQuery, SEARCH_CLIENT_FUNCS: SEARCH_CLIENT_FUNCS, SEARCH_LIST_KEYS: SEARCH_LIST_KEYS };
 }

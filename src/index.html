@@ -291,7 +291,10 @@
   .gm-nav .runsel { margin: 14px 0 0 24px; font-size: 12px; color: #444746; }
   .gm-nav .runsel select { width: calc(100% - 4px); border: 1px solid #dadce0; border-radius: 8px; padding: 6px 8px; font-size: 12px; background: #fff; margin-top: 4px; }
   .gm-main { flex: 1; display: flex; min-width: 0; background: #fff; border-radius: 16px 0 0 0; box-shadow: 0 0 0 1px #e0e3e7 inset; }
-  .gm-listwrap { width: 52%; min-width: 380px; display: flex; flex-direction: column; border-right: 1px solid #e0e3e7; min-height: 0; }
+  .gm-split { width: 7px; flex: none; cursor: col-resize; background: transparent; margin: 0 -3px; position: relative; z-index: 2; }
+  .gm-split:hover, .gm-split.drag { background: #d3e3fd; }
+  body.wide .wrap, body.wide header .inner { max-width: none; }
+  .gm-listwrap { width: var(--listw, 52%); min-width: 380px; display: flex; flex-direction: column; border-right: 1px solid #e0e3e7; min-height: 0; }
   .gm-tools { display: flex; align-items: center; gap: 4px; padding: 6px 8px 6px 14px; border-bottom: 1px solid #e0e3e7; font-size: 12px; color: #444746; min-height: 48px; }
   .gm-tools .pg { margin-left: auto; display: flex; align-items: center; gap: 2px; white-space: nowrap; }
   .gm-list { flex: 1; overflow-y: auto; min-height: 0; }
@@ -479,7 +482,7 @@
             <div class="btns"><button type="button" id="advReset">초기화</button><button type="submit" class="primary">🔍 검색</button></div>
           </form>
         </div>
-        <div class="right"><button type="button" class="gm-ib" id="exRefresh" title="새로고침">⟳</button></div>
+        <div class="right"><button type="button" class="gm-ib" id="exWide" title="전체 화면 너비로 보기 / 기본 너비">⛶</button><button type="button" class="gm-ib" id="exRefresh" title="새로고침">⟳</button></div>
       </div>
       <div class="gm-chips" id="gmChips"></div>
       <div class="gm-navchips" id="exNavChips"></div>
@@ -494,6 +497,7 @@
             </div>
             <div class="gm-list" id="mlist"><div class="gm-empty">불러오는 중…</div></div>
           </div>
+          <div class="gm-split" id="gmSplit" title="끌어서 목록/미리보기 너비 조절 · 더블클릭: 기본값"></div>
           <div class="gm-reader" id="reader"><div class="gm-ph"><div style="font-size:44px">✉️</div><b>메일을 선택하세요</b></div></div>
         </div>
       </div>
@@ -1011,7 +1015,7 @@
   }
   function loadExplorer() {
     $('mlist').innerHTML = '<div class="gm-empty">불러오는 중…</div>';
-    return call('getExplorerData').then(function (data) { state.explorer = data; fillAdvLists(); renderExplorer(); })
+    return call('getExplorerData').then(function (data) { state.explorer = data; if (typeof setSearchAliases === 'function') setSearchAliases(data.records || []); fillAdvLists(); renderExplorer(); })
       .catch(function (e) { $('mlist').innerHTML = '<div class="gm-empty"><b>불러오기 실패</b>' + esc(e.message || e) + '</div>'; });
   }
   function allRecords() { return (state.explorer && state.explorer.records) || []; }
@@ -1239,6 +1243,25 @@
   $('exPrev').addEventListener('click', function () { state.ex.page -= 1; renderExplorer(); $('mlist').scrollTop = 0; });
   $('exNext').addEventListener('click', function () { state.ex.page += 1; renderExplorer(); $('mlist').scrollTop = 0; });
   $('exRefresh').addEventListener('click', function () { state.explorer = null; loadExplorer(); });
+  // 전체 너비 토글 (기억됨)
+  function setWide(on) { document.body.classList.toggle('wide', !!on); $('exWide').classList.toggle('on', !!on); try { localStorage.setItem('mb.wide', on ? '1' : '0'); } catch (e) { /* 무시 */ } }
+  $('exWide').addEventListener('click', function () { setWide(!document.body.classList.contains('wide')); });
+  try { if (localStorage.getItem('mb.wide') === '1') setWide(true); } catch (e) { /* 무시 */ }
+  // 목록/미리보기 너비 조절 (끌기, 기억됨)
+  (function () {
+    var lw = document.querySelector('.gm-listwrap'), main = document.querySelector('.gm-main'), h = $('gmSplit');
+    function apply(px) { lw.style.setProperty('--listw', px ? px + 'px' : ''); }
+    try { var saved = Number(localStorage.getItem('mb.listw')); if (saved > 0) apply(saved); } catch (e) { /* 무시 */ }
+    var dragging = false;
+    h.addEventListener('mousedown', function (e) { dragging = true; h.classList.add('drag'); document.body.style.userSelect = 'none'; e.preventDefault(); });
+    document.addEventListener('mousemove', function (e) {
+      if (!dragging) return;
+      var rect = main.getBoundingClientRect(), px = Math.round(e.clientX - rect.left);
+      px = Math.max(380, Math.min(rect.width - 360, px)); apply(px);
+    });
+    document.addEventListener('mouseup', function () { if (!dragging) return; dragging = false; h.classList.remove('drag'); document.body.style.userSelect = ''; try { localStorage.setItem('mb.listw', String(parseInt(lw.style.getPropertyValue('--listw')) || '')); } catch (e) { /* 무시 */ } });
+    h.addEventListener('dblclick', function () { apply(''); try { localStorage.removeItem('mb.listw'); } catch (e) { /* 무시 */ } });
+  })();
   $('mlist').addEventListener('click', function (e) {
     var row = e.target.closest('.gm-row'); if (!row) return;
     if (row.dataset.tid) { var t = (state.ex.items || []).filter(function (x) { return String(x.id) === row.dataset.tid; })[0]; if (t) openThread(t); return; }

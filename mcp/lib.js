@@ -3,7 +3,7 @@
  * 검색 문법은 웹앱과 같은 src/lib/search.js 를 그대로 쓴다.
  */
 const { INDEX_HEADERS, rowToRecord, filterRecords, summarizeRecords, parseAttachmentFiles } = require('../src/lib/index_row.js');
-const { parseSearch, matchSearch } = require('../src/lib/search.js');
+const { parseSearch, matchSearch, setSearchAliases } = require('../src/lib/search.js');
 
 /** 시트 값(첫 행 = 헤더)을 레코드 배열로. 헤더 이름 기준으로 매핑해 열 순서가 달라도 견딘다. */
 function rowsToRecords(rows) {
@@ -34,6 +34,7 @@ function folderMatch(r, key) {
 function searchRecords(records, o) {
   o = o || {};
   const parsed = o.query ? parseSearch(o.query) : null;
+  if (parsed) setSearchAliases(records);
   let hits = records.filter(r => folderMatch(r, o.folder) && (!parsed || matchSearch(r, parsed)));
   if (o.category) hits = hits.filter(r => r.category === o.category);
   hits.sort((a, b) => String(b.date).localeCompare(String(a.date)));
