@@ -231,6 +231,11 @@ Claude Desktop, Claude Code 등 MCP 클라이언트를 연결하면 AI가 메일
 
 ### 준비 (관리자 1회) — 직원은 준비물 없음
 
+> 이미 등록된 상태입니다. 두 파일 `src/oauth_client.js`(웹앱이 직원 설정에 넣어 줌)와 `mcp/oauth_client.json`(MCP 서버 폴백)은 공개 저장소에 올리지 않도록 .gitignore에 있습니다.
+> 저장소를 새로 클론한 관리자 PC에서는 GCP 콘솔 → 사용자 인증 정보에서 같은 클라이언트의 JSON을 내려받아 `mcp/oauth_client.json`으로 두고,
+> `src/oauth_client.js`에 `var DEFAULT_OAUTH_CLIENT_JSON = JSON.stringify({ installed: { client_id, client_secret, ... } });` 한 줄을 만든 뒤 `npm run deploy` 하면 됩니다.
+> 파일이 없어도 AI 연결 탭 관리자 카드에 JSON을 붙여넣어 등록하면 같은 효과입니다. 동의 화면 사용자 유형은 **내부**로 두세요.
+
 1. **OAuth 클라이언트**: https://console.cloud.google.com → 프로젝트(2-2 B의 것을 써도 됨) → API 및 서비스 →
    사용자 인증 정보 → "OAuth 클라이언트 ID 만들기" → 유형 **데스크톱 앱** → JSON 다운로드.
    같은 프로젝트에서 **Google Drive API**와 **Google Sheets API**를 사용 설정합니다.

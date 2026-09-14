@@ -52,7 +52,7 @@ function getDashboard() {
     webAppUrl: links.webAppUrl || null,
     user: Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail(),
     isOwner: isOwner_(),
-    oauthClientJson: PropertiesService.getScriptProperties().getProperty('OAUTH_CLIENT_JSON') || null, // 관리자가 등록한 MCP용 OAuth 클라이언트(데스크톱 앱, 공개 무방)
+    oauthClientJson: PropertiesService.getScriptProperties().getProperty('OAUTH_CLIENT_JSON') || (typeof DEFAULT_OAUTH_CLIENT_JSON !== 'undefined' ? DEFAULT_OAUTH_CLIENT_JSON : null), // 관리자 등록값 > 배포에 동봉된 src/oauth_client.js(git 제외)
     scriptId: ScriptApp.getScriptId(),
   };
 }
