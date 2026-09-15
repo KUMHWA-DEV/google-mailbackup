@@ -912,7 +912,16 @@
   }
   /** 가져오기 진행 상자 (가져오기 탭·대시보드 공용). s = {state, message, cursor, progress} */
   function impBoxHtml(s, compact) {
-    var c = s.cursor || {}, p = s.progress || {}, st = s.state, queued = st === 'queued', pct = p.percent;
+    var c = s.cursor || {}, p = s.progress || {}, st = s.state, queued = st === 'queued', pct = p.percent, rp = s.repair;
+    if (rp && rp.active) { // 오류 수정 실행: 행 점검 → 파일 위치 점검 → (실패 메일 재시도)
+      var rHead = queued ? '⏳ 오류 수정 · 곧 시작' : st === 'stopping' ? '⏹ 오류 수정 중지 중' : st === 'paused' ? '⏸ 오류 수정 중지됨' : st === 'error' ? '⚠️ 오류 수정 실패' : '🛠 오류 수정 중';
+      var rPhase = rp.phase === 'sweep' ? '파일 위치 점검 ' + fmtNum(rp.done) + '/' + fmtNum(rp.total) + ' · 옮김 ' + fmtNum(rp.moved) : '행 점검 ' + fmtNum(rp.done) + '/' + fmtNum(rp.total) + ' · 고침 ' + fmtNum(rp.fixed);
+      var rRight = queued ? '' : '구간 ' + fmtNum(c.chunks) + ' · 경과 ' + secs(Math.round(c.activeSeconds || 0)) + (c.errors ? ' · <span title="' + esc(c.lastError || '') + '">⚠️ 오류 ' + fmtNum(c.errors) + '</span>' : '');
+      return '<div class="top"><span>' + rHead + (queued ? '' : ' · ' + rPhase + (rp.percent != null ? ' · ' + rp.percent + '%' : '')) + '</span><span>' + rRight + '</span></div>' +
+        '<div class="bar"><i style="width:' + (rp.percent != null ? rp.percent : 0) + '%"></i></div>' +
+        (st === 'error' && c.lastError ? '<div class="meta" style="color:var(--red-ink)">마지막 오류: ' + esc(String(c.lastError).slice(0, 160)) + '</div>' : '') +
+        '<div class="meta">' + (compact ? '🛠 가져온 메일 오류 수정 · <a href="#" data-goto="import">가져오기 탭에서 보기 ↗</a>' : '1단계 행 점검(라벨·폴더·대화 묶음) → 2단계 파일 위치 점검 → 실패했던 메일 재시도 · 백그라운드에서 실행') + '</div>';
+    }
     var head = queued ? '⏳ 대기열 · 곧 시작' : st === 'stopping' ? '⏹ 중지 중 · 현재 파일까지 저장' : st === 'paused' ? '⏸ 중지됨' : st === 'error' ? '⚠️ 실패' : '📥 가져오는 중';
     var top = head + (queued ? '' : ' · 저장 ' + fmtNum(c.processed) + '건' + (c.skipped ? ' · 중복 ' + fmtNum(c.skipped) : '') + (pct != null ? ' · ' + pct + '%' : '') + (p.filesTotal ? ' · 파일 ' + fmtNum(p.filesDone) + '/' + fmtNum(p.filesTotal) : ''));
     var right = queued ? '' : '구간 ' + fmtNum(c.chunks) + ' · 경과 ' + secs(Math.round(c.activeSeconds || 0)) + (p.etaSeconds != null ? ' · 남은 약 ' + etaText(p.etaSeconds) : '') + (c.errors ? ' · <span title="' + esc(c.lastError || '') + '">⚠️ 오류 ' + fmtNum(c.errors) + '</span>' : '');
@@ -1036,7 +1045,9 @@
     var c = s.cursor || {}, running = /^(running|queued|stopping)$/.test(s.state), paused = s.state === 'paused', failed = s.state === 'error';
     $('impFolderPath').innerHTML = esc(s.folderPath || '내 드라이브 › Mail Backup › _import').replace(/_import$/, '<b>_import</b>');
     $('impFolderCtl').innerHTML = s.folderExists && s.folderUrl ? '<a href="' + esc(s.folderUrl) + '" target="_blank" rel="noopener">폴더 열기 ↗</a>' : '<span class="note" style="padding:2px 8px">아직 폴더가 없습니다</span> <button type="button" class="sm" id="impMkdir">📁 폴더 만들기</button>';
-    $('impState').textContent = running ? (s.state === 'queued' ? '⏳ 대기열 · 곧 시작' : s.state === 'stopping' ? '⏹ 중지 중' : '⚙️ 가져오는 중') : paused ? '⏸ 중지됨' : failed ? '⚠️ 실패' : '가져오기';
+    var repairing = !!(s.repair && s.repair.active);
+    $('impState').textContent = repairing ? (s.state === 'queued' ? '⏳ 오류 수정 · 곧 시작' : running ? '🛠 오류 수정 중' : paused ? '⏸ 오류 수정 중지됨' : failed ? '⚠️ 오류 수정 실패' : '가져오기')
+      : running ? (s.state === 'queued' ? '⏳ 대기열 · 곧 시작' : s.state === 'stopping' ? '⏹ 중지 중' : '⚙️ 가져오는 중') : paused ? '⏸ 중지됨' : failed ? '⚠️ 실패' : '가져오기';
     $('impSub').textContent = (s.message || '') + (c.startedAt && running ? ' · 시작 ' + fmtDate(c.startedAt) + ' · 구간 ' + fmtNum(c.chunks) : '') + (running && c.curFile ? ' · 현재 파일 ' + c.curFile + (c.curSize ? ' (' + Math.round(c.curOffset / c.curSize * 100) + '%)' : '') : '');
     var live = running || paused || failed;
     $('impBox').hidden = !live; if (live) $('impBox').innerHTML = impBoxHtml(s, false);
@@ -1047,7 +1058,7 @@
     $('impStop').hidden = !running || s.state === 'stopping'; $('impResume').hidden = !(paused || failed); $('impCancel').hidden = !(paused || failed || s.state === 'stopping');
     $('impAutoRepair').checked = !!s.autoRepair;
     $('impRepair').hidden = !s.repairNeeded; $('impRepair').disabled = running; $('impRepair').title = running ? '가져오기가 끝나거나 중지된 뒤 누를 수 있습니다' : '예전 버전이 잘못 기록한 행을 고칩니다: #ERROR! 라벨·폴더, 한 대화로 묶인 메일'; // 고칠 행이 감지됐을 때만 보이고, 실행 중이면 눌리지 않음
-    $('impRepairNote').hidden = !s.repairNeeded; $('impRepairRun').hidden = !running;
+    $('impRepairNote').hidden = !s.repairNeeded || repairing; $('impRepairRun').hidden = !running || repairing; // 오류 수정이 도는 동안은 안내 대신 진행 상자
     var what = []; if (s.failedMsgs) what.push('저장에 실패한 메일 ' + fmtNum(s.failedMsgs) + '건을 다시 시도합니다 (원본 파일을 다시 훑되 이미 저장된 메일은 건너뜀)'); if (s.repairNeeded) what.push('예전 버전이 잘못 기록한 행이 있으면 라벨명 복원·파일 이동·대화 다시 묶기를 합니다');
     $('impRepairWhat').textContent = what.join(' · ') + '.';
     $('impHist').innerHTML = (s.history || []).map(function (h) { return '<tr' + (h.status === 'cancelled' ? ' class="held"' : '') + '><td>' + (h.status === 'cancelled' ? '✖ ' : h.errors ? '⚠️ ' : '✅ ') + fmtDate(h.startedAt) + '</td><td>' + fmtDate(h.finishedAt) + '</td><td><b style="color:var(--blue-ink)">' + fmtNum(h.processed) + '</b></td><td>' + fmtNum(h.skipped) + '</td><td>' + fmtNum(h.errors) + '</td><td>' + fmtBytes(h.bytes) + '</td></tr>'; }).join('') || '<tr><td colspan="6" class="empty">아직 가져오기 이력이 없습니다</td></tr>';

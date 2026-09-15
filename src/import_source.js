@@ -171,6 +171,7 @@ function repairImportRows_(cursor, deadline, settings) {
   if (last < 2) return out;
   var C = { id: 0, thread: 1, date: 2, category: 3, labels: 5, from: INDEX_HEADERS.indexOf('from'), fileId: INDEX_HEADERS.indexOf('driveFileId') };
   var startRow = cursor.repairRow || 2;
+  cursor.repairTotal = last - 1; cursor.repairPhase = 'rows';
   var BATCH = 100;
   for (var r0 = startRow; r0 <= last; r0 += BATCH) {
     var n = Math.min(BATCH, last - r0 + 1);
@@ -198,6 +199,7 @@ function repairImportRows_(cursor, deadline, settings) {
         vals[i][C.thread] = key; touched = true;
       }
       if (touched) { changed = true; out.fixed += 1; }
+      if ((r0 + i) % 25 === 0) { cursor.repairRow = r0 + i + 1; cursor.repairFixed = out.fixed; setImportStatus_({ state: 'running', message: '오류 수정 중 · 행 점검 ' + (r0 + i) + '/' + (last - 1) + ' · 고침 ' + out.fixed, cursor: cursor }); }
     }
     if (changed) rng.setValues(vals.map(sheetSafeRowGas_));
     cursor.repairRow = r0 + n; cursor.repairFixed = out.fixed;
@@ -247,13 +249,14 @@ function sweepImportedFiles_(cursor, deadline, settings) {
   if (last < 2) return out;
   var C = { id: 0, date: 2, category: 3, fileId: INDEX_HEADERS.indexOf('driveFileId') };
   var vals = sheet.getRange(2, 1, last - 1, C.fileId + 1).getValues();
+  cursor.repairPhase = 'sweep'; cursor.sweepTotal = vals.length; cursor.repairRow = last; // 행 점검은 끝남
   for (var i = (cursor.sweepRow || 2) - 2; i < vals.length; i++) {
     if (Date.now() > deadline) { cursor.sweepRow = i + 2; out.done = false; return out; }
     var id = String(vals[i][C.id] || ''), fid = String(vals[i][C.fileId] || ''), cat = String(vals[i][C.category] || '');
     if (id.indexOf('eml:') !== 0 || !fid || !cat || repairBadCategory_(cat)) continue;
     try { if (moveImportedFile_(fid, cat, vals[i][C.date], settings)) { cursor.movedFiles = (cursor.movedFiles || 0) + 1; out.moved += 1; } }
     catch (e) { cursor.errors += 1; cursor.lastError = '파일 이동 실패: ' + e.message; Logger.log('위치 점검: 이동 실패 %s', e.message); }
-    if (i % 50 === 0) setImportStatus_({ state: 'running', message: '파일 위치 점검 중 ' + (i + 1) + '/' + vals.length + ' · 옮김 ' + (cursor.movedFiles || 0), cursor: cursor });
+    if (i % 25 === 0) { cursor.sweepRow = i + 2; setImportStatus_({ state: 'running', message: '오류 수정 중 · 파일 위치 점검 ' + (i + 1) + '/' + vals.length + ' · 옮김 ' + (cursor.movedFiles || 0), cursor: cursor }); }
   }
   delete cursor.sweepRow;
   return out;
@@ -334,6 +337,15 @@ function scheduleImport_(delayMs) {
 }
 function importLeaseHeld_() { return Number(getProp_(IMPORT_PROP.LEASE, '0')) > Date.now(); }
 /** 커서만으로 계산하는 진행률: 이번 실행에서 끝낸 파일 바이트 + 현재 파일의 읽은 입력 위치 / 구간 시작 때 잰 전체 바이트 (200개 넘는 파일은 다음 구간에서 합산되므로 99%로 막음) */
+/** 오류 수정 실행의 진행 정보 (실행 중·대기 중인 오류 수정 커서에서) */
+function importRepairInfo_(c) {
+  c = c || {};
+  if (!c.repairOnly && !c.wasRepair) return null;
+  var phase = c.repairPhase || 'rows', done, total;
+  if (phase === 'sweep') { done = Math.max(0, (c.sweepRow || 2) - 2); total = c.sweepTotal || 0; }
+  else { done = Math.max(0, (c.repairRow || 2) - 2); total = c.repairTotal || 0; }
+  return { active: !!c.repairOnly, phase: phase, done: done, total: total, percent: total ? Math.min(100, Math.floor(done / total * 100)) : null, fixed: c.repairFixed || 0, moved: c.movedFiles || 0, retrying: c.retrying || 0 };
+}
 function importProgress_(c) {
   c = c || {};
   var done = (c.fileBytes || 0) + (c.cur ? (c.cur.inPos || 0) : 0), total = c.totalBytes || 0;
@@ -419,7 +431,7 @@ function getImportState() {
   return {
     state: st.state || 'idle', message: st.message || '', updatedAt: st.updatedAt || null,
     cursor: { startedAt: c.startedAt || null, processed: c.processed || 0, skipped: c.skipped || 0, errors: c.errors || 0, chunks: c.chunks || 0, bytes: c.bytes || 0, files: c.files || 0, lastError: c.lastError || null, activeSeconds: c.activeSeconds || 0, curFile: c.cur ? c.cur.name : null, curOffset: c.cur ? c.cur.offset : 0, curSize: c.cur ? c.cur.size : 0 },
-    progress: importProgress_(c), repairNeeded: repairNeeded, failedMsgs: failedMsgs, autoRepair: importAutoRepairOn_(),
+    progress: importProgress_(c), repair: importRepairInfo_(c), repairNeeded: repairNeeded, failedMsgs: failedMsgs, autoRepair: importAutoRepairOn_(),
     pending: pendingCount, pendingCapped: pendingCount != null && pendingCount >= 2000,
     folderExists: folderExists, folderUrl: folderExists ? importFolderUrl_() : '', folderPath: rootFolderPath_() + ' › ' + IMPORT_FOLDER_NAME,
     history: importHistory_(),
