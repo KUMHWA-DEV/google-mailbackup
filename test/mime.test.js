@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseEml, mimeDecodeWords_ } from '../src/lib/mime.js';
+import { parseEml, mimeDecodeWords_, mboxScan, mboxUnwrap, gmailLabelsToIds } from '../src/lib/mime.js';
 
 // Node용 문자셋 디코더: 바이너리 문자열 → Buffer(latin1) → TextDecoder
 const decode = (bin, cs) => {
@@ -77,5 +77,28 @@ describe('parseEml', () => {
 
   it('decodes adjacent encoded words without inserting spaces', () => {
     expect(mimeDecodeWords_('=?UTF-8?B?7ZWc6riA?= =?UTF-8?B?IOygnOuqqQ==?=', decode)).toBe('한글 제목');
+  });
+});
+
+describe('mbox', () => {
+  const msg = (n) => 'From sender@example.com Mon Jul  1 09:00:00 2024\nFrom: a@example.com\nSubject: m' + n + '\n\nbody ' + n + '\n>From quoted line\n';
+  it('scans complete messages and leaves the trailing partial one for the next window', () => {
+    const bin = msg(1) + msg(2) + 'From x@example.com Mon Jul  1 09:00:00 2024\nSubject: partial';
+    const r = mboxScan(bin, false);
+    expect(r.messages.length).toBe(2);
+    expect(bin.slice(r.messages[1].start, r.messages[1].end)).toBe(msg(2));
+    expect(r.nextOffset).toBe(msg(1).length + msg(2).length);
+    const end = mboxScan(bin, true);
+    expect(end.messages.length).toBe(3);
+    expect(end.nextOffset).toBe(bin.length);
+  });
+  it('unwraps the From line and >From escapes', () => {
+    expect(mboxUnwrap(msg(7))).toBe('From: a@example.com\nSubject: m7\n\nbody 7\nFrom quoted line\n');
+  });
+  it('maps X-Gmail-Labels to label ids and user labels', () => {
+    const r = gmailLabelsToIds('Inbox,Important,Category Promotions,거래처/BBB,Opened');
+    expect(r.labelIds).toEqual(['INBOX', 'IMPORTANT', 'CATEGORY_PROMOTIONS', 'user:거래처/BBB']);
+    expect(r.labelMap).toEqual({ 'user:거래처/BBB': '거래처/BBB' });
+    expect(gmailLabelsToIds('보낸편지함').labelIds).toEqual(['SENT']);
   });
 });

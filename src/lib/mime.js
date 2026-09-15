@@ -162,9 +162,52 @@ function parseEml(bin, decodeCharset) {
     headers: { from: mimeDecodeWords_(h['from'], decodeCharset), to: mimeDecodeWords_(h['to'], decodeCharset), cc: mimeDecodeWords_(h['cc'], decodeCharset), subject: mimeDecodeWords_(h['subject'], decodeCharset) },
     bodyText: body,
     attachments: atts,
+    gmailLabels: h['x-gmail-labels'] || '', // Google Takeout mbox: "Inbox,Important,Category Promotions,라벨명"
   };
 }
 
+/**
+ * mbox 텍스트(바이너리 문자열)에서 완전한 메시지들의 [start, end) 오프셋을 찾는다.
+ * 메시지 경계는 줄 첫머리의 "From " (mbox 표준). 마지막 메시지는 파일 끝(isEnd=true)일 때만 완전한 것으로 본다.
+ * @returns {{messages:{start:number,end:number}[], nextOffset:number}} nextOffset = 다음 읽기 시작점(마지막 완전 메시지의 끝)
+ */
+function mboxScan(bin, isEnd) {
+  var starts = [];
+  if (bin.indexOf('From ') === 0) starts.push(0);
+  var re = /\r?\nFrom /g, m;
+  while ((m = re.exec(bin))) starts.push(m.index + m[0].length - 5);
+  var messages = [];
+  for (var i = 0; i < starts.length; i++) {
+    var end = i + 1 < starts.length ? starts[i + 1] : (isEnd ? bin.length : -1);
+    if (end < 0) break; // 마지막 조각은 다음 창에서
+    messages.push({ start: starts[i], end: end });
+  }
+  var nextOffset = messages.length ? messages[messages.length - 1].end : (starts.length ? starts[starts.length - 1] : (isEnd ? bin.length : 0));
+  return { messages: messages, nextOffset: nextOffset };
+}
+/** mbox 메시지 하나(“From …” 첫 줄 포함)에서 그 줄을 떼고 ">From " 이스케이프를 되돌린다. */
+function mboxUnwrap(chunk) {
+  var body = chunk.replace(/^From [^\n]*\r?\n/, '');
+  return body.replace(/(^|\r?\n)>(>*From )/g, '$1$2');
+}
+/**
+ * Google Takeout의 X-Gmail-Labels 값 → categorize()에 넣을 labelIds/labelMap.
+ * 시스템 라벨(Inbox/Sent/Draft/Category …, 한국어 표기 포함)은 Gmail ID로, 나머지는 사용자 라벨로.
+ */
+function gmailLabelsToIds(value) {
+  var ids = [], map = {};
+  var SYS = { 'inbox': 'INBOX', '받은편지함': 'INBOX', 'sent': 'SENT', '보낸편지함': 'SENT', 'draft': 'DRAFT', 'drafts': 'DRAFT', '임시보관함': 'DRAFT', 'spam': 'SPAM', '스팸함': 'SPAM', 'trash': 'TRASH', '휴지통': 'TRASH',
+    'important': 'IMPORTANT', '중요': 'IMPORTANT', 'starred': 'STARRED', '별표편지함': 'STARRED', 'unread': 'UNREAD', '읽지않음': 'UNREAD', 'opened': null, '열림': null, 'archived': null, '보관처리됨': null, 'chat': 'CHAT',
+    'category promotions': 'CATEGORY_PROMOTIONS', 'category social': 'CATEGORY_SOCIAL', 'category updates': 'CATEGORY_UPDATES', 'category forums': 'CATEGORY_FORUMS', 'category personal': 'CATEGORY_PERSONAL',
+    '카테고리 프로모션': 'CATEGORY_PROMOTIONS', '카테고리 소셜': 'CATEGORY_SOCIAL', '카테고리 업데이트': 'CATEGORY_UPDATES', '카테고리 포럼': 'CATEGORY_FORUMS', '카테고리 개인': 'CATEGORY_PERSONAL' };
+  String(value || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (name) {
+    var key = name.toLowerCase();
+    if (key in SYS) { if (SYS[key]) ids.push(SYS[key]); return; }
+    var id = 'user:' + name; ids.push(id); map[id] = name;
+  });
+  return { labelIds: ids, labelMap: map };
+}
+
 if (typeof module !== 'undefined') {
-  module.exports = { parseEml: parseEml, mimeDecodeWords_: mimeDecodeWords_, mimeParseParams_: mimeParseParams_, mimeStripHtml_: mimeStripHtml_ };
+  module.exports = { parseEml: parseEml, mboxScan: mboxScan, mboxUnwrap: mboxUnwrap, gmailLabelsToIds: gmailLabelsToIds, mimeDecodeWords_: mimeDecodeWords_, mimeParseParams_: mimeParseParams_, mimeStripHtml_: mimeStripHtml_ };
 }

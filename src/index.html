@@ -638,13 +638,13 @@
   <section class="page" id="tab-import" hidden>
     <div class="grid2" style="align-items:start">
       <div class="card">
-        <div class="cardhead"><h3>📥 예전 .eml 백업 가져오기</h3><span class="pill blue">백업과 별도로 동작</span></div>
+        <div class="cardhead"><h3>📥 예전 백업 가져오기 (.eml · .mbox)</h3><span class="pill blue">백업과 별도로 동작</span></div>
         <div class="steps">
-          <div class="step"><div class="n">1</div><div class="b"><b>파일을 이 폴더에 넣기</b><div class="how">내 드라이브 › Mail Backup › <b>_import</b> — <a id="impFolderLink" href="#" target="_blank" rel="noopener">폴더 열기 ↗</a><br>.eml 파일을 그대로 넣거나, 폴더째 끌어다 놓으세요. <b>첫 단계 하위 폴더 이름이 라벨(폴더)</b>이 됩니다. 예: <code>_import/2023 거래처/a.eml</code> → 라벨 "2023 거래처". 루트에 둔 파일은 받은편지함(내가 보낸 것은 보낸편지함).</div></div></div>
-          <div class="step"><div class="n">2</div><div class="b"><b>가져오기 시작</b><div class="how">오른쪽 ▶ 가져오기 시작을 누르면 서버가 파일을 하나씩 해석해 <code>Mail Backup/가져옴/&lt;라벨&gt;/</code>에 원본을, 첨부는 <code>_attachments_import/</code>에 저장하고 메일함에 넣습니다. 컴퓨터를 꺼도 계속되고, 백업과 동시에 돌아도 됩니다.</div></div></div>
-          <div class="step"><div class="n">3</div><div class="b"><b>끝나면</b><div class="how">메일함 라벨 목록에 <b>가져옴</b>이 생깁니다. 처리한 원본 파일은 기록되어 다시 처리되지 않으니 <code>_import</code> 폴더는 비워도 되고, 파일을 더 넣고 다시 시작하면 새 것만 처리합니다.</div></div></div>
+          <div class="step"><div class="n">1</div><div class="b"><b>파일을 이 폴더에 넣기</b><div class="how"><span id="impFolderPath">내 드라이브 › Mail Backup › <b>_import</b></span> — <span id="impFolderCtl"></span><br>.eml 파일이나 .mbox 파일(Google Takeout·Thunderbird·Apple Mail 내보내기)을 넣으세요. <b>mbox 여러 개와 eml 수천 개가 섞여 있어도 되고</b>, 하위 폴더에 나눠 넣어도 됩니다(폴더 이름은 분류에 쓰지 않습니다). 압축 mbox(.mbox.gz)는 40MB까지 그대로, 더 크면 압축을 풀어 넣으세요.</div></div></div>
+          <div class="step"><div class="n">2</div><div class="b"><b>가져오기 시작</b><div class="how">오른쪽 ▶ 가져오기 시작을 누르면 서버가 메일을 한 통씩 해석해 <b>메일 자체의 속성</b>으로 분류합니다. Gmail 내보내기(mbox)의 라벨 정보가 있으면 백업과 똑같은 규칙(사용자 라벨 › 보낸편지함 › 받은편지함 › 보관됨)으로, 없으면 보낸사람이 나면 보낸편지함·아니면 받은편지함으로 넣어 같은 폴더에 저장합니다. 컴퓨터를 꺼도 계속되고, 백업과 동시에 돌아도 됩니다.</div></div></div>
+          <div class="step"><div class="n">3</div><div class="b"><b>끝나면</b><div class="how">메일함에서 다른 메일과 똑같이 검색·열람됩니다. 처리한 파일은 기록되어 다시 처리되지 않으니 <code>_import</code> 폴더는 비워도 되고, 파일을 더 넣고 다시 시작하면 새 것만 처리합니다.</div></div></div>
         </div>
-        <p class="muted" style="margin:8px 0 0">지원: 표준 .eml(RFC 822) · multipart · base64/quoted-printable · UTF-8/EUC-KR 등 · 한 파일 30MB까지. 같은 메일(Message-ID)이 여러 파일에 있어도 한 번만 저장됩니다. Outlook .pst/.msg는 먼저 .eml로 변환해야 합니다.</p>
+        <p class="muted" style="margin:8px 0 0">지원: .eml(30MB까지) · .mbox(크기 제한 없음, 8MB씩 나눠 읽음) · .mbox.gz(40MB까지) · multipart · base64/quoted-printable · UTF-8/EUC-KR 등. 같은 메일(Message-ID)이 여러 파일에 있어도 한 번만 저장됩니다. Outlook .pst/.msg는 먼저 .eml이나 .mbox로 변환해야 합니다.</p>
       </div>
       <div class="card">
         <div class="cardhead"><h3 id="impState">가져오기</h3><div style="display:flex;gap:8px"><button type="button" class="primary" id="impStart">▶ 가져오기 시작</button><button type="button" class="warn" id="impStop" hidden>⏹ 중지</button><button type="button" class="primary" id="impResume" hidden>▶ 이어서</button><button type="button" id="impCancel" hidden>✕ 취소</button></div></div>
@@ -969,9 +969,10 @@
   function loadImport() { return call('getImportState').then(renderImport).catch(function (e) { toast('가져오기 상태 조회 실패: ' + (e.message || e), true); }); }
   function renderImport(s) {
     var c = s.cursor || {}, running = /^(running|queued|stopping)$/.test(s.state), paused = s.state === 'paused', failed = s.state === 'error';
-    $('impFolderLink').href = s.folderUrl || '#';
+    $('impFolderPath').innerHTML = esc(s.folderPath || '내 드라이브 › Mail Backup › _import').replace(/_import$/, '<b>_import</b>');
+    $('impFolderCtl').innerHTML = s.folderExists && s.folderUrl ? '<a href="' + esc(s.folderUrl) + '" target="_blank" rel="noopener">폴더 열기 ↗</a>' : '<span class="note" style="padding:2px 8px">아직 폴더가 없습니다</span> <button type="button" class="sm" id="impMkdir">📁 폴더 만들기</button>';
     $('impState').textContent = running ? (s.state === 'queued' ? '⏳ 대기열 · 곧 시작' : s.state === 'stopping' ? '⏹ 중지 중' : '⚙️ 가져오는 중') : paused ? '⏸ 중지됨' : failed ? '⚠️ 실패' : '가져오기';
-    $('impSub').textContent = (s.message || '') + (c.startedAt && running ? ' · 시작 ' + fmtDate(c.startedAt) + ' · 구간 ' + fmtNum(c.chunks) : '');
+    $('impSub').textContent = (s.message || '') + (c.startedAt && running ? ' · 시작 ' + fmtDate(c.startedAt) + ' · 구간 ' + fmtNum(c.chunks) : '') + (running && c.curFile ? ' · 현재 파일 ' + c.curFile + (c.curSize ? ' (' + Math.round(c.curOffset / c.curSize * 100) + '%)' : '') : '');
     $('impPending').textContent = s.pending == null ? '-' : fmtNum(s.pending) + (s.pendingCapped ? '+' : '');
     $('impDone').textContent = fmtNum(c.processed); $('impDup').textContent = fmtNum(c.skipped); $('impErr').textContent = fmtNum(c.errors);
     $('impLastErr').hidden = !c.lastError; $('impLastErr').textContent = c.lastError ? '마지막 오류: ' + c.lastError : '';
@@ -981,6 +982,7 @@
     if (running && !impTimer) impTimer = setTimeout(function tick() { impTimer = null; if (state.tab !== 'import') return; loadImport().then(function () { if (!impTimer && /^(running|queued|stopping)$/.test((state.imp || {}).state || '')) impTimer = setTimeout(tick, 5000); }); }, 5000);
     state.imp = s;
   }
+  $('tab-import').addEventListener('click', function (e) { if (e.target.id !== 'impMkdir') return; e.target.disabled = true; call('ensureImportFolder').then(function (r) { toast('📁 폴더를 만들었습니다'); if (r && r.url) window.open(r.url, '_blank'); loadImport(); }).catch(function (err) { toast('폴더 생성 실패: ' + (err.message || err), true); e.target.disabled = false; }); });
   $('impStart').addEventListener('click', function () { $('impStart').disabled = true; call('startImport').then(renderImport).catch(function (e) { toast('시작 실패: ' + (e.message || e), true); $('impStart').disabled = false; }); });
   $('impResume').addEventListener('click', function () { call('startImport').then(renderImport).catch(function (e) { toast('실패: ' + (e.message || e), true); }); });
   $('impStop').addEventListener('click', function () { call('stopImport').then(renderImport).catch(function (e) { toast('실패: ' + (e.message || e), true); }); });

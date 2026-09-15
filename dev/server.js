@@ -33,7 +33,7 @@ const history = [
 ];
 let preview = null;
 let oauthJson = null;
-const impState = { state: 'idle', message: '', pending: 9, cursor: { processed: 0, skipped: 0, errors: 0, chunks: 1, bytes: 0 }, history: [], timer: null };
+const impState = { state: 'idle', message: '', folderExists: false, pending: 9, cursor: { processed: 0, skipped: 0, errors: 0, chunks: 1, bytes: 0 }, history: [], timer: null };
 
 function dashboard() {
   return {
@@ -120,7 +120,8 @@ const api = {
   resumeBackup: () => { currentRun.chunks = (currentRun.chunks || 0) + 1; currentRun.chunkStartedAt = new Date().toISOString(); status = { state: 'running', message: '이어서 실행 (' + currentRun.chunks + '번째 구간)', updatedAt: new Date().toISOString() }; mockTicking(); return dashboard(); },
   cancelBackup: () => { clearTimeout(mockStart); clearInterval(mockTick); if (currentRun.startedAt) history.unshift({ ...currentRun, finishedAt: new Date().toISOString(), status: 'cancelled', notifiedTo: null }); status = { state: 'idle', message: '취소됨 · ' + (currentRun.processed || 0) + '건은 저장됨', updatedAt: new Date().toISOString() }; currentRun = {}; return dashboard(); },
   installWeeklyTrigger: () => api.installScheduledTrigger(),
-  getImportState: () => ({ state: impState.state, message: impState.message, cursor: impState.cursor, pending: impState.pending, pendingCapped: false, folderUrl: 'https://drive.google.com/drive/folders/LOCAL_IMPORT', history: impState.history }),
+  getImportState: () => ({ state: impState.state, message: impState.message, cursor: impState.cursor, pending: impState.pending, pendingCapped: false, folderExists: impState.folderExists, folderUrl: impState.folderExists ? 'https://drive.google.com/drive/folders/LOCAL_IMPORT' : '', folderPath: '내 드라이브 › Mail Backup › _import', history: impState.history }),
+  ensureImportFolder: () => { impState.folderExists = true; return { url: 'https://drive.google.com/drive/folders/LOCAL_IMPORT', path: '내 드라이브 › Mail Backup › _import' }; },
   startImport: () => { impState.state = 'running'; impState.message = '가져오는 중 (1번째 구간)'; impState.cursor.startedAt = new Date().toISOString(); clearInterval(impState.timer); impState.timer = setInterval(() => { if (impState.pending <= 0) { clearInterval(impState.timer); impState.state = 'idle'; impState.message = '완료: ' + impState.cursor.processed + '건 저장'; impState.history.unshift({ ...impState.cursor, finishedAt: new Date().toISOString(), status: 'done' }); return; } impState.pending -= 1; impState.cursor.processed += 1; impState.cursor.bytes += 120000; }, 800); return api.getImportState(); },
   stopImport: () => { clearInterval(impState.timer); impState.state = 'paused'; impState.message = '중지됨'; return api.getImportState(); },
   cancelImport: () => { clearInterval(impState.timer); impState.state = 'idle'; impState.message = '취소됨'; impState.cursor = { processed: 0, skipped: 0, errors: 0, chunks: 0, bytes: 0 }; return api.getImportState(); },
