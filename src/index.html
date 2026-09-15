@@ -563,6 +563,7 @@
         <label class="sw"><input type="checkbox" name="splitGmailTabs"><i></i>🗂 Gmail 탭(프로모션·소셜·업데이트·포럼) 별도 폴더</label>
         <label class="sw"><input type="checkbox" name="saveAttachments"><i></i>📎 첨부 별도 저장</label>
         <label class="sw"><input type="checkbox" name="notifyOnComplete"><i></i>📨 완료 알림 메일</label>
+        <label class="sw" title="백업이 끝날 때 Gmail 변경 이력을 읽어, 이미 백업된 메일의 라벨이 바뀌었으면 인덱스의 라벨·폴더를 따라 바꿉니다 (파일도 새 폴더로 이동)"><input type="checkbox" name="syncLabels"><i></i>🔁 라벨 변경 따라가기</label>
       </div>
       <div class="grid2" style="margin-top:12px">
         <div class="field"><label class="t">📨 알림 받을 주소</label><input type="email" name="notifyEmail" id="notifyEmail" placeholder="비우면 내 계정"></div>
@@ -971,6 +972,8 @@
     var imp = h.kind === 'import' || h.kind === 'repair', rep = h.kind === 'repair';
     var how = rep ? '<span class="pill gray" title="가져온 메일 오류 수정" style="margin-left:4px">🛠 오류 수정</span>' : imp ? '<span class="pill blue" title="예전 백업 가져오기" style="margin-left:4px">📥 가져오기</span>' : h.manual ? '<span title="수동 실행">🖱</span>' : '<span title="자동 실행">⏱</span>';
     if (imp) range = '-';
+    var ls = h.labelSync && (h.labelSync.changed || h.labelSync.pending) ? ' <span class="pill gray" title="라벨 변경 따라가기: ' + fmtNum(h.labelSync.checked) + '건 확인, ' + fmtNum(h.labelSync.changed) + '건 갱신' + (h.labelSync.moved ? ', 폴더 이동 ' + fmtNum(h.labelSync.moved) : '') + (h.labelSync.pending ? ', ' + fmtNum(h.labelSync.pending) + '건 다음에' : '') + '">🔁 ' + fmtNum(h.labelSync.changed) + '</span>' : '';
+    how += ls;
     if (rep) return '<tr><td>' + (h.errors ? '<span title="오류 ' + h.errors + '건 · ' + esc(h.lastError || '') + '">⚠️</span>' : '<span title="정상">✅</span>') + ' ' + fmtDate(h.startedAt) + ' ' + how + '</td>' + (full ? '<td>' + fmtDate(h.finishedAt) + '</td>' : '') +
       '<td>' + (h.activeSeconds ? secs(Math.round(h.activeSeconds)) : dur(h.startedAt, h.finishedAt)) + '</td><td colspan="2"><span style="color:var(--muted);font-size:12px">고침 <b>' + fmtNum(h.fixed) + '</b>행 · 옮김 <b>' + fmtNum(h.moved) + '</b>개' + (h.retryFiles ? ' · 재시도 파일 ' + fmtNum(h.retryFiles) + '개' : '') + '</span></td>' +
       '<td' + (h.errors ? ' style="color:var(--red);font-weight:700"' : '') + '>' + fmtNum(h.errors) + '</td><td>–</td><td style="color:var(--muted)">-</td><td><span style="color:var(--muted);font-size:12px">라벨·폴더·대화 묶음</span></td><td>–</td><td></td></tr>';
@@ -1063,7 +1066,7 @@
     $('impAutoRepair').checked = !!s.autoRepair;
     $('impRepair').hidden = !s.repairNeeded; $('impRepair').disabled = running; $('impRepair').title = running ? '가져오기가 끝나거나 중지된 뒤 누를 수 있습니다' : '예전 버전이 잘못 기록한 행을 고칩니다: #ERROR! 라벨·폴더, 한 대화로 묶인 메일'; // 고칠 행이 감지됐을 때만 보이고, 실행 중이면 눌리지 않음
     $('impRepairNote').hidden = !s.repairNeeded || repairing; $('impRepairRun').hidden = !running || repairing; // 오류 수정이 도는 동안은 안내 대신 진행 상자
-    var what = []; if (s.failedMsgs) what.push('저장에 실패한 메일 ' + fmtNum(s.failedMsgs) + '건을 다시 시도합니다 (원본 파일을 다시 훑되 이미 저장된 메일은 건너뜀)'); if (s.repairNeeded) what.push('예전 버전이 잘못 기록한 행이 있으면 라벨명 복원·파일 이동·대화 다시 묶기를 합니다');
+    var what = []; if (s.moveFailed) what.push('폴더 이동에 실패한 파일 ' + fmtNum(s.moveFailed) + '개를 다시 옮깁니다'); if (s.failedMsgs) what.push('저장에 실패한 메일 ' + fmtNum(s.failedMsgs) + '건을 다시 시도합니다 (원본 파일을 다시 훑되 이미 저장된 메일은 건너뜀)'); if (s.repairNeeded) what.push('예전 버전이 잘못 기록한 행이 있으면 라벨명 복원·파일 이동·대화 다시 묶기를 합니다');
     $('impRepairWhat').textContent = what.join(' · ') + '.';
     $('impHist').innerHTML = (s.history || []).map(function (h) {
       if (h.kind === 'repair') return '<tr><td>' + (h.errors ? '⚠️ ' : '✅ ') + fmtDate(h.startedAt) + ' <span class="pill gray">🛠 오류 수정</span></td><td>' + fmtDate(h.finishedAt) + '</td><td colspan="3"><span style="color:var(--muted);font-size:12px">고침 <b>' + fmtNum(h.fixed) + '</b>행 · 옮김 <b>' + fmtNum(h.moved) + '</b>개' + (h.retryFiles ? ' · 재시도 파일 ' + fmtNum(h.retryFiles) + '개' : '') + (h.errors ? ' · 오류 ' + fmtNum(h.errors) : '') + '</span></td><td>' + (h.activeSeconds ? secs(Math.round(h.activeSeconds)) : dur(h.startedAt, h.finishedAt)) + '</td></tr>';
@@ -1182,7 +1185,7 @@
   var form = $('settingsForm');
   function fillSettings(s) {
     ['initialStartDate', 'notifyEmail', 'intervalDays', 'maxPerRun', 'folderId', 'filterQuery'].forEach(function (k) { form.elements[k].value = s[k] == null ? '' : s[k]; });
-    ['notifyOnComplete', 'includeSent', 'saveAttachments', 'splitGmailTabs'].forEach(function (k) { form.elements[k].checked = !!s[k]; });
+    ['notifyOnComplete', 'includeSent', 'saveAttachments', 'splitGmailTabs', 'syncLabels'].forEach(function (k) { form.elements[k].checked = !!s[k]; });
     setRadio('layoutRadios', s.folderLayout);
     $('folderLink').hidden = !(state.dash && state.dash.folderUrl); if (state.dash && state.dash.folderUrl) $('folderLink').href = state.dash.folderUrl;
     if (state.dash && state.dash.folderPath) $('folderPathText').textContent = state.dash.folderPath;
@@ -1194,7 +1197,7 @@
     e.preventDefault();
     var s = {};
     ['initialStartDate', 'notifyEmail', 'intervalDays', 'maxPerRun', 'folderId', 'filterQuery'].forEach(function (k) { s[k] = form.elements[k].value; });
-    ['notifyOnComplete', 'includeSent', 'saveAttachments', 'splitGmailTabs'].forEach(function (k) { s[k] = form.elements[k].checked; });
+    ['notifyOnComplete', 'includeSent', 'saveAttachments', 'splitGmailTabs', 'syncLabels'].forEach(function (k) { s[k] = form.elements[k].checked; });
     s.folderLayout = $('layoutRadios').dataset.value;
     $('btnSave').disabled = true; $('btnSave').innerHTML = '<span class="spin"></span>';
     call('saveSettings', s).then(function (d) { renderDashboard(d); fillSettings(d.settings); toast('✔ 저장됨'); })

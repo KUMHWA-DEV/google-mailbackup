@@ -17,6 +17,7 @@ describe('normalizeSettings', () => {
     const s = normalizeSettings({ includeSent: 'false', notifyOnComplete: 'true', saveAttachments: false });
     expect(s.includeSent).toBe(false);
     expect(s.notifyOnComplete).toBe(true);
+    expect(s.syncLabels).toBe(true); // 기본 켜짐
     expect(s.saveAttachments).toBe(false);
   });
   it('validates date and enums, trims strings', () => {

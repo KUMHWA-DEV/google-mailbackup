@@ -334,13 +334,26 @@ function runBackupLocked_() {
     return;
   }
   props_().setProperty(PROP.LAST_SYNC_EPOCH, String(cursor.runStartEpoch));
+  // 라벨 변경 따라가기: 남은 시간(최소 90초, 하드 리밋 전까지) 안에서 바뀐 메일의 라벨·폴더를 갱신
+  var syncMsg = '';
+  if (settings.syncLabels !== false) {
+    try {
+      setStatus_({ state: 'running', message: '라벨 변경 확인 중', cursor: cursor });
+      var syncDeadline = Math.max(deadline, Math.min(startedAt + 330 * 1000, Date.now() + 90 * 1000));
+      var ls = syncLabels_(syncDeadline, settings);
+      cursor.labelSync = ls;
+      if (ls.changed || ls.pending) syncMsg = ' · 라벨 변경 ' + ls.changed + '건 반영' + (ls.moved ? ' (폴더 이동 ' + ls.moved + ')' : '') + (ls.pending ? ' · ' + ls.pending + '건은 다음 실행에서' : '');
+      else if (ls.note) syncMsg = ' · 라벨 동기화: ' + ls.note;
+      if (ls.changed) refreshSummary_();
+    } catch (e5) { Logger.log('라벨 동기화 실패: %s', e5.message); syncMsg = ' · 라벨 동기화 실패: ' + e5.message; }
+  }
   props_().deleteProperty(PROP.CURSOR_JSON);
   cursor.finishedAt = new Date().toISOString();
   appendRunHistory_(cursor);
   setStatus_({
     state: 'idle',
     message: '완료: 감지 ' + cursor.found + '건, 새로 ' + cursor.processed + '건 저장, ' + cursor.skipped + '건 이미 있음, 오류 ' + cursor.errors + '건' +
-      (cursor.limitHit ? ' (회당 최대 ' + maxPerRun + '건 도달, 나머지는 다음 실행)' : ''),
+      (cursor.limitHit ? ' (회당 최대 ' + maxPerRun + '건 도달, 나머지는 다음 실행)' : '') + syncMsg,
     cursor: cursor,
     finishedAt: cursor.finishedAt,
   });
@@ -405,7 +418,7 @@ function appendRunHistory_(cursor) {
     startedAt: cursor.startedAt, finishedAt: cursor.finishedAt, chunks: cursor.chunks, activeSeconds: cursor.activeSeconds || 0, timing: cursor.timing || null,
     found: cursor.found, processed: cursor.processed, skipped: cursor.skipped, errors: cursor.errors,
     bytes: cursor.bytes, mailFrom: cursor.mailFrom, mailTo: cursor.mailTo, query: cursor.query,
-    limitHit: !!cursor.limitHit, notifiedTo: cursor.notifiedTo || null,
+    limitHit: !!cursor.limitHit, notifiedTo: cursor.notifiedTo || null, labelSync: cursor.labelSync || null,
     manual: !!cursor.manual, expectedTotal: cursor.expectedTotal || 0, scope: cursor.scope || 'incremental',
     status: cursor.status || 'done', // done | cancelled
     byCategory: breakdownList(cursor.cats || {}).slice(0, 6),

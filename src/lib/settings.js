@@ -13,6 +13,7 @@ var SETTINGS_DEFAULTS = {
   splitGmailTabs: false,    // Gmail 탭(프로모션·소셜·업데이트·포럼)을 별도 폴더로 분리
   notifyEmail: '',          // 완료 알림 수신처 (비우면 실행 계정)
   notifyOnComplete: true,   // 완료 시 알림 메일 발송
+  syncLabels: true,         // 이미 백업된 메일의 라벨 변경을 Gmail 변경 이력으로 따라감 (폴더 이동 포함)
 };
 
 var SETTINGS_PROP_KEYS = {
@@ -27,6 +28,7 @@ var SETTINGS_PROP_KEYS = {
   splitGmailTabs: 'SPLIT_GMAIL_TABS',
   notifyEmail: 'NOTIFY_EMAIL',
   notifyOnComplete: 'NOTIFY_ON_COMPLETE',
+  syncLabels: 'SYNC_LABELS',
 };
 
 function toBool_(v, d) {
@@ -60,6 +62,7 @@ function normalizeSettings(input) {
     splitGmailTabs: toBool_(i.splitGmailTabs, SETTINGS_DEFAULTS.splitGmailTabs),
     notifyEmail: str_(i.notifyEmail),
     notifyOnComplete: toBool_(i.notifyOnComplete, SETTINGS_DEFAULTS.notifyOnComplete),
+    syncLabels: toBool_(i.syncLabels, SETTINGS_DEFAULTS.syncLabels),
   };
 }
 
