@@ -44,7 +44,7 @@ function dashboard() {
     summary: summarizeRecords(listRecords()),
     settings, triggerInstalled,
     folderUrl: 'https://drive.google.com/drive/folders/LOCAL', folderPath: '내 드라이브 › Mail Backup', indexSheetUrl: 'https://docs.google.com/spreadsheets/d/LOCAL',
-    webAppUrl: `http://localhost:${PORT}/`, importFolderUrl: 'https://drive.google.com/drive/folders/LOCAL_IMPORT', user: 'kumhwa_dev@spris.com (local)', isOwner: true, hasOauthClient: !!oauthJson, scriptId: 'LOCAL', deploymentId: '',
+    webAppUrl: `http://localhost:${PORT}/`, ...(typeof api !== 'undefined' && api._importForDash ? api._importForDash() : {}), importFolderUrl: 'https://drive.google.com/drive/folders/LOCAL_IMPORT', user: 'kumhwa_dev@spris.com (local)', isOwner: true, hasOauthClient: !!oauthJson, scriptId: 'LOCAL', deploymentId: '',
   };
 }
 
@@ -120,6 +120,8 @@ const api = {
   resumeBackup: () => { currentRun.chunks = (currentRun.chunks || 0) + 1; currentRun.chunkStartedAt = new Date().toISOString(); status = { state: 'running', message: '이어서 실행 (' + currentRun.chunks + '번째 구간)', updatedAt: new Date().toISOString() }; mockTicking(); return dashboard(); },
   cancelBackup: () => { clearTimeout(mockStart); clearInterval(mockTick); if (currentRun.startedAt) history.unshift({ ...currentRun, finishedAt: new Date().toISOString(), status: 'cancelled', notifiedTo: null }); status = { state: 'idle', message: '취소됨 · ' + (currentRun.processed || 0) + '건은 저장됨', updatedAt: new Date().toISOString() }; currentRun = {}; return dashboard(); },
   installWeeklyTrigger: () => api.installScheduledTrigger(),
+  // 대시보드에도 가져오기 이력/상태를 실어 보낸다
+  _importForDash: () => ({ importHistory: impState.history, importRun: { state: impState.state, message: impState.message, cursor: impState.cursor } }),
   getImportState: () => ({ state: impState.state, message: impState.message, cursor: impState.cursor, pending: impState.pending, pendingCapped: false, folderExists: impState.folderExists, folderUrl: impState.folderExists ? 'https://drive.google.com/drive/folders/LOCAL_IMPORT' : '', folderPath: '내 드라이브 › Mail Backup › _import', history: impState.history }),
   ensureImportFolder: () => { impState.folderExists = true; return { url: 'https://drive.google.com/drive/folders/LOCAL_IMPORT', path: '내 드라이브 › Mail Backup › _import' }; },
   startImport: () => { impState.state = 'running'; impState.message = '가져오는 중 (1번째 구간)'; impState.cursor.startedAt = new Date().toISOString(); clearInterval(impState.timer); impState.timer = setInterval(() => { if (impState.pending <= 0) { clearInterval(impState.timer); impState.state = 'idle'; impState.message = '완료: ' + impState.cursor.processed + '건 저장'; impState.history.unshift({ ...impState.cursor, finishedAt: new Date().toISOString(), status: 'done' }); return; } impState.pending -= 1; impState.cursor.processed += 1; impState.cursor.bytes += 120000; }, 800); return api.getImportState(); },

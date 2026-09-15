@@ -913,15 +913,25 @@
   function histRow(h, i, full) {
     var ok = h.status === 'cancelled' ? '<span title="취소됨 · ' + fmtNum(h.processed) + '건은 저장됨">✖</span>' : h.errors ? '<span title="오류 ' + h.errors + '건">⚠️</span>' : '<span title="정상">✅</span>';
     var range = h.mailFrom ? fmtDayShort(h.mailFrom) + ' ~ ' + fmtDayShort(h.mailTo) : '-';
-    var how = h.manual ? '<span title="수동 실행">🖱</span>' : '<span title="자동 실행">⏱</span>';
+    var imp = h.kind === 'import';
+    var how = imp ? '<span class="pill blue" title="예전 백업 가져오기" style="margin-left:4px">📥 가져오기</span>' : h.manual ? '<span title="수동 실행">🖱</span>' : '<span title="자동 실행">⏱</span>';
+    if (imp) range = '-';
     return '<tr' + (h.status === 'cancelled' ? ' class="held"' : '') + '><td>' + ok + ' ' + fmtDate(h.startedAt) + ' ' + how + '</td>' + (full ? '<td>' + fmtDate(h.finishedAt) + '</td>' : '') +
       '<td title="' + esc(timingTip(h)) + '">' + (h.activeSeconds ? secs(h.activeSeconds) : dur(h.startedAt, h.finishedAt)) + (h.timing ? ' <span style="color:var(--faint)">⏱</span>' : '') + '</td>' +
       '<td>' + fmtNum(runTarget(h)) + (h.skipped ? ' <small style="color:var(--faint)" title="이미 저장돼 있어 건너뜀">(' + fmtNum(h.skipped) + ' 기존)</small>' : '') + '</td><td><b style="color:var(--blue-ink)">' + fmtNum(h.processed) + '</b></td>' +
       '<td' + (h.errors ? ' style="color:var(--red);font-weight:700"' : '') + '>' + fmtNum(h.errors) + '</td><td>' + fmtBytes(h.bytes) + '</td>' +
       '<td style="color:var(--muted)">' + range + (h.limitHit ? ' <span class="pill gray" title="회당 최대 건수 도달">⏭</span>' : '') + '</td>' +
-      '<td>' + catChips(h.byCategory, 3) + '</td>' +
+      '<td>' + (imp ? '<span style="color:var(--muted);font-size:12px">' + (h.files ? '파일 ' + fmtNum(h.files) + '개' : '.eml/.mbox') + '</span>' : catChips(h.byCategory, 3)) + '</td>' +
       '<td>' + (h.notifiedTo ? '<span title="' + esc(h.notifiedTo) + '">📨</span>' : '<span style="color:var(--faint)">–</span>') + '</td>' +
-      '<td style="text-align:right"><button type="button" class="ib" data-run="' + i + '" title="이 회차 메일 보기">📬</button></td></tr>';
+      '<td style="text-align:right">' + (imp ? '' : '<button type="button" class="ib" data-run="' + h._bi + '" title="이 회차 메일 보기">📬</button>') + '</td></tr>';
+  }
+  /** 가져오기 진행 중 행 (백업 진행 행과 같은 열 구성) */
+  function importRunningRow(ir, full) {
+    var c = ir.cursor || {}, label = ir.state === 'queued' ? '⏳ 대기열' : ir.state === 'paused' ? '⏸ 중지됨' : ir.state === 'error' ? '⚠️ 실패' : ir.state === 'stopping' ? '⏹ 중지 중' : '⚙️ 진행 중';
+    return '<tr class="runrow' + (ir.state === 'paused' || ir.state === 'error' ? ' held' : '') + '"><td>' + label + (c.startedAt ? ' ' + fmtDate(c.startedAt) : '') + ' <span class="pill blue" style="margin-left:4px">📥 가져오기</span></td>' + (full ? '<td>–</td>' : '') +
+      '<td>' + secs(c.activeSeconds || 0) + '</td><td>' + fmtNum((c.processed || 0) + (c.skipped || 0) + (c.errors || 0)) + '</td><td><b style="color:var(--blue-ink)">' + fmtNum(c.processed || 0) + '</b></td>' +
+      '<td' + (c.errors ? ' style="color:var(--red);font-weight:700"' : '') + '>' + fmtNum(c.errors || 0) + '</td><td>' + fmtBytes(c.bytes || 0) + '</td><td style="color:var(--muted)">-</td>' +
+      '<td><span style="color:var(--muted);font-size:12px">' + esc(c.cur ? (c.cur.name || '') : (ir.message || '')) + '</span></td><td>–</td><td></td></tr>';
   }
   function runningRow(d, full) {
     var r = d.currentRun || {}, p = r.progress || {}, queued = d.state === 'queued', exp = r.expectedTotal || 0;
@@ -936,10 +946,16 @@
   }
   function renderHistory(hist) {
     var d = state.dash || {}, running = d.state === 'running' || d.state === 'queued' || d.state === 'stopping' || d.state === 'paused' || d.state === 'error';
-    $('histCount').textContent = hist.length + (running ? 1 : 0);
-    var empty = running ? '' : '<tr><td colspan="12" class="empty">아직 실행 이력이 없습니다</td></tr>';
-    $('histMini').innerHTML = (running ? runningRow(d, false) : '') + (hist.slice(0, 5).map(function (h, i) { return histRow(h, i, false); }).join('') || empty);
-    $('histRows').innerHTML = (running ? runningRow(d, true) : '') + (hist.map(function (h, i) { return histRow(h, i, true); }).join('') || empty);
+    var ir = d.importRun || {}, impRunning = /^(running|queued|stopping|paused|error)$/.test(ir.state || '');
+    // 백업 이력 + 가져오기 이력을 시작 시각순으로 합쳐 보여준다 (📬 버튼은 백업 회차에만)
+    var all = hist.map(function (h, i) { return Object.assign({ kind: 'backup', _bi: i }, h); })
+      .concat((d.importHistory || []).map(function (h) { return Object.assign({ kind: 'import' }, h); }))
+      .sort(function (a, b) { return String(b.startedAt || '').localeCompare(String(a.startedAt || '')); });
+    $('histCount').textContent = all.length + (running ? 1 : 0) + (impRunning ? 1 : 0);
+    var empty = (running || impRunning) ? '' : '<tr><td colspan="12" class="empty">아직 실행 이력이 없습니다</td></tr>';
+    var head = function (full) { return (running ? runningRow(d, full) : '') + (impRunning ? importRunningRow(ir, full) : ''); };
+    $('histMini').innerHTML = head(false) + (all.slice(0, 5).map(function (h, i) { return histRow(h, i, false); }).join('') || empty);
+    $('histRows').innerHTML = head(true) + (all.map(function (h, i) { return histRow(h, i, true); }).join('') || empty);
   }
   function onRunClick(e) {
     var b = e.target.closest('button[data-run]'); if (!b) return;
