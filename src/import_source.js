@@ -110,13 +110,91 @@ function importMessage_(bin, fallbackId, backedUp, settings, srcFileId) {
   var attachmentFiles = saveAttachments_(id.replace(/^eml:/, ''), blobs, date);
   var attachmentNames = attachmentFiles.length ? attachmentFiles.map(function (f) { return f.name; }) : m.attachments.map(function (a) { return a.name; });
   var row = buildIndexRow({
-    id: id, threadId: 'src:' + srcFileId, date: date, category: cls.category,
+    id: id, threadId: importThreadId_(m.threadHint), date: date, category: cls.category,
     labelNames: cls.labelNames, headers: m.headers, snippet: String(m.bodyText || '').replace(/\s+/g, ' ').slice(0, 160),
     sizeEstimate: bin.length, attachmentNames: attachmentNames, attachmentFiles: attachmentFiles, bodyPreview: m.bodyText,
     driveFileId: saved.fileId, driveUrl: saved.url, backedUpAt: new Date(),
   });
   return { row: row, id: id, skipped: false, bytes: bin.length };
 }
+/** 대화 묶음 키: Takeout X-GM-THRID 는 Gmail threadId(16진)와 같아 백업분과 합쳐지고, 그 외는 대화 첫 Message-ID 해시. 없으면 '' (메일 단독) */
+function importThreadId_(hint) {
+  hint = String(hint || '');
+  if (hint.indexOf('gm:') === 0) return hint.slice(3);
+  if (hint.indexOf('ref:') === 0) return 'ref:' + sha1Hex_(hint.slice(4)).slice(0, 24);
+  return '';
+}
+
+// ---------- 예전 버전이 남긴 행 복구: 인코딩된 라벨명이 수식(#ERROR!)으로 들어간 셀, 원본 파일 ID로 묶인 threadId ----------
+var IMPORT_REPAIR_PROP = 'IMPORT_REPAIR_V1_DONE';
+/** 복구할 행이 있는지 (한 번 끝나면 속성으로 기억해 다시 훑지 않음) */
+function importRepairNeeded_() {
+  if (getProp_(IMPORT_REPAIR_PROP, '') === '1') return false;
+  try {
+    var sheet = importSheet_(), last = sheet.getLastRow();
+    if (last < 2) { props_().setProperty(IMPORT_REPAIR_PROP, '1'); return false; }
+    var vals = sheet.getRange(2, 1, last - 1, 2).getValues();
+    for (var i = 0; i < vals.length; i++) if (String(vals[i][0]).indexOf('eml:') === 0 && String(vals[i][1]).indexOf('src:') === 0) return true;
+    var f = sheet.getRange(2, INDEX_HEADERS.indexOf('category') + 1, last - 1, 1).getFormulas();
+    for (var j = 0; j < f.length; j++) if (f[j][0]) return true;
+    props_().setProperty(IMPORT_REPAIR_PROP, '1');
+    return false;
+  } catch (e) { return false; }
+}
+/**
+ * 복구 한 구간: 행마다 (1) 수식이 된 카테고리/라벨 셀을 디코딩한 텍스트로, (2) 파일을 올바른 카테고리 폴더로 이동, (3) threadId를 메일 헤더(X-GM-THRID 등)로.
+ * @returns {{done:boolean, fixed:number, total:number}}
+ */
+function repairImportRows_(cursor, deadline, settings) {
+  var sheet = importSheet_(), last = sheet.getLastRow(), cols = INDEX_HEADERS.length;
+  var out = { done: true, fixed: cursor.repairFixed || 0, total: Math.max(0, last - 1) };
+  if (last < 2) return out;
+  var C = { id: 0, thread: 1, date: 2, category: 3, labels: 5, fileId: INDEX_HEADERS.indexOf('driveFileId') };
+  var startRow = cursor.repairRow || 2;
+  var BATCH = 100;
+  for (var r0 = startRow; r0 <= last; r0 += BATCH) {
+    var n = Math.min(BATCH, last - r0 + 1);
+    var rng = sheet.getRange(r0, 1, n, cols), vals = rng.getValues(), forms = rng.getFormulas(), changed = false;
+    for (var i = 0; i < n; i++) {
+      if (Date.now() > deadline) { cursor.repairRow = r0 + i; cursor.repairFixed = out.fixed; if (changed) rng.setValues(vals.map(sheetSafeRowGas_)); out.done = false; return out; }
+      var id = String(vals[i][C.id] || ''); if (id.indexOf('eml:') !== 0) continue;
+      var touched = false;
+      for (var c = 0; c < cols; c++) if (forms[i][c] && c !== C.category && c !== C.labels) { vals[i][c] = mimeDecodeWords_(forms[i][c], decodeCharsetGas_); touched = true; } // 수식이 된 다른 셀(제목 등)은 원문 텍스트로
+      if (forms[i][C.category]) { // '=?UTF-8?B?…?=' 가 수식으로 들어감 → 디코딩한 라벨명으로, 파일도 그 폴더로
+        var cat = mimeDecodeWords_(forms[i][C.category], decodeCharsetGas_).replace(/\//g, '-').trim() || '받은편지함';
+        vals[i][C.category] = cat; touched = true;
+        try { var f = DriveApp.getFileById(String(vals[i][C.fileId])); f.moveTo(ensureFolderPath_(buildFolderPath(cat, new Date(vals[i][C.date]), CONFIG.TIME_ZONE, settings.folderLayout))); } catch (e) { Logger.log('복구: 파일 이동 실패 %s', e.message); }
+      }
+      if (forms[i][C.labels]) { vals[i][C.labels] = forms[i][C.labels].split(',').map(function (x) { return mimeDecodeWords_(x.trim(), decodeCharsetGas_); }).join(', '); touched = true; }
+      if (String(vals[i][C.thread] || '').indexOf('src:') === 0) { // 원본 파일 ID로 묶여 있던 대화 → 메일 헤더에서 다시
+        var key = '';
+        try { var head = u8ToBin(readFileRange_(String(vals[i][C.fileId]), 0, 16383)); var cut = head.search(/\r?\n\r?\n/); key = importThreadId_(mimeThreadHint_(mimeParseHeaders_(cut > 0 ? head.slice(0, cut) : head))); } catch (e2) { Logger.log('복구: 헤더 읽기 실패 %s', e2.message); }
+        vals[i][C.thread] = key; touched = true;
+      }
+      if (touched) { changed = true; out.fixed += 1; }
+    }
+    if (changed) rng.setValues(vals.map(sheetSafeRowGas_));
+    cursor.repairRow = r0 + n; cursor.repairFixed = out.fixed;
+  }
+  // 백업 시트도 수식이 된 셀(예: '=== 공지 ===' 제목)을 텍스트로
+  try { repairSheetFormulas_(indexSheet_()); } catch (e4) { Logger.log('백업 시트 수식 복구 실패: %s', e4.message); }
+  // 비어 버린 '=?…' 폴더 정리
+  try { var root = rootFolder_(), it = root.getFolders(); while (it.hasNext()) { var d = it.next(); if (/^=\?/.test(d.getName()) && !d.getFiles().hasNext() && !d.getFolders().hasNext()) d.setTrashed(true); } } catch (e3) { /* 무시 */ }
+  props_().setProperty(IMPORT_REPAIR_PROP, '1');
+  delete cursor.repairRow;
+  return out;
+}
+/** 시트의 수식 셀을 모두 그 수식 원문(텍스트)으로 되돌린다 */
+function repairSheetFormulas_(sheet) {
+  var last = sheet.getLastRow(), cols = INDEX_HEADERS.length; if (last < 2) return 0;
+  var rng = sheet.getRange(2, 1, last - 1, cols), forms = rng.getFormulas(), vals = null, n = 0;
+  for (var i = 0; i < forms.length; i++) for (var c = 0; c < cols; c++) if (forms[i][c]) { if (!vals) vals = rng.getValues(); vals[i][c] = forms[i][c]; n += 1; }
+  if (vals) rng.setValues(vals.map(sheetSafeRowGas_));
+  return n;
+}
+function fmtRepair_(c) { return (c.repairRow ? (c.repairRow - 1) + '행' : '') + (c.repairFixed ? ' · ' + c.repairFixed + '건 수정' : ''); }
+function sheetSafeRowGas_(row) { return row.map(function (v) { return typeof v === 'string' && v.charAt(0) === '=' ? "'" + v : v; }); }
+
 /** 파일 하나를 끝까지 처리했다는 표시 행 (목록에는 안 보임, 다음 실행에서 건너뜀). failed=true 면 'srcfail:' 기록만 남기고 다음 "시작" 때 다시 시도한다 */
 function importDoneRow_(fileId, note, failed) {
   return buildIndexRow({ id: 'emldup:' + fileId, threadId: (failed ? 'srcfail:' : 'src:') + fileId, date: new Date(), category: failed ? '가져옴-실패' : '가져옴-처리됨', labelNames: [], headers: { subject: note || '' }, sizeEstimate: 0, backedUpAt: new Date() });
@@ -221,6 +299,10 @@ function getImportState() {
     var pending = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === IMPORT_FN; });
     if (!pending && importCursor_()) { try { scheduleImport_(5 * 1000); } catch (e) { /* 무시 */ } setImportStatus_({ state: 'queued', message: '실행이 끊겨 다시 예약함' }); st = importStatus_(); }
   }
+  if (!/^(running|queued|stopping)$/.test(st.state || '') && importRepairNeeded_()) { // 예전 행 복구가 필요하면 백그라운드 실행 예약
+    saveImportCursor_(importCursor_() || newImportCursor_());
+    try { scheduleImport_(5 * 1000); setImportStatus_({ state: 'queued', message: '가져온 메일 복구(라벨·폴더·대화 묶음) 예약 · 곧 시작' }); st = importStatus_(); } catch (e) { /* 무시 */ }
+  }
   var pendingCount = null, folderExists = false;
   try {
     folderExists = !!importFolder_(false);
@@ -261,6 +343,13 @@ function runImport() {
     cursor.chunks += 1;
     tickStatus('가져오는 중 (' + cursor.chunks + '번째 구간)');
     sheet = importSheet_();
+    if (importRepairNeeded_()) { // 예전 버전이 남긴 행 복구를 먼저 (라벨명·폴더·대화 묶음)
+      tickStatus('가져온 메일 복구 중 (라벨·폴더·대화 묶음)' + (cursor.repairRow ? ' · ' + fmtRepair_(cursor) : ''));
+      var rep = repairImportRows_(cursor, deadline, settings);
+      cursor.repairedTotal = rep.fixed;
+      if (!rep.done) { saveImportCursor_(cursor); scheduleImport_(); setImportStatus_({ state: 'running', message: '복구 중 ' + fmtRepair_(cursor) + ' · 1분 뒤 이어서', cursor: cursor }); return; }
+      refreshSummary_();
+    }
     var backedUp = loadBackedUpIds_();
     var handleMessage = function (bin, fallbackId, srcId) {
       try {
@@ -342,9 +431,9 @@ function runImport() {
     if (!exhausted) { saveImportCursor_(cursor); scheduleImport_(); setImportStatus_({ state: 'running', message: '구간 ' + cursor.chunks + ' 완료 · 1분 뒤 이어서', cursor: cursor }); refreshSummary_(); return; }
     props_().deleteProperty(IMPORT_PROP.CURSOR);
     cursor.finishedAt = new Date().toISOString();
-    appendImportHistory_(cursor);
+    if (cursor.processed || cursor.skipped || cursor.errors || cursor.files) appendImportHistory_(cursor);
     var nFailed = Object.keys(cursor.failed || {}).length;
-    setImportStatus_({ state: 'idle', message: '완료: ' + cursor.processed + '건 저장, ' + cursor.skipped + '건 중복, 오류 ' + cursor.errors + '건 (파일 ' + cursor.files + '개)' + (nFailed ? ' · 실패한 파일 ' + nFailed + '개는 "가져오기 시작"을 다시 누르면 재시도합니다' : ''), cursor: cursor, finishedAt: cursor.finishedAt });
+    setImportStatus_({ state: 'idle', message: (cursor.repairedTotal ? '복구 완료: ' + cursor.repairedTotal + '건의 라벨·폴더·대화 묶음 수정 · ' : '') + '완료: ' + cursor.processed + '건 저장, ' + cursor.skipped + '건 중복, 오류 ' + cursor.errors + '건 (파일 ' + cursor.files + '개)' + (nFailed ? ' · 실패한 파일 ' + nFailed + '개는 "가져오기 시작"을 다시 누르면 재시도합니다' : ''), cursor: cursor, finishedAt: cursor.finishedAt });
     refreshSummary_();
   } catch (e) {
     try { flush(); } catch (e2) { /* 무시 */ }

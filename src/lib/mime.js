@@ -162,7 +162,9 @@ function parseEml(bin, decodeCharset) {
     headers: { from: mimeDecodeWords_(h['from'], decodeCharset), to: mimeDecodeWords_(h['to'], decodeCharset), cc: mimeDecodeWords_(h['cc'], decodeCharset), subject: mimeDecodeWords_(h['subject'], decodeCharset) },
     bodyText: body,
     attachments: atts,
-    gmailLabels: h['x-gmail-labels'] || '', // Google Takeout mbox: "Inbox,Important,Category Promotions,라벨명"
+    // Google Takeout mbox: "Inbox,Important,Category Promotions,라벨명" — 한글 라벨은 =?UTF-8?B?…?= 로 인코딩돼 있으므로 항목별로 푼다
+    threadHint: mimeThreadHint_(h),
+    gmailLabels: String(h['x-gmail-labels'] || '').split(',').map(function (x) { return mimeDecodeWords_(x.trim(), decodeCharset); }).filter(Boolean).join(','),
   };
 }
 
@@ -190,6 +192,28 @@ function mboxUnwrap(chunk) {
   var body = chunk.replace(/^From [^\n]*\r?\n/, '');
   return body.replace(/(^|\r?\n)>(>*From )/g, '$1$2');
 }
+/** 10진 문자열 → 16진 (2^53 넘는 X-GM-THRID도 정확히). Gmail API의 threadId는 X-GM-THRID의 16진 표기라 백업분과 같은 대화로 묶인다 */
+function decToHex(dec) {
+  var digits = String(dec || '').replace(/\D/g, '').split('').map(Number); if (!digits.length) return '';
+  var hex = '';
+  while (digits.length) {
+    var rem = 0, next = [];
+    for (var i = 0; i < digits.length; i++) { var v = rem * 10 + digits[i]; var q = Math.floor(v / 16); rem = v % 16; if (next.length || q) next.push(q); }
+    hex = rem.toString(16) + hex; digits = next;
+  }
+  return hex;
+}
+/**
+ * 대화 묶음 힌트: 'gm:<hex threadId>' (Takeout의 X-GM-THRID) → 'ref:<대화 첫 Message-ID>' (References/In-Reply-To, 없으면 자기 Message-ID) → ''.
+ */
+function mimeThreadHint_(h) {
+  var thrid = String(h['x-gm-thrid'] || '').trim();
+  if (/^\d+$/.test(thrid)) return 'gm:' + decToHex(thrid);
+  var refs = String(h['references'] || '').match(/<[^>]+>/g);
+  var root = refs && refs.length ? refs[0] : (String(h['in-reply-to'] || '').match(/<[^>]+>/) || [])[0];
+  if (!root) root = (String(h['message-id'] || '').match(/<[^>]+>/) || [])[0];
+  return root ? 'ref:' + root.replace(/^<|>$/g, '').trim() : '';
+}
 /**
  * Google Takeout의 X-Gmail-Labels 값 → categorize()에 넣을 labelIds/labelMap.
  * 시스템 라벨(Inbox/Sent/Draft/Category …, 한국어 표기 포함)은 Gmail ID로, 나머지는 사용자 라벨로.
@@ -209,5 +233,5 @@ function gmailLabelsToIds(value) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { parseEml: parseEml, mboxScan: mboxScan, mboxUnwrap: mboxUnwrap, gmailLabelsToIds: gmailLabelsToIds, mimeDecodeWords_: mimeDecodeWords_, mimeParseParams_: mimeParseParams_, mimeStripHtml_: mimeStripHtml_ };
+  module.exports = { parseEml: parseEml, mboxScan: mboxScan, mboxUnwrap: mboxUnwrap, gmailLabelsToIds: gmailLabelsToIds, decToHex: decToHex, mimeThreadHint_: mimeThreadHint_, mimeParseHeaders_: mimeParseHeaders_, mimeDecodeWords_: mimeDecodeWords_, mimeParseParams_: mimeParseParams_, mimeStripHtml_: mimeStripHtml_ };
 }

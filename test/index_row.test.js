@@ -24,6 +24,13 @@ describe('headersFromPayload', () => {
 });
 
 describe('buildIndexRow', () => {
+  it('prefixes cells that start with "=" so Sheets keeps them as text', () => {
+    const row = buildIndexRow({ id: 'm2', date: new Date(), category: '=?UTF-8?B?x?=', labelNames: ['=a'], headers: { subject: '=== 공지 ===' }, backedUpAt: new Date() });
+    expect(row[INDEX_HEADERS.indexOf('category')]).toBe("'=?UTF-8?B?x?=");
+    expect(row[INDEX_HEADERS.indexOf('labels')]).toBe("'=a");
+    expect(row[INDEX_HEADERS.indexOf('subject')]).toBe("'=== 공지 ===");
+    expect(row[INDEX_HEADERS.indexOf('id')]).toBe('m2');
+  });
   it('produces a row aligned with INDEX_HEADERS', () => {
     const row = buildIndexRow({
       id: 'm1', threadId: 't1', date: new Date('2026-09-11T00:05:00Z'),

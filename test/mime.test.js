@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseEml, mimeDecodeWords_, mboxScan, mboxUnwrap, gmailLabelsToIds } from '../src/lib/mime.js';
+import { parseEml, mimeDecodeWords_, mboxScan, mboxUnwrap, gmailLabelsToIds, decToHex } from '../src/lib/mime.js';
 
 // Node용 문자셋 디코더: 바이너리 문자열 → Buffer(latin1) → TextDecoder
 const decode = (bin, cs) => {
@@ -75,6 +75,19 @@ describe('parseEml', () => {
     expect(m.attachments.map(a => a.name)).toEqual(['계약서.docx']);
   });
 
+  it('decodes encoded-word label names in X-Gmail-Labels (Takeout)', () => {
+    const eml = ['From: a@example.com', 'Subject: s', 'X-Gmail-Labels: Inbox,=?UTF-8?B?7KCE65617Iuk?=,Important', '', 'hi'].join('\r\n');
+    expect(parseEml(eml, decode).gmailLabels).toBe('Inbox,전략실,Important');
+    expect(gmailLabelsToIds(parseEml(eml, decode).gmailLabels).labelMap).toEqual({ 'user:전략실': '전략실' });
+  });
+  it('derives a thread hint: X-GM-THRID as Gmail hex thread id, else the References root, else own Message-ID', () => {
+    const base = ['From: a@example.com', 'Subject: s', 'Message-ID: <own@x>'];
+    expect(parseEml([...base, 'X-GM-THRID: 1811234567890123456', '', 'hi'].join('\r\n'), decode).threadHint).toBe('gm:' + (1811234567890123456n).toString(16));
+    expect(parseEml([...base, 'References: <root@x> <mid@x>', 'In-Reply-To: <mid@x>', '', 'hi'].join('\r\n'), decode).threadHint).toBe('ref:root@x');
+    expect(parseEml([...base, 'In-Reply-To: <mid@x>', '', 'hi'].join('\r\n'), decode).threadHint).toBe('ref:mid@x');
+    expect(parseEml([...base, '', 'hi'].join('\r\n'), decode).threadHint).toBe('ref:own@x');
+    expect(decToHex('255')).toBe('ff'); expect(decToHex('0')).toBe('0');
+  });
   it('decodes adjacent encoded words without inserting spaces', () => {
     expect(mimeDecodeWords_('=?UTF-8?B?7ZWc6riA?= =?UTF-8?B?IOygnOuqqQ==?=', decode)).toBe('한글 제목');
   });

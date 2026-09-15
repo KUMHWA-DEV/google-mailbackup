@@ -36,14 +36,17 @@ function buildIndexRow(m) {
   var h = m.headers || {};
   var body = String(m.bodyPreview || '');
   if (body.length > BODY_PREVIEW_MAX) body = body.slice(0, BODY_PREVIEW_MAX) + '\n…(생략)';
-  return [
+  return sheetSafeRow([
     m.id, m.threadId || '', isoOf(m.date), m.category, '', (m.labelNames || []).join(', '),
     h.from || '', h.to || '', h.cc || '', h.subject || '', m.snippet || '',
     Number(m.sizeEstimate || 0), (m.attachmentNames || []).join('; '),
     (m.attachmentFiles && m.attachmentFiles.length) ? JSON.stringify(m.attachmentFiles) : '',
     m.driveFileId || '', m.driveUrl || '', isoOf(m.backedUpAt), body,
-  ];
+  ]);
 }
+/** '=' 로 시작하는 문자열 셀은 시트가 수식으로 해석해 #ERROR! 가 되므로 앞에 작은따옴표를 붙여 텍스트로 고정한다 (읽을 때는 따옴표 없이 돌아옴) */
+function sheetSafeCell(v) { return typeof v === 'string' && v.charAt(0) === '=' ? "'" + v : v; }
+function sheetSafeRow(row) { return row.map(sheetSafeCell); }
 
 /** 인덱스 레코드의 첨부 목록 [{name, fileId?, size?, mime?}]. JSON이 없으면 이름 목록으로 대체. */
 function parseAttachmentFiles(rec) {
@@ -152,7 +155,7 @@ function decodeBase64Url(s) {
 
 if (typeof module !== 'undefined') {
   module.exports = {
-    INDEX_HEADERS: INDEX_HEADERS, INDEX_LIST_COLUMNS: INDEX_LIST_COLUMNS, headersFromPayload: headersFromPayload,
+    INDEX_HEADERS: INDEX_HEADERS, INDEX_LIST_COLUMNS: INDEX_LIST_COLUMNS, headersFromPayload: headersFromPayload, sheetSafeCell: sheetSafeCell,
     buildIndexRow: buildIndexRow, rowToRecord: rowToRecord, filterRecords: filterRecords,
     summarizeRecords: summarizeRecords, decodeBase64Url: decodeBase64Url,
     parseAttachmentFiles: parseAttachmentFiles, driveDownloadUrl: driveDownloadUrl,
