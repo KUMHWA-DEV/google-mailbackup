@@ -290,6 +290,20 @@ function startImport() {
   setImportStatus_({ state: 'queued', message: err ? '트리거 생성 실패: ' + err : '대기열 등록 · 곧 시작', cursor: c, queuedAt: new Date().toISOString() });
   return getImportState();
 }
+/** "오류 수정" 버튼: 예전 행 복구만 하는 실행을 예약한다 (가져오기 중이면 거부). 중지된 가져오기가 있으면 복구 뒤 다시 중지 상태로 둔다 */
+function startImportRepair() {
+  var st = importStatus_();
+  if (/^(running|queued|stopping)$/.test(st.state || '') || importLeaseHeld_()) throw new Error('가져오기가 실행 중입니다. 끝나거나 중지한 뒤 눌러 주세요');
+  if (!importRepairNeeded_()) return getImportState();
+  props_().deleteProperty(IMPORT_PROP.STOP);
+  deleteImportTriggers_();
+  var c = importCursor_() || newImportCursor_(); c.repairOnly = true; c.repairPrevState = st.state === 'paused' || st.state === 'error' ? 'paused' : 'idle';
+  saveImportCursor_(c);
+  var err = '';
+  try { scheduleImport_(5 * 1000); } catch (e) { err = String(e && e.message || e); }
+  setImportStatus_({ state: 'queued', message: err ? '트리거 생성 실패: ' + err : '오류 수정(라벨·폴더·대화 묶음) 예약 · 곧 시작', cursor: c, queuedAt: new Date().toISOString() });
+  return getImportState();
+}
 function stopImport() { props_().setProperty(IMPORT_PROP.STOP, '1'); deleteImportTriggers_(); if (!importLeaseHeld_()) { props_().deleteProperty(IMPORT_PROP.STOP); setImportStatus_({ state: importCursor_() ? 'paused' : 'idle', message: '중지됨' }); } else setImportStatus_({ state: 'stopping', message: '중지 중 · 현재 파일까지 저장 후 멈춥니다' }); return getImportState(); }
 function cancelImport() { props_().deleteProperty(IMPORT_PROP.STOP); deleteImportTriggers_(); var c = importCursor_(); props_().deleteProperty(IMPORT_PROP.CURSOR); if (c && c.cur && c.cur.id) { try { deleteImportSnapshot_(c.cur.id); } catch (e) { /* 무시 */ } } if (c && (c.processed || c.errors)) appendImportHistory_(Object.assign(c, { finishedAt: new Date().toISOString(), status: 'cancelled' })); setImportStatus_({ state: 'idle', message: '취소됨', cursor: {} }); return getImportState(); }
 
@@ -299,10 +313,7 @@ function getImportState() {
     var pending = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === IMPORT_FN; });
     if (!pending && importCursor_()) { try { scheduleImport_(5 * 1000); } catch (e) { /* 무시 */ } setImportStatus_({ state: 'queued', message: '실행이 끊겨 다시 예약함' }); st = importStatus_(); }
   }
-  if (!/^(running|queued|stopping)$/.test(st.state || '') && importRepairNeeded_()) { // 예전 행 복구가 필요하면 백그라운드 실행 예약
-    saveImportCursor_(importCursor_() || newImportCursor_());
-    try { scheduleImport_(5 * 1000); setImportStatus_({ state: 'queued', message: '가져온 메일 복구(라벨·폴더·대화 묶음) 예약 · 곧 시작' }); st = importStatus_(); } catch (e) { /* 무시 */ }
-  }
+  var repairNeeded = false; try { repairNeeded = !/^(running|queued|stopping)$/.test(st.state || '') && importRepairNeeded_(); } catch (e) { /* 무시 */ } // 감지만 하고 실행은 사용자가 버튼으로
   var pendingCount = null, folderExists = false;
   try {
     folderExists = !!importFolder_(false);
@@ -313,7 +324,7 @@ function getImportState() {
   return {
     state: st.state || 'idle', message: st.message || '', updatedAt: st.updatedAt || null,
     cursor: { startedAt: c.startedAt || null, processed: c.processed || 0, skipped: c.skipped || 0, errors: c.errors || 0, chunks: c.chunks || 0, bytes: c.bytes || 0, files: c.files || 0, lastError: c.lastError || null, activeSeconds: c.activeSeconds || 0, curFile: c.cur ? c.cur.name : null, curOffset: c.cur ? c.cur.offset : 0, curSize: c.cur ? c.cur.size : 0 },
-    progress: importProgress_(c),
+    progress: importProgress_(c), repairNeeded: repairNeeded,
     pending: pendingCount, pendingCapped: pendingCount != null && pendingCount >= 2000,
     folderExists: folderExists, folderUrl: folderExists ? importFolderUrl_() : '', folderPath: rootFolderPath_() + ' › ' + IMPORT_FOLDER_NAME,
     history: importHistory_(),
@@ -349,6 +360,13 @@ function runImport() {
       cursor.repairedTotal = rep.fixed;
       if (!rep.done) { saveImportCursor_(cursor); scheduleImport_(); setImportStatus_({ state: 'running', message: '복구 중 ' + fmtRepair_(cursor) + ' · 1분 뒤 이어서', cursor: cursor }); return; }
       refreshSummary_();
+    }
+    if (cursor.repairOnly) { // 오류 수정만 하는 실행: 파일 가져오기는 하지 않고 여기서 끝낸다
+      var prev = cursor.repairPrevState, fixedN = cursor.repairedTotal || 0; delete cursor.repairOnly; delete cursor.repairPrevState; delete cursor.repairedTotal;
+      var doneMsg = '오류 수정 완료: ' + fixedN + '건의 라벨·폴더·대화 묶음을 고쳤습니다';
+      if (prev === 'paused') { saveImportCursor_(cursor); setImportStatus_({ state: 'paused', message: doneMsg + ' · 중지된 가져오기는 "이어서"로 계속', cursor: cursor }); }
+      else { props_().deleteProperty(IMPORT_PROP.CURSOR); setImportStatus_({ state: 'idle', message: doneMsg, cursor: cursor }); }
+      return;
     }
     var backedUp = loadBackedUpIds_();
     var handleMessage = function (bin, fallbackId, srcId) {

@@ -648,8 +648,9 @@
         <p class="muted" style="margin:8px 0 0">지원: .eml(30MB까지) · .mbox · .mbox.gz · .zip(4GB까지, 안의 .mbox/.eml) — GB급도 4MB씩 스트리밍으로 읽고 풀면서 처리하고, 구간이 끝나면 압축 해제 상태를 저장해 다음 구간에서 그 자리부터 이어갑니다 · multipart · base64/quoted-printable · UTF-8/EUC-KR 등. 같은 메일(Message-ID)이 여러 파일에 있어도 한 번만 저장됩니다. Outlook .pst/.msg는 먼저 .eml이나 .mbox로 변환해야 합니다.</p>
       </div>
       <div class="card">
-        <div class="cardhead"><h3 id="impState">가져오기</h3><div style="display:flex;gap:8px"><button type="button" class="primary" id="impStart">▶ 가져오기 시작</button><button type="button" class="warn" id="impStop" hidden>⏹ 중지</button><button type="button" class="primary" id="impResume" hidden>▶ 이어서</button><button type="button" id="impCancel" hidden>✕ 취소</button></div></div>
+        <div class="cardhead"><h3 id="impState">가져오기</h3><div style="display:flex;gap:8px"><button type="button" id="impRepair" hidden title="예전 버전이 잘못 기록한 행을 고칩니다: #ERROR! 라벨·폴더, 한 대화로 묶인 메일">🛠 오류 수정</button><button type="button" class="primary" id="impStart">▶ 가져오기 시작</button><button type="button" class="warn" id="impStop" hidden>⏹ 중지</button><button type="button" class="primary" id="impResume" hidden>▶ 이어서</button><button type="button" id="impCancel" hidden>✕ 취소</button></div></div>
         <div id="impSub" style="font-size:13px;color:var(--ink2);margin-bottom:10px"></div>
+        <div id="impRepairNote" hidden class="note" style="margin:0 0 12px;padding:8px 12px">🛠 예전 버전이 잘못 기록한 가져오기 행이 있습니다 (#ERROR! 라벨·폴더, 한 대화로 묶인 메일). 지금 작업이 끝난 뒤 <b>오류 수정</b>을 누르면 라벨명을 복원하고 파일을 맞는 폴더로 옮기고 대화를 다시 묶습니다. 백그라운드에서 돌며 몇 분 걸릴 수 있습니다.</div>
         <div class="runbox" id="impBox" hidden style="margin:0 0 12px"></div>
         <div class="kpis" style="margin:0 0 12px"><div class="kpi"><span class="ic">📄</span><div class="txt"><div class="k">대기 중 파일</div><div class="v" id="impPending">-</div></div></div><div class="kpi"><span class="ic">✅</span><div class="txt"><div class="k">저장</div><div class="v" id="impDone">-</div></div></div><div class="kpi"><span class="ic">♻️</span><div class="txt"><div class="k">중복</div><div class="v" id="impDup">-</div></div></div><div class="kpi"><span class="ic">⚠️</span><div class="txt"><div class="k">오류</div><div class="v" id="impErr">-</div></div></div></div>
         <div class="note" id="impLastErr" hidden></div>
@@ -704,7 +705,7 @@
     if (on) { if (b.hidden) return; if (!b.dataset.busy) b.dataset.busy = b.innerHTML; b.disabled = true; b.innerHTML = '<span class="spin' + (/\b(primary|warn)\b/.test(b.className) ? '' : ' dark') + '"></span>' + (label ? ' ' + label : ''); }
     else if (b.dataset.busy != null) { b.innerHTML = b.dataset.busy; delete b.dataset.busy; b.disabled = false; }
   }
-  var DASH_BTNS = ['btnRun', 'btnStop', 'btnResume', 'btnCancel'], IMP_BTNS = ['impStart', 'impStop', 'impResume', 'impCancel'];
+  var DASH_BTNS = ['btnRun', 'btnStop', 'btnResume', 'btnCancel'], IMP_BTNS = ['impStart', 'impStop', 'impResume', 'impCancel', 'impRepair'];
   function busyAll(ids, on, label) { ids.forEach(function (id) { busy(id, on, label); }); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function fmtBytes(n) { n = Number(n) || 0; var u = ['B', 'KB', 'MB', 'GB', 'TB'], i = 0; while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; } return (i === 0 ? n : n.toFixed(n >= 100 ? 0 : 1)) + ' ' + u[i]; }
@@ -1031,6 +1032,8 @@
     $('impLastErr').hidden = !c.lastError; $('impLastErr').textContent = c.lastError ? '마지막 오류: ' + c.lastError : '';
     $('impStart').hidden = running || paused || failed; $('impStart').disabled = !s.pending; $('impStart').title = s.pending ? '' : (s.pending == null ? '대기 파일 수를 세지 못했습니다' : '_import 폴더에 가져올 파일이 없습니다');
     $('impStop').hidden = !running || s.state === 'stopping'; $('impResume').hidden = !(paused || failed); $('impCancel').hidden = !(paused || failed || s.state === 'stopping');
+    $('impRepair').hidden = !s.repairNeeded; $('impRepair').disabled = running; // 고칠 행이 감지됐을 때만 보이고, 실행 중이면 눌리지 않음
+    $('impRepairNote').hidden = !s.repairNeeded;
     $('impHist').innerHTML = (s.history || []).map(function (h) { return '<tr' + (h.status === 'cancelled' ? ' class="held"' : '') + '><td>' + (h.status === 'cancelled' ? '✖ ' : h.errors ? '⚠️ ' : '✅ ') + fmtDate(h.startedAt) + '</td><td>' + fmtDate(h.finishedAt) + '</td><td><b style="color:var(--blue-ink)">' + fmtNum(h.processed) + '</b></td><td>' + fmtNum(h.skipped) + '</td><td>' + fmtNum(h.errors) + '</td><td>' + fmtBytes(h.bytes) + '</td></tr>'; }).join('') || '<tr><td colspan="6" class="empty">아직 가져오기 이력이 없습니다</td></tr>';
     if (running && !impTimer) impTimer = setTimeout(function tick() { impTimer = null; if (state.tab !== 'import') return; loadImport().then(function () { if (!impTimer && /^(running|queued|stopping)$/.test((state.imp || {}).state || '')) impTimer = setTimeout(tick, 5000); }); }, 5000);
     state.imp = s;
@@ -1041,6 +1044,7 @@
   $('impResume').addEventListener('click', function () { impAction('startImport', '▶ 이어서 실행'); });
   $('impStop').addEventListener('click', function () { impAction('stopImport'); });
   $('impCancel').addEventListener('click', function () { impAction('cancelImport', '취소됨'); });
+  $('impRepair').addEventListener('click', function () { impAction('startImportRepair', '🛠 오류 수정을 예약했습니다 · 곧 시작'); });
 
   function loadDashboard(showBusy) {
     if (showBusy) busyAll(DASH_BTNS, true, '불러오는 중'); // 첫 로드·재조회: 데이터가 올 때까지 버튼 비활성 + 스피너 (주기 폴링은 제외)
