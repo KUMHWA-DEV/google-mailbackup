@@ -12,7 +12,7 @@ function rowsToRecords(rows) {
   const idx = {};
   header.forEach((h, i) => { if (h) idx[h] = i; });
   const useHeader = INDEX_HEADERS.every(h => idx[h] != null);
-  return rows.slice(1).map((r, i) => Object.assign({ _row: i + 2 }, rowsToRecordOne_(r, useHeader, idx))).filter(r => r && String(r.id || '').trim());
+  return rows.slice(1).map((r, i) => Object.assign({ _row: i + 2 }, rowsToRecordOne_(r, useHeader, idx))).filter(r => r && String(r.id || '').trim() && String(r.id).indexOf('emldup:') !== 0);
 }
 function rowsToRecordOne_(r, useHeader, idx) {
   if (!r || !r.length || !String(r[0] || '').trim()) return null;

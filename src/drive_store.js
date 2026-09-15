@@ -138,6 +138,7 @@ function loadIndexRecords_() {
   var last = sheet.getLastRow();
   if (last < 2) return [];
   var values = sheet.getRange(2, 1, last - 1, INDEX_LIST_COLUMNS).getValues();
+  values = values.filter(function (row) { return String(row[0] || '').indexOf('emldup:') !== 0; }); // 가져오기 중복 표시 행은 메일이 아님
   return values.map(function (row) {
     var rec = rowToRecord(row);
     if (rec.date instanceof Date) rec.date = rec.date.toISOString();
