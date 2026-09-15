@@ -96,7 +96,7 @@ function classifyLabels_(labelsCsv, fromHeader, settings) {
   var sent = !!me && String(fromHeader || '').toLowerCase().indexOf(me) >= 0;
   var labelIds = [], labelMap = {};
   if (labelsCsv) { var g = gmailLabelsToIds(labelsCsv); labelIds = g.labelIds; labelMap = g.labelMap; }
-  if (!labelIds.length) labelIds = [sent ? 'SENT' : 'INBOX'];
+  if (!labelsCsv) labelIds = [sent ? 'SENT' : 'INBOX']; // 라벨 정보가 아예 없는 .eml 만 기본값 (라벨이 있는데 전부 무시된 경우 = 보관됨)
   else if (sent && labelIds.indexOf('SENT') < 0 && labelIds.indexOf('INBOX') < 0) labelIds.push('SENT');
   return { category: categorize(labelIds, labelMap, { splitGmailTabs: settings.splitGmailTabs }), labelNames: labelNamesOf(labelIds, labelMap) };
 }
@@ -152,7 +152,14 @@ function importRepairNeeded_() {
   } catch (e) { return false; }
 }
 /** 잘못된 카테고리 값: 수식 오류 표시, 안 풀린 인코딩, 라벨 목록 전체가 통째로 들어간 것(쉼표 포함) */
-function repairBadCategory_(v) { v = String(v || ''); return v === '#ERROR!' || v.indexOf('=?') === 0 || v.indexOf(',') >= 0; }
+function repairBadCategory_(v) {
+  v = String(v || '').trim();
+  if (v === '#ERROR!' || v.indexOf('=?') === 0 || v.indexOf(',') >= 0) return true;
+  if (!v || SYSTEM_CATEGORY_NAMES[v]) return false; // 정상 시스템 폴더명
+  var ids = gmailLabelsToIds(v).labelIds; // 시스템 라벨 표기("중요편지함", "개인정보 카테고리", "열림" 등)가 폴더가 된 것
+  for (var i = 0; i < ids.length; i++) if (ids[i].indexOf('user:') === 0) return false;
+  return true;
+}
 /**
  * 복구 한 구간: 행마다 (1) 수식이 된 카테고리/라벨 셀을 디코딩한 텍스트로, (2) 파일을 올바른 카테고리 폴더로 이동, (3) threadId를 메일 헤더(X-GM-THRID 등)로.
  * @returns {{done:boolean, fixed:number, total:number}}

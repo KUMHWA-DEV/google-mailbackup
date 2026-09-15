@@ -13,13 +13,19 @@ var CATEGORY_NAMES = {
   CATEGORY_SOCIAL: '소셜',
   CATEGORY_UPDATES: '업데이트',
   CATEGORY_FORUMS: '포럼',
+  CATEGORY_PURCHASES: '구매',
+  SPAM: '스팸',
+  TRASH: '휴지통',
   ARCHIVED: '보관됨',
 };
 
 var SYSTEM_LABEL_IDS = {
   INBOX: 1, SENT: 1, DRAFT: 1, SPAM: 1, TRASH: 1, UNREAD: 1, STARRED: 1, IMPORTANT: 1, CHAT: 1,
-  CATEGORY_PERSONAL: 1, CATEGORY_PROMOTIONS: 1, CATEGORY_SOCIAL: 1, CATEGORY_UPDATES: 1, CATEGORY_FORUMS: 1,
+  CATEGORY_PERSONAL: 1, CATEGORY_PROMOTIONS: 1, CATEGORY_SOCIAL: 1, CATEGORY_UPDATES: 1, CATEGORY_FORUMS: 1, CATEGORY_PURCHASES: 1,
 };
+/** 카테고리(폴더) 이름 중 시스템 폴더에 해당하는 것 */
+var SYSTEM_CATEGORY_NAMES = {};
+Object.keys(CATEGORY_NAMES).forEach(function (k) { SYSTEM_CATEGORY_NAMES[CATEGORY_NAMES[k]] = k; });
 
 /**
  * @param {string[]|undefined} labelIds Gmail API labelIds
@@ -43,11 +49,14 @@ function categorize(labelIds, labelMap, opts) {
   }
   if (has.SENT) return CATEGORY_NAMES.SENT;
   if (has.DRAFT) return CATEGORY_NAMES.DRAFT;
+  if (has.SPAM) return CATEGORY_NAMES.SPAM;
+  if (has.TRASH) return CATEGORY_NAMES.TRASH;
   if (splitTabs) {
     if (has.CATEGORY_PROMOTIONS) return CATEGORY_NAMES.CATEGORY_PROMOTIONS;
     if (has.CATEGORY_SOCIAL) return CATEGORY_NAMES.CATEGORY_SOCIAL;
     if (has.CATEGORY_UPDATES) return CATEGORY_NAMES.CATEGORY_UPDATES;
     if (has.CATEGORY_FORUMS) return CATEGORY_NAMES.CATEGORY_FORUMS;
+    if (has.CATEGORY_PURCHASES) return CATEGORY_NAMES.CATEGORY_PURCHASES;
   }
   if (has.INBOX) return CATEGORY_NAMES.INBOX;
   return CATEGORY_NAMES.ARCHIVED;
@@ -63,5 +72,5 @@ function labelNamesOf(labelIds, labelMap) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { categorize: categorize, labelNamesOf: labelNamesOf, CATEGORY_NAMES: CATEGORY_NAMES };
+  module.exports = { categorize: categorize, labelNamesOf: labelNamesOf, CATEGORY_NAMES: CATEGORY_NAMES, SYSTEM_CATEGORY_NAMES: SYSTEM_CATEGORY_NAMES, SYSTEM_LABEL_IDS: SYSTEM_LABEL_IDS };
 }

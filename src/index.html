@@ -315,6 +315,9 @@
   .gm-nav .it { display: flex; align-items: center; gap: 14px; height: 32px; padding: 0 12px 0 24px; border-radius: 0 16px 16px 0; cursor: pointer; color: #202124; user-select: none; }
   .gm-nav .it:hover { background: rgba(60,64,67,.08); }
   .gm-nav .it.active { background: #d3e3fd; font-weight: 700; }
+  .gm-nav .it[draggable] { cursor: grab; }
+  .gm-nav .it.dragging { opacity: .4; }
+  .gm-nav .it.over { box-shadow: inset 0 2px 0 var(--blue); }
   .gm-nav .it .ic { width: 20px; text-align: center; font-size: 15px; flex: none; }
   .gm-nav .it .lb { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .gm-nav .it .ct { font-size: 12px; color: #444746; }
@@ -723,7 +726,8 @@
   function isoDay(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   function nameOnly(addr) { var s = String(addr || ''); var m = s.match(/^\s*"?([^"<]*)"?\s*<.*>/); return (m && m[1].trim()) || s; }
   function emailOf(addr) { var m = String(addr || '').match(/<([^>]+)>/); return m ? m[1] : String(addr || '').trim(); }
-  var GMAIL_TAB_NAMES = { '프로모션': 1, '소셜': 1, '업데이트': 1, '포럼': 1 };
+  var GMAIL_TAB_NAMES = { '프로모션': 1, '소셜': 1, '업데이트': 1, '포럼': 1, '구매': 1 };
+  var SYSTEM_CAT_NAMES = { '받은편지함': 1, '보낸편지함': 1, '임시보관함': 1, '보관됨': 1, '스팸': 1, '휴지통': 1, '프로모션': 1, '소셜': 1, '업데이트': 1, '포럼': 1, '구매': 1 }; // 폴더이지 라벨이 아님
   /** Gmail 자동 탭 폴더명은 설정(Gmail 탭 분리)이 꺼져 있으면 받은편지함으로 취급 */
   function isTabCat(c) { return !!(c && GMAIL_TAB_NAMES[c] && !(state.dash && state.dash.settings && state.dash.settings.splitGmailTabs)); }
   function foldCategories(list) {
@@ -1211,12 +1215,17 @@
   }
   var FOLDERS = [
     { key: '', ic: '📧', lb: '전체 메일' }, { key: 'inbox', ic: '📥', lb: '받은편지함' }, { key: 'sent', ic: '📤', lb: '보낸편지함' },
-    { key: 'starred', ic: '⭐', lb: '중요' }, { key: 'draft', ic: '📝', lb: '임시보관함' }, { key: 'attachments', ic: '📎', lb: '첨부파일' },
+    { key: 'starred', ic: '⭐', lb: '중요' }, { key: 'draft', ic: '📝', lb: '임시보관함' }, { key: 'archived', ic: '🗄', lb: '보관됨' },
+    { key: 'spam', ic: '🚫', lb: '스팸' }, { key: 'trash', ic: '🗑', lb: '휴지통' }, { key: 'attachments', ic: '📎', lb: '첨부파일' },
   ];
+  var OUT_OF_INBOX = { '임시보관함': 1, '보관됨': 1, '스팸': 1, '휴지통': 1 };
   function folderMatch(r, key) {
     if (!key) return true;
     if (key === 'sent') return isSentRec(r);
-    if (key === 'inbox') return !isSentRec(r) && r.category !== '임시보관함';
+    if (key === 'inbox') return !isSentRec(r) && !OUT_OF_INBOX[r.category];
+    if (key === 'archived') return r.category === '보관됨';
+    if (key === 'spam') return r.category === '스팸' || /(^|,\s*)SPAM(\s*,|$)/.test(String(r.labels || ''));
+    if (key === 'trash') return r.category === '휴지통' || /(^|,\s*)TRASH(\s*,|$)/.test(String(r.labels || ''));
     if (key === 'starred') return /(^|,\s*)STARRED(\s*,|$)/.test(String(r.labels || ''));
     if (key === 'draft') return r.category === '임시보관함' || /(^|,\s*)DRAFT(\s*,|$)/.test(String(r.labels || ''));
     if (key === 'attachments') return !!String(r.attachments || '').trim();
@@ -1349,22 +1358,36 @@
   $('advReset').addEventListener('click', function () { $('adv').reset(); setQuery(''); });
 
   // --- 내비 ---
-  function navItem(key, val, ic, lb, ct, active, swatch) {
-    return '<div class="it' + (active ? ' active' : '') + '" data-k="' + key + '" data-v="' + esc(val) + '">' + (swatch ? '<span class="sw" style="' + swatch + '"></span>' : '<span class="ic">' + ic + '</span>') + '<span class="lb">' + esc(lb) + '</span>' + (ct != null ? '<span class="ct">' + fmtNum(ct) + '</span>' : '') + '</div>';
+  /** 저장된 순서대로, 새로 생긴 라벨은 이름순으로 뒤에 */
+  function orderedLabels(names) {
+    var saved = (state.explorer && state.explorer.labelOrder) || [], have = {}; names.forEach(function (n) { have[n] = true; });
+    var out = saved.filter(function (n) { return have[n]; }), seen = {}; out.forEach(function (n) { seen[n] = true; });
+    names.filter(function (n) { return !seen[n]; }).sort().forEach(function (n) { out.push(n); });
+    return out;
+  }
+  var dragLabel = null, labelOrderSaveTimer = null;
+  function saveLabelOrderNow(order) {
+    state.explorer.labelOrder = order;
+    clearTimeout(labelOrderSaveTimer);
+    labelOrderSaveTimer = setTimeout(function () { call('saveLabelOrder', order).catch(function (e) { toast('라벨 순서 저장 실패: ' + (e.message || e), true); }); }, 600); // 연속 드래그는 한 번만 저장
+  }
+  function navItem(key, val, ic, lb, ct, active, swatch, draggable) {
+    return '<div class="it' + (active ? ' active' : '') + '" data-k="' + key + '" data-v="' + esc(val) + '"' + (draggable ? ' draggable="true"' : '') + '>' + (swatch ? '<span class="sw" style="' + swatch + '"></span>' : '<span class="ic">' + ic + '</span>') + '<span class="lb">' + esc(lb) + '</span>' + (ct != null ? '<span class="ct">' + fmtNum(ct) + '</span>' : '') + '</div>';
   }
   function renderNav(src) {
     var x = state.ex, html = '';
     FOLDERS.forEach(function (f) { html += navItem('folder', f.key, f.ic, f.lb, src.filter(function (r) { return folderMatch(r, f.key); }).length, x.folder === f.key && !x.category && !x.agenda); });
     var cats = {};
-    src.forEach(function (r) { if (r.category && !isTabCat(r.category)) cats[r.category] = (cats[r.category] || 0) + 1; });
-    html += '<div class="sec">라벨</div>';
-    Object.keys(cats).sort().forEach(function (c) { html += navItem('category', c, '', c, cats[c], x.category === c, 'background:' + LABEL_COLORS[hash(c) % LABEL_COLORS.length].split(':')[1]); });
+    src.forEach(function (r) { if (r.category && !isTabCat(r.category) && !SYSTEM_CAT_NAMES[r.category]) cats[r.category] = (cats[r.category] || 0) + 1; }); // 시스템 폴더는 위 목록에, 여기는 사용자 라벨만
+    var ordered = orderedLabels(Object.keys(cats));
+    html += '<div class="sec" title="드래그해서 순서를 바꿀 수 있습니다 · 자동 저장">라벨 <span style="font-weight:400;color:var(--faint)">↕</span></div>';
+    ordered.forEach(function (c) { html += navItem('category', c, '', c, cats[c], x.category === c, 'background:' + LABEL_COLORS[hash(c) % LABEL_COLORS.length].split(':')[1], true); });
     var hist = (state.explorer && state.explorer.history) || [];
     html += '<div class="runsel">🕘 백업 회차<select id="exRun"><option value="all">전체</option>' + hist.map(function (h, i) { return '<option value="' + i + '"' + (String(i) === x.run ? ' selected' : '') + '>' + fmtDay(h.startedAt) + ' (' + fmtNum(h.processed) + '건)</option>'; }).join('') + '</select></div>';
     $('exNav').innerHTML = html;
     var chips = '';
     FOLDERS.forEach(function (f) { chips += '<button type="button" class="chip' + (x.folder === f.key && !x.category ? ' active' : '') + '" data-k="folder" data-v="' + f.key + '">' + f.ic + ' ' + f.lb + '</button>'; });
-    Object.keys(cats).sort().forEach(function (c) { chips += '<button type="button" class="chip' + (x.category === c ? ' active' : '') + '" data-k="category" data-v="' + esc(c) + '">' + esc(c) + '</button>'; });
+    ordered.forEach(function (c) { chips += '<button type="button" class="chip' + (x.category === c ? ' active' : '') + '" data-k="category" data-v="' + esc(c) + '">' + esc(c) + '</button>'; });
     $('exNavChips').innerHTML = chips;
     $('exWhere').textContent = x.category ? '🏷 ' + x.category : (FOLDERS.filter(function (f) { return f.key === x.folder; })[0] || FOLDERS[0]).lb;
   }
@@ -1443,6 +1466,17 @@
   }
   function onNavClick(e) { var it = e.target.closest('[data-k]'); if (!it || it.tagName === 'SELECT') return; setFilter(it.dataset.k, it.dataset.v); }
   $('exNav').addEventListener('click', onNavClick);
+  // 라벨 드래그 정렬 (HTML5 drag & drop) → 순서 자동 저장
+  $('exNav').addEventListener('dragstart', function (e) { var it = e.target.closest('.it[draggable]'); if (!it) return; dragLabel = it.dataset.v; it.classList.add('dragging'); try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', dragLabel); } catch (err) { /* 무시 */ } });
+  $('exNav').addEventListener('dragend', function () { dragLabel = null; document.querySelectorAll('#exNav .it.dragging, #exNav .it.over').forEach(function (n) { n.classList.remove('dragging', 'over'); }); });
+  $('exNav').addEventListener('dragover', function (e) { var it = e.target.closest('.it[draggable]'); if (!it || dragLabel == null) return; e.preventDefault(); document.querySelectorAll('#exNav .it.over').forEach(function (n) { n.classList.remove('over'); }); if (it.dataset.v !== dragLabel) it.classList.add('over'); });
+  $('exNav').addEventListener('drop', function (e) {
+    var it = e.target.closest('.it[draggable]'); if (!it || dragLabel == null) return; e.preventDefault();
+    var items = Array.prototype.slice.call(document.querySelectorAll('#exNav .it[draggable]')).map(function (n) { return n.dataset.v; });
+    var from = items.indexOf(dragLabel), to = items.indexOf(it.dataset.v); if (from < 0 || to < 0 || from === to) return;
+    items.splice(from, 1); items.splice(to, 0, dragLabel);
+    saveLabelOrderNow(items); renderNav(sourceRecords());
+  });
   $('exNavChips').addEventListener('click', onNavClick);
   $('exNav').addEventListener('change', function (e) { if (e.target.id === 'exRun') { state.ex.run = e.target.value; state.ex.selected = null; state.ex.page = 1; renderExplorer(); } });
   var qTimer;

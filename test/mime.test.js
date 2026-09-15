@@ -89,6 +89,11 @@ describe('parseEml', () => {
   it('repairs base64 padding and strips junk so a truncated attachment does not fail the whole mail', () => {
     expect(mimeCleanB64_('YWJj')).toBe('YWJj'); expect(mimeCleanB64_('YWI')).toBe('YWI='); expect(mimeCleanB64_('YQ')).toBe('YQ=='); expect(mimeCleanB64_('YQ==\r\n')).toBe('YQ=='); expect(mimeCleanB64_('YWJjZ')).toBe('YWJj');
   });
+  it('maps Korean Takeout system names and free-form "… 카테고리" labels instead of making user labels', () => {
+    expect(gmailLabelsToIds('받은편지함,중요편지함,열림,개인정보 카테고리,구매 카테고리,보관됨,스팸').labelIds).toEqual(['INBOX', 'IMPORTANT', 'CATEGORY_PERSONAL', 'CATEGORY_PURCHASES', 'SPAM']);
+    expect(gmailLabelsToIds('보관됨').labelIds).toEqual([]);
+    expect(gmailLabelsToIds('거래처/BBB').labelMap).toEqual({ 'user:거래처/BBB': '거래처/BBB' });
+  });
   it('derives a thread hint: X-GM-THRID as Gmail hex thread id, else the References root, else own Message-ID', () => {
     const base = ['From: a@example.com', 'Subject: s', 'Message-ID: <own@x>'];
     expect(parseEml([...base, 'X-GM-THRID: 1811234567890123456', '', 'hi'].join('\r\n'), decode).threadHint).toBe('gm:' + (1811234567890123456n).toString(16));

@@ -75,6 +75,13 @@ function oauthClientJson_() {
 }
 /** MCP용 OAuth 데스크톱 클라이언트 (AI 연결 탭에서만 요청). */
 function getOauthClientJson() { return { json: oauthClientJson_() }; }
+/** 메일함 사이드바의 라벨 순서 (사용자별, 드래그로 바꾸면 자동 저장) */
+function loadLabelOrder_() { try { var v = JSON.parse(PropertiesService.getUserProperties().getProperty('LABEL_ORDER_JSON') || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+function saveLabelOrder(order) {
+  var list = (Array.isArray(order) ? order : []).map(function (x) { return String(x).slice(0, 200); }).slice(0, 500);
+  PropertiesService.getUserProperties().setProperty('LABEL_ORDER_JSON', JSON.stringify(list));
+  return { ok: true, labelOrder: list };
+}
 
 /** 관리자(소유자)만: MCP용 OAuth 데스크톱 클라이언트 JSON을 저장/삭제. 직원은 AI 연결 탭에서 내려받는다. */
 function saveOauthClientJson(json) {
@@ -103,7 +110,7 @@ function getExplorerData(opt) {
   var total = records.length, capped = total > EXPLORER_CAP;
   var out = records;
   if (capped) out = opt.q ? filterRecords(records, { q: opt.q }).slice(0, 3000) : records.slice(-EXPLORER_CAP);
-  return { records: capped ? out : filterRecords(records, {}), total: total, capped: capped, summary: loadSummary_(), history: loadRunHistory_() };
+  return { records: capped ? out : filterRecords(records, {}), total: total, capped: capped, summary: loadSummary_(), history: loadRunHistory_(), labelOrder: loadLabelOrder_() };
 }
 
 /** 서버 측 검색 (페이지 단위). */

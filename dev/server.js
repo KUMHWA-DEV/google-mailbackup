@@ -69,10 +69,12 @@ function mockTicking() {
   }, 1500);
 }
 function impProgress() { const c = impState.cursor, done = c.processed || 0, total = done + (impState.pending || 0); const pct = total ? Math.floor(done / total * 100) : null; return { percent: pct, doneBytes: c.bytes || 0, totalBytes: total * 120000, filesDone: Math.floor(done / 3), filesTotal: Math.ceil(total / 3), etaSeconds: pct ? Math.round((c.activeSeconds || 0) * (100 - pct) / pct) : null, curFile: impState.state === 'running' ? '전체 메일.mbox.gz' : null, curPos: done * 120000, curSize: total * 120000, curPercent: pct }; }
+let labelOrder = [];
 const api = {
   getDashboard: dashboard,
   getStatus: dashboard,
-  getExplorerData: () => ({ records: filterRecords(listRecords(), {}), total: listRecords().length, capped: false, summary: summarizeRecords(listRecords()), history }),
+  saveLabelOrder: (order) => { labelOrder = Array.isArray(order) ? order : []; return { ok: true, labelOrder }; },
+  getExplorerData: () => ({ labelOrder, records: filterRecords(listRecords(), {}), total: listRecords().length, capped: false, summary: summarizeRecords(listRecords()), history }),
   getOauthClientJson: () => ({ json: oauthJson }),
   getMessageBody: (id) => ({ id, body: (fixtures.find(r => r.id === id) || {}).bodyPreview || '' }),
   getCategories: () => summarizeRecords(listRecords()).categories,

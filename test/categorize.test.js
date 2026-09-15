@@ -13,6 +13,12 @@ describe('categorize', () => {
   it('SENT beats INBOX and categories', () => {
     expect(categorize(['SENT', 'INBOX', 'CATEGORY_UPDATES'], labelMap)).toBe(CATEGORY_NAMES.SENT);
   });
+  it('SPAM / TRASH become their own folders, purchases tab folds into inbox by default', () => {
+    expect(categorize(['SPAM'], labelMap)).toBe('스팸');
+    expect(categorize(['TRASH', 'CATEGORY_UPDATES'], labelMap)).toBe('휴지통');
+    expect(categorize(['INBOX', 'CATEGORY_PURCHASES'], labelMap)).toBe('받은편지함');
+    expect(categorize(['INBOX', 'CATEGORY_PURCHASES'], labelMap, { splitGmailTabs: true })).toBe('구매');
+  });
   it('DRAFT', () => {
     expect(categorize(['DRAFT'], labelMap)).toBe(CATEGORY_NAMES.DRAFT);
   });
