@@ -92,6 +92,8 @@ describe('parseEml', () => {
   it('maps Korean Takeout system names and free-form "… 카테고리" labels instead of making user labels', () => {
     expect(gmailLabelsToIds('받은편지함,중요편지함,열림,개인정보 카테고리,구매 카테고리,보관됨,스팸').labelIds).toEqual(['INBOX', 'IMPORTANT', 'CATEGORY_PERSONAL', 'CATEGORY_PURCHASES', 'SPAM']);
     expect(gmailLabelsToIds('보관됨').labelIds).toEqual([]);
+    expect(gmailLabelsToIds('받은편지함,마지막으로 연 시간,카테고리 청구서,개인정보 카테고리').labelIds).toEqual(['INBOX', 'CATEGORY_PERSONAL']);
+    expect(gmailLabelsToIds('받은편지함,마지막으로 연 시간,카테고리 청구서').labelMap).toEqual({});
     expect(gmailLabelsToIds('거래처/BBB').labelMap).toEqual({ 'user:거래처/BBB': '거래처/BBB' });
   });
   it('derives a thread hint: X-GM-THRID as Gmail hex thread id, else the References root, else own Message-ID', () => {

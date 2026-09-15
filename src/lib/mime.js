@@ -235,7 +235,8 @@ function gmailLabelsToIds(value) {
     // 한국어 계정의 Takeout 표기 (Gmail 한국어 UI 이름)
     '중요편지함': 'IMPORTANT', '별표': 'STARRED', '읽지 않음': 'UNREAD', '읽음': null, '열어봄': null, '스팸': 'SPAM', '휴지통으로 이동': 'TRASH', '채팅': 'CHAT', '전체보관함': null, '보관메일함': null, '모든 메일': null, '보관됨': null, '보관': null,
     '프로모션 카테고리': 'CATEGORY_PROMOTIONS', '소셜 카테고리': 'CATEGORY_SOCIAL', '업데이트 카테고리': 'CATEGORY_UPDATES', '포럼 카테고리': 'CATEGORY_FORUMS', '개인 카테고리': 'CATEGORY_PERSONAL',
-    '프로모션': 'CATEGORY_PROMOTIONS', '소셜': 'CATEGORY_SOCIAL', '업데이트': 'CATEGORY_UPDATES', '포럼': 'CATEGORY_FORUMS', '기본': 'CATEGORY_PERSONAL', '구매': 'CATEGORY_PURCHASES', 'category purchases': 'CATEGORY_PURCHASES', 'category_purchases': 'CATEGORY_PURCHASES', 'purchases': 'CATEGORY_PURCHASES' };
+    '프로모션': 'CATEGORY_PROMOTIONS', '소셜': 'CATEGORY_SOCIAL', '업데이트': 'CATEGORY_UPDATES', '포럼': 'CATEGORY_FORUMS', '기본': 'CATEGORY_PERSONAL', '구매': 'CATEGORY_PURCHASES',
+    '마지막으로 연 시간': null, '마지막으로 연시간': null, '마지막으로 열어본 시간': null, 'last opened': null, '청구서': null, '영수증': null, '예약': null, '여행': null, // Gmail 이 자동으로 붙이는 표시·스마트 분류: 라벨로 만들지 않음 'category purchases': 'CATEGORY_PURCHASES', 'category_purchases': 'CATEGORY_PURCHASES', 'purchases': 'CATEGORY_PURCHASES' };
   var SYS_NOSPACE = {}; Object.keys(SYS).forEach(function (k) { SYS_NOSPACE[k.replace(/\s+/g, '')] = SYS[k]; });
   String(value || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (name) {
     var key = name.toLowerCase(), key2 = key.replace(/\s+/g, '');
@@ -243,8 +244,9 @@ function gmailLabelsToIds(value) {
     if (key2 in SYS_NOSPACE) { if (SYS_NOSPACE[key2]) ids.push(SYS_NOSPACE[key2]); return; }
     if (/카테고리|^category\b/i.test(name)) { // "개인정보 카테고리", "구매 카테고리", "Category Purchases" 처럼 표기가 다양한 Gmail 탭 이름
       var tab = /프로모션|promotion/i.test(name) ? 'CATEGORY_PROMOTIONS' : /소셜|social/i.test(name) ? 'CATEGORY_SOCIAL' : /업데이트|update/i.test(name) ? 'CATEGORY_UPDATES' : /포럼|forum/i.test(name) ? 'CATEGORY_FORUMS' : /구매|purchase/i.test(name) ? 'CATEGORY_PURCHASES' : /개인|기본|personal|primary/i.test(name) ? 'CATEGORY_PERSONAL' : null;
-      if (tab) ids.push(tab); return; // 모르는 카테고리 표기는 무시 (사용자 라벨로 만들지 않음)
+      if (tab) ids.push(tab); return; // "카테고리 청구서" 처럼 모르는 카테고리 표기는 무시 (사용자 라벨로 만들지 않음)
     }
+    if (/마지막으로\s*연|last\s*opened|^opened$/i.test(name)) return; // "마지막으로 연 시간" 같은 Gmail 자동 표시
     var id = 'user:' + name; ids.push(id); map[id] = name;
   });
   return { labelIds: ids, labelMap: map };

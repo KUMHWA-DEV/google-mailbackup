@@ -136,7 +136,8 @@ function importThreadId_(hint) {
 }
 
 // ---------- 예전 버전이 남긴 행 복구: 인코딩된 라벨명이 수식(#ERROR!)으로 들어간 셀, 원본 파일 ID로 묶인 threadId ----------
-var IMPORT_REPAIR_PROP = 'IMPORT_REPAIR_V2_DONE';
+var IMPORT_REPAIR_RULES = 3; // 감지 규칙을 넓힐 때마다 올린다 → "고칠 것 없음" 캐시가 무효화돼 다시 훑는다
+var IMPORT_REPAIR_PROP = 'IMPORT_REPAIR_DONE_R' + IMPORT_REPAIR_RULES;
 /** 복구할 행이 있는지 (한 번 끝나면 속성으로 기억해 다시 훑지 않음) */
 function importRepairNeeded_() {
   if (getProp_(IMPORT_REPAIR_PROP, '') === '1') return false;
