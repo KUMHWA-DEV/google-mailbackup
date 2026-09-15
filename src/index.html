@@ -1484,20 +1484,21 @@
       return;
     }
     AI_PKG = AI_PKG_BASE + (d.gitSha ? '#' + d.gitSha : ''); AI_SCRIPT_ID = d.deploymentId || d.scriptId || ''; // 실행 모드는 배포 ID로 호출
-    $('aiInstallCmd').innerHTML = !d.gitSha ? '<p class="note">배포 커밋 정보가 없어 설치 명령을 만들 수 없습니다. 관리자가 <code>npm run deploy</code>로 배포하면 생깁니다.</p>' : codeBlock('npx -y -p ' + AI_PKG + ' mailbackup-setup' + (d.gitSha ? ' --ref ' + d.gitSha : '') + (aiExec() ? ' --script-id ' + AI_SCRIPT_ID : '') + (oauthB64() ? ' --oauth ' + oauthB64() : '') + ' --apps ' + ({ 'claude-desktop': 'claude-desktop', 'claude-code': 'claude-code', 'gemini': 'gemini', 'cursor': 'cursor' }[aiClient] || 'claude-desktop'));
+    var oauthReady = !!state.oauthClientJson, oauthPending = !!(d.hasOauthClient && !oauthReady);
+    $('aiInstallCmd').innerHTML = oauthPending ? '<div class="pv-loading"><span class="spin dark"></span> 인증 정보를 불러오는 중…</div>' : !d.gitSha ? '<p class="note">배포 커밋 정보가 없어 설치 명령을 만들 수 없습니다. 관리자가 <code>npm run deploy</code>로 배포하면 생깁니다.</p>' : codeBlock('npx -y -p ' + AI_PKG + ' mailbackup-setup' + (d.gitSha ? ' --ref ' + d.gitSha : '') + (aiExec() ? ' --script-id ' + AI_SCRIPT_ID : '') + (oauthB64() ? ' --oauth ' + oauthB64() : '') + ' --apps ' + ({ 'claude-desktop': 'claude-desktop', 'claude-code': 'claude-code', 'gemini': 'gemini', 'cursor': 'cursor' }[aiClient] || 'claude-desktop'));
     document.querySelectorAll('#aiClients button').forEach(function (b) { b.classList.toggle('active', b.dataset.c === aiClient); });
     $('aiClientBody').innerHTML = AI_CLIENTS[aiClient]();
     var chat = aiClient === 'chatgpt';
     $('aiInstallWrap').hidden = chat; $('aiManual').open = chat || $('aiManual').open;
     $('aiManual').querySelector('summary').textContent = chat ? 'ChatGPT는 원격(HTTPS) MCP만 연결됩니다 · 아래 방법으로' : '고급 · 설정 파일을 직접 편집하려면 (ChatGPT·VS Code는 이 방법)';
-    $('aiOauthRow').innerHTML = d.oauthClientJson
+    $('aiOauthRow').innerHTML = oauthPending ? '<span style="font-size:12px;color:var(--muted)">🔑 인증 정보 불러오는 중…</span>' : oauthReady
       ? '<span style="font-size:12px;color:var(--muted)" title="MAIL_BACKUP_OAUTH_JSON 값은 이 파일을 base64로 넣은 것입니다. 파일로 받아 ~/.config/mail-backup-mcp/oauth_client.json 에 두면 그 값은 지워도 됩니다.">🔑 로그인용 앱 식별자 포함 · 별도 파일 불필요</span><button type="button" class="sm" id="oauthDl">⬇ OAuth 파일로 받기</button>'
       : '<span class="note">관리자가 OAuth 클라이언트를 아직 등록하지 않았습니다. 받은 JSON을 <code>~/.config/mail-backup-mcp/oauth_client.json</code>에 두세요.</span>';
     $('aiAdmin').hidden = !d.isOwner;
     $('aiOauthRow').insertAdjacentHTML('beforeend', '<div style="font-size:12px;color:var(--muted);margin-top:6px">' +
       '<span title="' + esc(aiExec() ? AI_SCOPES_RO + ' + ' + AI_SCOPES_EXEC : AI_SCOPES_RO) + '">🔒 권한: ' + (aiExec() ? 'Drive·시트 읽기 + Gmail 읽기·Apps Script 실행·알림 발송' : 'Drive·시트 읽기 전용') + '</span>' +
       (AI_PKG !== AI_PKG_BASE ? ' · <span title="npx가 최신 코드가 아니라 지금 배포된 커밋만 받도록 고정했습니다">📌 버전 고정 ' + esc(AI_PKG.split('#')[1].slice(0, 7)) + '</span>' : '') + '</div>');
-    if (d.isOwner) $('oauthState').textContent = d.oauthClientJson ? '등록됨 ✔' : '미등록';
+    if (d.isOwner) $('oauthState').textContent = d.hasOauthClient ? '등록됨 ✔' : '미등록';
   }
   function copyText(text, msg) {
     (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () { toast(msg || '📋 복사됨'); }, function () { var ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); toast(msg || '📋 복사됨'); } catch (err) { toast('복사 실패', true); } ta.remove(); });
@@ -1505,9 +1506,9 @@
   $('aiClients').addEventListener('click', function (e) { var b = e.target.closest('button[data-c]'); if (b) { aiClient = b.dataset.c; renderAi(); } });
   $('tab-ai').addEventListener('click', function (e) {
     var b = e.target.closest('button[data-copy]'); if (b) { copyText(b.dataset.copy); return; }
-    if (e.target.id === 'oauthDl') { var j = state.dash.oauthClientJson; var a = document.createElement('a'); a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(j); a.download = 'oauth_client.json'; document.body.appendChild(a); a.click(); a.remove(); toast('⬇ oauth_client.json · ~/.config/mail-backup-mcp/ 에 두세요'); }
+    if (e.target.id === 'oauthDl') { var j = state.oauthClientJson; var a = document.createElement('a'); a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(j); a.download = 'oauth_client.json'; document.body.appendChild(a); a.click(); a.remove(); toast('⬇ oauth_client.json · ~/.config/mail-backup-mcp/ 에 두세요'); }
   });
-  $('oauthSave').addEventListener('click', function () { var v = $('oauthJsonInput').value.trim(); if (!v) { toast('JSON을 붙여넣으세요', true); return; } call('saveOauthClientJson', v).then(function (d) { renderDashboard(d); $('oauthJsonInput').value = ''; renderAi(); toast('✔ 등록됨'); }).catch(function (e) { toast('실패: ' + (e.message || e), true); }); });
+  $('oauthSave').addEventListener('click', function () { var v = $('oauthJsonInput').value.trim(); if (!v) { toast('JSON을 붙여넣으세요', true); return; } state.oauthClientJson = null; call('saveOauthClientJson', v).then(function (d) { renderDashboard(d); $('oauthJsonInput').value = ''; renderAi(); toast('✔ 등록됨'); }).catch(function (e) { toast('실패: ' + (e.message || e), true); }); });
   $('oauthClear').addEventListener('click', function () { call('saveOauthClientJson', '').then(function (d) { renderDashboard(d); renderAi(); toast('삭제됨'); }).catch(function (e) { toast('실패: ' + (e.message || e), true); }); });
   var INITIAL_TAB = '<?= initialTab ?>';
   if (location.hash === '#ai' || /^(ai|explorer|settings|history)$/.test(INITIAL_TAB)) setTimeout(function () { showTab(location.hash === '#ai' ? 'ai' : INITIAL_TAB); }, 0);
