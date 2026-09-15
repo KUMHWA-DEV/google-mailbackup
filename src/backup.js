@@ -153,8 +153,15 @@ function reconcileStatus_() {
   return getStatus_();
 }
 
+/** 단계별 소요 시간(ms) 누적: api(Gmail 원문) · gmailapp(헤더/본문/첨부 파싱) · eml(Drive 저장) · att(첨부 저장) · sheet(인덱스). 속도 개선 판단용. */
+var TIMING_ = {};
+function tick_(key, t0) { TIMING_[key] = (TIMING_[key] || 0) + (Date.now() - t0); }
+
 /** 구간이 끝날 때 실제 작업 시간과 처리 속도를 누적 (대기·지연 시간은 소요/남은 시간에서 제외). */
 function noteChunkEnd_(cursor) {
+  cursor.timing = cursor.timing || {};
+  Object.keys(TIMING_).forEach(function (k) { cursor.timing[k] = (cursor.timing[k] || 0) + TIMING_[k]; });
+  TIMING_ = {};
   var started = cursor.chunkStartedAt ? new Date(cursor.chunkStartedAt).getTime() : 0;
   if (!started) return;
   var secs = Math.max(0, (Date.now() - started) / 1000);
@@ -249,7 +256,7 @@ function runBackupLocked_() {
           cursor.lastError = id + ': ' + e.message;
           Logger.log('메시지 %s 백업 실패: %s', id, e.stack || e.message);
         }
-        if (pending.length >= CONFIG.INDEX_FLUSH_EVERY) { appendIndexRows_(sheet, pending); pending = []; }
+        if (pending.length >= CONFIG.INDEX_FLUSH_EVERY) { var ts = Date.now(); appendIndexRows_(sheet, pending); pending = []; tick_('sheet', ts); }
         if ((cursor.processed + cursor.errors) % CONFIG.STATUS_EVERY === 0) { updateRate(cursor); setStatus_({ state: 'running', message: '저장 중 ' + cursor.processed + '건' + (cursor.expectedTotal ? ' / ' + cursor.expectedTotal : ''), cursor: cursor }); }
         if (Date.now() > deadline) { cursor.pageOffset = i + 1; outOfTime = true; break; }
       }
@@ -311,8 +318,11 @@ function backupOne_(id, labelMap, settings) {
   var folderName = category;
   var folder = ensureFolderPath_(buildFolderPath(folderName, m.date, CONFIG.TIME_ZONE, settings.folderLayout));
   var fileName = buildFileName({ date: m.date, subject: m.headers.subject, id: m.id }, CONFIG.TIME_ZONE);
+  var t0 = Date.now();
   var saved = saveEml_(folder, fileName, m.rawBytes);
+  tick_('eml', t0); t0 = Date.now();
   var attachmentFiles = saveAttachments_(m.id, m.attachments);
+  tick_('att', t0);
   // 첨부 별도 저장을 껐어도 이름은 기록해 두어 목록/필터에 보이게 한다.
   var attachmentNames = attachmentFiles.length
     ? attachmentFiles.map(function (f) { return f.name; })
@@ -342,7 +352,7 @@ var RUN_HISTORY_MAX = 12;
 function appendRunHistory_(cursor) {
   var hist = loadRunHistory_();
   hist.unshift({
-    startedAt: cursor.startedAt, finishedAt: cursor.finishedAt, chunks: cursor.chunks,
+    startedAt: cursor.startedAt, finishedAt: cursor.finishedAt, chunks: cursor.chunks, activeSeconds: cursor.activeSeconds || 0, timing: cursor.timing || null,
     found: cursor.found, processed: cursor.processed, skipped: cursor.skipped, errors: cursor.errors,
     bytes: cursor.bytes, mailFrom: cursor.mailFrom, mailTo: cursor.mailTo, query: cursor.query,
     limitHit: !!cursor.limitHit, notifiedTo: cursor.notifiedTo || null,

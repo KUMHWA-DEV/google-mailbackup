@@ -39,7 +39,9 @@ function fetchMessageMeta_(id) {
  * raw는 Gmail API(정확한 원본 바이트), 헤더/본문/첨부는 GmailApp(디코딩된 값).
  */
 function fetchMessage_(id) {
+  var t0 = Date.now();
   var api = Gmail.Users.Messages.get('me', id, { format: 'raw' });
+  tick_('api', t0); t0 = Date.now();
   var msg = GmailApp.getMessageById(id);
   var rawBytes = decodeRawBytes_(api.raw);
   if (!rawBytes) rawBytes = Utilities.newBlob(msg.getRawContent(), 'message/rfc822').getBytes(); // API raw를 못 풀면 GmailApp 원문으로
@@ -51,6 +53,7 @@ function fetchMessage_(id) {
 
   var bodyPreview = '';
   try { bodyPreview = msg.getPlainBody() || ''; } catch (e) { bodyPreview = api.snippet || ''; }
+  tick_('gmailapp', t0);
 
   return {
     id: api.id,

@@ -744,7 +744,7 @@
     if (!r.startedAt && last) r = last; // 실행 중이 아니면 최근 이력(취소된 실행 포함)
     if (r.startedAt) {
       $('stRun').textContent = fmtNum(r.processed) + '건 저장' + (r.errors ? ' · ⚠️ ' + fmtNum(r.errors) : '') + (r.status === 'cancelled' ? ' ✖' : '');
-      $('stRunD').textContent = '대상 ' + fmtNum(r.expectedTotal || r.found) + ' · ' + fmtBytes(r.bytes) + (r.mailFrom ? ' · ' + fmtDayShort(r.mailFrom) + '~' + fmtDayShort(r.mailTo) : '');
+      $('stRunD').textContent = '대상 ' + fmtNum(runTarget(r)) + (r.skipped ? ' (기존 ' + fmtNum(r.skipped) + ' 제외)' : '') + ' · ' + fmtBytes(r.bytes) + (r.mailFrom ? ' · ' + fmtDayShort(r.mailFrom) + '~' + fmtDayShort(r.mailTo) : '');
     } else { $('stRun').textContent = '-'; $('stRunD').textContent = ''; }
     var catList = foldCategories(sum.categories || []);
     distBars($('distCat'), catList, 'category'); $('distCatN').textContent = catList.length + '개';
@@ -823,13 +823,21 @@
     var b = e.target.closest('.dist .r'); if (b) { var p = {}; p[b.dataset.k] = b.dataset.v; openExplorer(p); }
   });
 
+  /** 대상: 진행 중이면 감지 단계의 예상치, 끝난 실행이면 실제로 다룬 수(저장+기존+오류). 보관 메일 수와 맞아떨어진다. */
+  function runTarget(h) { var handled = (Number(h.processed) || 0) + (Number(h.skipped) || 0) + (Number(h.errors) || 0); return h.finishedAt ? (handled || h.expectedTotal || h.found || 0) : (h.expectedTotal || h.found || handled); }
+  function timingTip(h) {
+    var t = h.timing; if (!t) return '';
+    var total = 0; Object.keys(t).forEach(function (k) { total += t[k]; }); if (!total) return '';
+    var names = { api: 'Gmail 원문', gmailapp: '헤더·본문·첨부 파싱', eml: 'Drive .eml 저장', att: '첨부 저장', sheet: '인덱스 기록' };
+    return '단계별 시간 · ' + Object.keys(t).sort(function (a, b) { return t[b] - t[a]; }).map(function (k) { return (names[k] || k) + ' ' + Math.round(t[k] / total * 100) + '%'; }).join(' · ') + (h.processed ? ' · 메일당 ' + (total / 1000 / h.processed).toFixed(1) + '초' : '');
+  }
   function histRow(h, i, full) {
     var ok = h.status === 'cancelled' ? '<span title="취소됨 · ' + fmtNum(h.processed) + '건은 저장됨">✖</span>' : h.errors ? '<span title="오류 ' + h.errors + '건">⚠️</span>' : '<span title="정상">✅</span>';
     var range = h.mailFrom ? fmtDayShort(h.mailFrom) + ' ~ ' + fmtDayShort(h.mailTo) : '-';
     var how = h.manual ? '<span title="수동 실행">🖱</span>' : '<span title="자동 실행">⏱</span>';
     return '<tr' + (h.status === 'cancelled' ? ' class="held"' : '') + '><td>' + ok + ' ' + fmtDate(h.startedAt) + ' ' + how + '</td>' + (full ? '<td>' + fmtDate(h.finishedAt) + '</td>' : '') +
-      '<td>' + dur(h.startedAt, h.finishedAt) + '</td>' +
-      '<td>' + fmtNum(h.expectedTotal || h.found) + '</td><td><b style="color:var(--blue-ink)">' + fmtNum(h.processed) + '</b></td>' +
+      '<td title="' + esc(timingTip(h)) + '">' + (h.activeSeconds ? secs(h.activeSeconds) : dur(h.startedAt, h.finishedAt)) + (h.timing ? ' <span style="color:var(--faint)">⏱</span>' : '') + '</td>' +
+      '<td>' + fmtNum(runTarget(h)) + (h.skipped ? ' <small style="color:var(--faint)" title="이미 저장돼 있어 건너뜀">(' + fmtNum(h.skipped) + ' 기존)</small>' : '') + '</td><td><b style="color:var(--blue-ink)">' + fmtNum(h.processed) + '</b></td>' +
       '<td' + (h.errors ? ' style="color:var(--red);font-weight:700"' : '') + '>' + fmtNum(h.errors) + '</td><td>' + fmtBytes(h.bytes) + '</td>' +
       '<td style="color:var(--muted)">' + range + (h.limitHit ? ' <span class="pill gray" title="회당 최대 건수 도달">⏭</span>' : '') + '</td>' +
       '<td>' + catChips(h.byCategory, 3) + '</td>' +
