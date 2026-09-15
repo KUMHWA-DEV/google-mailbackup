@@ -1474,9 +1474,9 @@
       '권한: ' + (exec
         ? '실행 모드라서 로그인 때 다음 권한을 요청해 — ' + AI_SCOPES_RO + ', 그리고 ' + AI_SCOPES_EXEC + '. Apps Script 실행 권한은 이 도구의 스크립트(회사 관리자가 배포)를 내 계정으로 호출하는 것이고, 백업 실행·설정 변경 도구가 그걸 쓴다.'
         : '읽기 전용이야. 로그인 때 요청하는 권한은 ' + AI_SCOPES_RO + ' 뿐이고(설정에 MAIL_BACKUP_SCRIPT_ID가 없으면 코드가 Gmail·Apps Script 권한을 요청하지 않아), 내 드라이브의 "Mail Backup" 폴더(백업된 메일 파일과 인덱스 시트)를 읽는 게 전부야.') + '\n\n' +
-      (pretty ? step() + '파일 만들기: ~/.config/mail-backup-mcp/oauth_client.json 에 아래 내용을 그대로 저장해(권한 600). Google OAuth "데스크톱 앱" 클라이언트 ID로, 로그인 창을 띄우기 위한 앱 식별자야. Google 문서상 데스크톱 앱의 client_secret은 비밀값으로 취급되지 않아(gcloud CLI도 같은 방식으로 배포됨).\n' + pretty + '\n\n' : '') +
+      (pretty ? step() + '파일 만들기: ~/.config/mail-backup-mcp/oauth_client.json 에 아래 내용을 그대로 저장해(권한 600). 이미 있으면 덮어쓰고, 같은 폴더에 token.json 이 있으면 지워. Google OAuth "데스크톱 앱" 클라이언트 ID로, 로그인 창을 띄우기 위한 앱 식별자야. Google 문서상 데스크톱 앱의 client_secret은 비밀값으로 취급되지 않아(gcloud CLI도 같은 방식으로 배포됨).\n' + pretty + '\n\n' : '') +
       step() + '설정에 서버 항목 추가: 네가 지금 실행되고 있는 앱 하나에만 추가하고 다른 앱은 건드리지 마.\n' +
-      '   - Claude Code면: claude mcp add mail-backup -s user ' + (exec ? '-e MAIL_BACKUP_SCRIPT_ID=' + AI_SCRIPT_ID + ' ' : '') + '-- npx -y -p ' + AI_PKG + ' mailbackup-mcp   (설정 등록 명령이라 이 시점에 서버가 실행되지는 않아)\n' +
+      '   - Claude Code면: (이미 mail-backup 항목이 있으면 먼저 claude mcp remove mail-backup -s user 로 지우고) claude mcp add mail-backup -s user ' + (exec ? '-e MAIL_BACKUP_SCRIPT_ID=' + AI_SCRIPT_ID + ' ' : '') + '-- npx -y -p ' + AI_PKG + ' mailbackup-mcp   (설정 등록 명령이라 이 시점에 서버가 실행되지는 않아)\n' +
       '   - Claude Desktop이면 ~/Library/Application Support/Claude/claude_desktop_config.json (Windows는 %APPDATA%\\Claude\\claude_desktop_config.json), Cursor면 ~/.cursor/mcp.json, Gemini CLI면 ~/.gemini/settings.json 의 "mcpServers" 안에 아래 항목을 추가해. 기존 항목은 그대로 두고, 고치기 전에 파일을 .bak으로 복사해 둬.\n' + entry.split('\n').map(function (l) { return '   ' + l; }).join('\n') + '\n' +
       step() + '앱을 완전히 종료했다가 다시 열라고 안내해. 첫 질문 때 앱이 서버를 띄우고 브라우저에 Google 로그인 창이 열리는데, 동의 화면에 위에 적은 권한만 나오는지 확인하고 회사 계정으로 로그인하라고 알려줘. 토큰은 ~/.config/mail-backup-mcp/token.json 에만 저장돼.\n' +
       step() + '테스트 질문 "내 백업 메일 상태 알려줘"를 보내보라고 알려줘. 문제가 생기면 오류 메시지를 그대로 보여주고 해결책을 제안해.';
