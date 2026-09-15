@@ -4,7 +4,8 @@
  * <루트>/_import 폴더(하위 폴더 포함)에 넣은 파일을 처리한다.
  *  - .eml            : 메일 1통
  *  - .mbox           : 메일 여러 통 (Google Takeout, Thunderbird, Apple Mail 내보내기). 크기 제한 없이 8MB 창으로 나눠 읽는다.
- *  - .mbox.gz/.gz    : 압축 mbox. 압축 상태로 40MB까지 (그 이상은 압축을 풀어서 넣어야 함)
+ *  - .mbox.gz/.gz    : 압축 mbox. 크기 제한 없이 스트리밍으로 풀면서 처리 (전역 pako, src/vendor_pako.js)
+ *  - .zip            : Google Takeout 등의 zip. 안의 .mbox/.eml 엔트리를 스트리밍으로 처리 (zip64/4GB 초과 미지원)
  * 분류는 메일 자체의 속성으로 한다: X-Gmail-Labels(Takeout)가 있으면 Gmail 백업과 같은 규칙(사용자 라벨 > 보낸편지함 > … > 받은편지함 > 보관됨),
  * 없으면 보낸사람이 나면 보낸편지함, 아니면 받은편지함. 저장 위치도 일반 백업과 같은 <루트>/<카테고리>/ 폴더.
  *
@@ -14,9 +15,8 @@
  */
 var IMPORT_FOLDER_NAME = '_import';
 var IMPORT_MAX_EML_BYTES = 30 * 1024 * 1024;
-var IMPORT_MAX_GZ_BYTES = 40 * 1024 * 1024;
-var IMPORT_WINDOW_BYTES = 8 * 1024 * 1024;      // mbox를 한 번에 읽는 창
-var IMPORT_WINDOW_MAX_BYTES = 40 * 1024 * 1024; // 한 통이 창보다 크면 여기까지 키움
+var IMPORT_CHUNK_BYTES = 4 * 1024 * 1024;       // 파일을 한 번에 읽는 창
+var IMPORT_MAX_MESSAGE_BYTES = 40 * 1024 * 1024; // 한 통 상한
 var IMPORT_FN = 'runImport';
 var IMPORT_PROP = { STATUS: 'IMPORT_STATUS_JSON', CURSOR: 'IMPORT_CURSOR_JSON', HISTORY: 'IMPORT_HISTORY_JSON', STOP: 'IMPORT_STOP', LEASE: 'IMPORT_LEASE_UNTIL' };
 var IMPORT_LEASE_MS = 7 * 60 * 1000;
@@ -40,6 +40,7 @@ function importKind_(file) {
   var name = String(file.getName() || '').toLowerCase(), mime = String(file.getMimeType() || '');
   if (/\.eml$/.test(name) || mime === 'message/rfc822') return 'eml';
   if (/\.mbox\.gz$/.test(name) || /\.gz$/.test(name) || mime === 'application/gzip' || mime === 'application/x-gzip') return 'gz';
+  if (/\.zip$/.test(name) || mime === 'application/zip' || mime === 'application/x-zip-compressed') return 'zip';
   if (/\.mbox$/.test(name) || /\.mbx$/.test(name) || mime === 'application/mbox') return 'mbox';
   return '';
 }
@@ -121,13 +122,23 @@ function importDoneRow_(fileId, note) {
   return buildIndexRow({ id: 'emldup:' + fileId, threadId: 'src:' + fileId, date: new Date(), category: '가져옴-처리됨', labelNames: [], headers: { subject: note || '' }, sizeEstimate: 0, backedUpAt: new Date() });
 }
 
-/** Drive 파일의 바이트 구간을 읽는다 (큰 mbox를 창 단위로) */
+/** Drive 파일의 바이트 구간을 Uint8Array로 읽는다 (큰 파일을 창 단위로) */
 function readFileRange_(fileId, start, endInclusive) {
   var res = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(fileId) + '?alt=media', {
     headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), Range: 'bytes=' + start + '-' + endInclusive }, muteHttpExceptions: true });
   var code = res.getResponseCode();
   if (code !== 206 && code !== 200) throw new Error('파일 읽기 실패 (' + code + '): ' + res.getContentText().slice(0, 200));
-  return res.getContent();
+  var bytes = res.getContent(), u8 = new Uint8Array(bytes.length);
+  for (var i = 0; i < bytes.length; i++) u8[i] = bytes[i] & 255;
+  return u8;
+}
+/** zip 엔트리(.eml 등 mbox가 아닌 것) 전체를 바이너리 문자열로 */
+function readZipEntryAll_(fileId, entry, dataStart) {
+  if (entry.size > IMPORT_MAX_EML_BYTES) throw new Error(entry.name + ': 파일이 너무 큽니다');
+  var comp = entry.compSize ? readFileRange_(fileId, dataStart, dataStart + entry.compSize - 1) : new Uint8Array(0);
+  if (entry.method === 0) return u8ToBin(comp);
+  if (entry.method !== 8) throw new Error(entry.name + ': 지원하지 않는 압축 방식(' + entry.method + ')');
+  return u8ToBin(pako.inflateRaw(comp));
 }
 
 // ---------- 실행 (백업과 독립: 자체 임대·트리거·상태) ----------
@@ -222,48 +233,43 @@ function runImport() {
       if (stopWanted()) { stopped = true; break; }
       var en = entries[k], file = en.file, fid = file.getId(), size = Number(file.getSize()) || 0;
       var resume = cursor.cur && cursor.cur.id === fid ? cursor.cur : null;
-      cursor.cur = { id: fid, name: file.getName(), kind: en.kind, size: size, offset: resume ? resume.offset : 0 };
+      cursor.cur = { id: fid, name: file.getName(), kind: en.kind, size: size, offset: resume ? resume.offset : 0, entry: resume ? (resume.entry || 0) : 0 };
       try {
+        var readRange = function (st, en2) { return readFileRange_(fid, st, en2); };
+        var stopRes = function () { return (Date.now() > deadline || stopWanted()) ? 'stop' : undefined; };
+        var stream = function (opt) { // mbox 스트림 공통 (일반/ gzip / zip 엔트리)
+          var r = streamMbox(Object.assign({ size: size, readRange: readRange, chunkBytes: IMPORT_CHUNK_BYTES, startOffset: cursor.cur.offset, maxMessageBytes: IMPORT_MAX_MESSAGE_BYTES,
+            log: function (m) { cursor.errors += 1; cursor.lastError = file.getName() + ': ' + m; },
+            onMessage: function (bin, off) { handleMessage(mboxUnwrap(bin), fid + '#' + cursor.cur.entry + '#' + off, fid); cursor.cur.offset = off + bin.length; if ((cursor.processed + cursor.skipped + cursor.errors) % 20 === 0) saveImportCursor_(cursor); return stopRes(); } }, opt));
+          if (r.stopped) { if (Date.now() > deadline) outOfTime = true; else stopped = true; }
+          return r;
+        };
+        cursor.cur.entry = cursor.cur.entry || 0;
         if (en.kind === 'eml') {
           if (size > IMPORT_MAX_EML_BYTES) throw new Error('파일이 너무 큽니다 (' + Math.round(size / 1048576) + 'MB)');
           handleMessage(bytesToBin_(file.getBlob().getBytes()), fid, fid);
+        } else if (en.kind === 'mbox') {
+          var r1 = stream({ decode: 'none' }); if (!r1.done) break;
         } else if (en.kind === 'gz') {
-          if (size > IMPORT_MAX_GZ_BYTES) throw new Error('압축 파일이 ' + Math.round(size / 1048576) + 'MB라 처리할 수 없습니다. 압축을 풀어 .mbox로 넣어 주세요');
-          var text = bytesToBin_(Utilities.ungzip(file.getBlob()).getBytes());
-          var scan = mboxScan(text, true), done = false;
-          for (var i = 0; i < scan.messages.length; i++) {
-            var sm = scan.messages[i]; if (sm.start < cursor.cur.offset) continue;
-            handleMessage(mboxUnwrap(text.slice(sm.start, sm.end)), fid + '#' + sm.start, fid);
-            cursor.cur.offset = sm.end;
-            if (Date.now() > deadline) { outOfTime = true; break; }
-            if (stopWanted()) { stopped = true; break; }
-          }
-          if (outOfTime || stopped) break;
-        } else { // mbox: 창 단위로 읽기
-          var offset = cursor.cur.offset, win = IMPORT_WINDOW_BYTES;
-          while (offset < size) {
-            var end = Math.min(size, offset + win) - 1;
-            var bin = bytesToBin_(readFileRange_(fid, offset, end));
-            var isEnd = end >= size - 1;
-            var sc = mboxScan(bin, isEnd);
-            if (!sc.messages.length) { // 한 통이 창보다 큼
-              if (win >= IMPORT_WINDOW_MAX_BYTES) { cursor.errors += 1; cursor.lastError = file.getName() + ': ' + Math.round(win / 1048576) + 'MB가 넘는 메일이 있어 건너뜁니다'; var nx = bin.indexOf('\nFrom ', 5); offset = nx > 0 ? offset + nx + 1 : size; cursor.cur.offset = offset; win = IMPORT_WINDOW_BYTES; continue; }
-              win = Math.min(IMPORT_WINDOW_MAX_BYTES, win * 4); continue;
+          var r2 = stream({ decode: 'gzip' }); if (!r2.done) break;
+        } else if (en.kind === 'zip') {
+          var zentries = listZipEntries(readRange, size);
+          var zi = cursor.cur.entry, brokeOut = false;
+          for (; zi < zentries.length; zi++) {
+            var ze = zentries[zi], zname = String(ze.name || '').toLowerCase();
+            if (zi !== cursor.cur.entry) { cursor.cur.entry = zi; cursor.cur.offset = 0; }
+            if (!ze.size || /\/$/.test(ze.name)) continue;
+            var ds = zipDataStart(readRange, ze);
+            if (/\.mbox$/.test(zname) || /\.mbx$/.test(zname)) {
+              var r3 = stream({ decode: ze.method === 8 ? 'deflate-raw' : 'none', dataStart: ds, dataEnd: ds + ze.compSize });
+              if (!r3.done) { brokeOut = true; break; }
+            } else if (/\.eml$/.test(zname)) {
+              handleMessage(readZipEntryAll_(fid, ze, ds), fid + '#' + zi, fid);
+              if (stopRes()) { cursor.cur.entry = zi + 1; cursor.cur.offset = 0; brokeOut = true; if (Date.now() > deadline) outOfTime = true; else stopped = true; break; }
             }
-            win = IMPORT_WINDOW_BYTES;
-            for (var j = 0; j < sc.messages.length; j++) {
-              var mm = sc.messages[j];
-              handleMessage(mboxUnwrap(bin.slice(mm.start, mm.end)), fid + '#' + (offset + mm.start), fid);
-              cursor.cur.offset = offset + mm.end;
-              if (Date.now() > deadline) { outOfTime = true; break; }
-              if (stopWanted()) { stopped = true; break; }
-            }
-            offset = cursor.cur.offset;
-            if (outOfTime || stopped) break;
-            tickStatus('가져오는 중 ' + cursor.processed + '건 · ' + file.getName() + ' ' + Math.round(offset / size * 100) + '%');
-            saveImportCursor_(cursor);
+            tickStatus('가져오는 중 ' + cursor.processed + '건 · ' + file.getName() + ' (' + (zi + 1) + '/' + zentries.length + ')');
           }
-          if (outOfTime || stopped) break;
+          if (brokeOut) break;
         }
         pending.push(importDoneRow_(fid, file.getName())); backedUp['src:' + fid] = true; cursor.files += 1; cursor.cur = null;
       } catch (e) {

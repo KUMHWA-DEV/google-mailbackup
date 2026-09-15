@@ -640,11 +640,11 @@
       <div class="card">
         <div class="cardhead"><h3>📥 예전 백업 가져오기 (.eml · .mbox)</h3><span class="pill blue">백업과 별도로 동작</span></div>
         <div class="steps">
-          <div class="step"><div class="n">1</div><div class="b"><b>파일을 이 폴더에 넣기</b><div class="how"><span id="impFolderPath">내 드라이브 › Mail Backup › <b>_import</b></span> — <span id="impFolderCtl"></span><br>.eml 파일이나 .mbox 파일(Google Takeout·Thunderbird·Apple Mail 내보내기)을 넣으세요. <b>mbox 여러 개와 eml 수천 개가 섞여 있어도 되고</b>, 하위 폴더에 나눠 넣어도 됩니다(폴더 이름은 분류에 쓰지 않습니다). 압축 mbox(.mbox.gz)는 40MB까지 그대로, 더 크면 압축을 풀어 넣으세요.</div></div></div>
+          <div class="step"><div class="n">1</div><div class="b"><b>파일을 이 폴더에 넣기</b><div class="how"><span id="impFolderPath">내 드라이브 › Mail Backup › <b>_import</b></span> — <span id="impFolderCtl"></span><br>.eml, .mbox, 압축된 .mbox.gz, Google Takeout이 준 <b>.zip을 그대로</b> 넣으면 됩니다(압축을 풀 필요 없음). <b>mbox 여러 개와 eml 수천 개가 섞여 있어도 되고</b>, 하위 폴더에 나눠 넣어도 됩니다(폴더 이름은 분류에 쓰지 않습니다).</div></div></div>
           <div class="step"><div class="n">2</div><div class="b"><b>가져오기 시작</b><div class="how">오른쪽 ▶ 가져오기 시작을 누르면 서버가 메일을 한 통씩 해석해 <b>메일 자체의 속성</b>으로 분류합니다. Gmail 내보내기(mbox)의 라벨 정보가 있으면 백업과 똑같은 규칙(사용자 라벨 › 보낸편지함 › 받은편지함 › 보관됨)으로, 없으면 보낸사람이 나면 보낸편지함·아니면 받은편지함으로 넣어 같은 폴더에 저장합니다. 컴퓨터를 꺼도 계속되고, 백업과 동시에 돌아도 됩니다.</div></div></div>
           <div class="step"><div class="n">3</div><div class="b"><b>끝나면</b><div class="how">메일함에서 다른 메일과 똑같이 검색·열람됩니다. 처리한 파일은 기록되어 다시 처리되지 않으니 <code>_import</code> 폴더는 비워도 되고, 파일을 더 넣고 다시 시작하면 새 것만 처리합니다.</div></div></div>
         </div>
-        <p class="muted" style="margin:8px 0 0">지원: .eml(30MB까지) · .mbox(크기 제한 없음, 8MB씩 나눠 읽음) · .mbox.gz(40MB까지) · multipart · base64/quoted-printable · UTF-8/EUC-KR 등. 같은 메일(Message-ID)이 여러 파일에 있어도 한 번만 저장됩니다. Outlook .pst/.msg는 먼저 .eml이나 .mbox로 변환해야 합니다.</p>
+        <p class="muted" style="margin:8px 0 0">지원: .eml(30MB까지) · .mbox · .mbox.gz · .zip(4GB까지, 안의 .mbox/.eml) — 크기 제한 없이 4MB씩 스트리밍으로 읽고 풀어서 처리 · multipart · base64/quoted-printable · UTF-8/EUC-KR 등. 같은 메일(Message-ID)이 여러 파일에 있어도 한 번만 저장됩니다. Outlook .pst/.msg는 먼저 .eml이나 .mbox로 변환해야 합니다.</p>
       </div>
       <div class="card">
         <div class="cardhead"><h3 id="impState">가져오기</h3><div style="display:flex;gap:8px"><button type="button" class="primary" id="impStart">▶ 가져오기 시작</button><button type="button" class="warn" id="impStop" hidden>⏹ 중지</button><button type="button" class="primary" id="impResume" hidden>▶ 이어서</button><button type="button" id="impCancel" hidden>✕ 취소</button></div></div>
