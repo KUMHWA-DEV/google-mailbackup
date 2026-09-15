@@ -136,7 +136,7 @@ function importThreadId_(hint) {
 }
 
 // ---------- 예전 버전이 남긴 행 복구: 인코딩된 라벨명이 수식(#ERROR!)으로 들어간 셀, 원본 파일 ID로 묶인 threadId ----------
-var IMPORT_REPAIR_RULES = 4; // 감지 규칙을 넓힐 때마다 올린다 → "고칠 것 없음" 캐시가 무효화돼 다시 훑는다
+var IMPORT_REPAIR_RULES = 5; // 감지 규칙을 넓힐 때마다 올린다 → "고칠 것 없음" 캐시가 무효화돼 다시 훑는다
 var IMPORT_REPAIR_PROP = 'IMPORT_REPAIR_DONE_R' + IMPORT_REPAIR_RULES;
 /** 복구할 행이 있는지 (한 번 끝나면 속성으로 기억해 다시 훑지 않음) */
 function importRepairNeeded_() {
@@ -190,7 +190,7 @@ function repairImportRows_(cursor, deadline, settings) {
         var cls = classifyLabels_(decoded.split(/\s*,\s*/).filter(Boolean).join(','), fromHdr, settings);
         var moved = cls.category !== String(vals[i][C.category]);
         vals[i][C.category] = cls.category; vals[i][C.labels] = cls.labelNames.join(', ') || (cls.category === '보관됨' ? '(라벨 없음)' : ''); touched = true; // 라벨이 정말 없으면 표시를 남겨 다음부터 재확인하지 않음
-        if (moved) { try { var f = DriveApp.getFileById(String(vals[i][C.fileId])); f.moveTo(ensureFolderPath_(buildFolderPath(cls.category, new Date(vals[i][C.date]), CONFIG.TIME_ZONE, settings.folderLayout))); } catch (e) { Logger.log('복구: 파일 이동 실패 %s', e.message); } }
+        if (moved) { try { moveImportedFile_(String(vals[i][C.fileId]), cls.category, vals[i][C.date], settings); cursor.movedFiles = (cursor.movedFiles || 0) + 1; } catch (e) { cursor.errors += 1; cursor.lastError = '파일 이동 실패: ' + e.message; Logger.log('복구: 파일 이동 실패 %s', e.message); } }
       }
       if (String(vals[i][C.thread] || '').indexOf('src:') === 0) { // 원본 파일 ID로 묶여 있던 대화 → 메일 헤더에서 다시
         var key = '';
@@ -202,6 +202,9 @@ function repairImportRows_(cursor, deadline, settings) {
     if (changed) rng.setValues(vals.map(sheetSafeRowGas_));
     cursor.repairRow = r0 + n; cursor.repairFixed = out.fixed;
   }
+  // 파일 위치 점검: 가져온 파일이 자기 카테고리 폴더에 없으면 옮긴다 (예전 복구가 시트만 고치고 파일을 못 옮긴 경우)
+  var sw = sweepImportedFiles_(cursor, deadline, settings);
+  if (!sw.done) { out.done = false; cursor.repairFixed = out.fixed; return out; }
   // 백업 시트도 수식이 된 셀(예: '=== 공지 ===' 제목)을 텍스트로
   try { repairSheetFormulas_(indexSheet_()); } catch (e4) { Logger.log('백업 시트 수식 복구 실패: %s', e4.message); }
   // 비어 버린 '=?…' 폴더 정리
@@ -229,6 +232,32 @@ function unmarkImportFiles_(sheet, fileIds) {
 }
 /** 드라이브 파일의 헤더 부분(첫 32KB 중 빈 줄까지)을 바이너리 문자열로 */
 function headOf_(fileId) { var head = u8ToBin(readFileRange_(fileId, 0, 32767)), cut = head.search(/\r?\n\r?\n/); return cut > 0 ? head.slice(0, cut) : head; }
+/** 파일을 카테고리 폴더로 옮기고, 실제로 옮겨졌는지 부모 폴더로 확인한다 */
+function moveImportedFile_(fileId, category, date, settings) {
+  var f = DriveApp.getFileById(fileId);
+  var target = ensureFolderPath_(buildFolderPath(category, new Date(date), CONFIG.TIME_ZONE, settings.folderLayout));
+  var ps = f.getParents(); if (ps.hasNext() && ps.next().getId() === target.getId()) return false;
+  f.moveTo(target);
+  var ps2 = f.getParents(); if (!ps2.hasNext() || ps2.next().getId() !== target.getId()) throw new Error('이동 후 확인 실패: ' + f.getName());
+  return true;
+}
+/** 모든 가져온 행을 훑어 파일이 카테고리 폴더 밖에 있으면 옮긴다. 구간 시간 안에 못 끝내면 cursor.sweepRow 에 이어갈 행을 남긴다 */
+function sweepImportedFiles_(cursor, deadline, settings) {
+  var sheet = importSheet_(), last = sheet.getLastRow(), out = { done: true, moved: cursor.movedFiles || 0 };
+  if (last < 2) return out;
+  var C = { id: 0, date: 2, category: 3, fileId: INDEX_HEADERS.indexOf('driveFileId') };
+  var vals = sheet.getRange(2, 1, last - 1, C.fileId + 1).getValues();
+  for (var i = (cursor.sweepRow || 2) - 2; i < vals.length; i++) {
+    if (Date.now() > deadline) { cursor.sweepRow = i + 2; out.done = false; return out; }
+    var id = String(vals[i][C.id] || ''), fid = String(vals[i][C.fileId] || ''), cat = String(vals[i][C.category] || '');
+    if (id.indexOf('eml:') !== 0 || !fid || !cat || repairBadCategory_(cat)) continue;
+    try { if (moveImportedFile_(fid, cat, vals[i][C.date], settings)) { cursor.movedFiles = (cursor.movedFiles || 0) + 1; out.moved += 1; } }
+    catch (e) { cursor.errors += 1; cursor.lastError = '파일 이동 실패: ' + e.message; Logger.log('위치 점검: 이동 실패 %s', e.message); }
+    if (i % 50 === 0) setImportStatus_({ state: 'running', message: '파일 위치 점검 중 ' + (i + 1) + '/' + vals.length + ' · 옮김 ' + (cursor.movedFiles || 0), cursor: cursor });
+  }
+  delete cursor.sweepRow;
+  return out;
+}
 function fmtRepair_(c) { return (c.repairRow ? (c.repairRow - 1) + '행' : '') + (c.repairFixed ? ' · ' + c.repairFixed + '건 수정' : ''); }
 function sheetSafeRowGas_(row) { return row.map(function (v) { return typeof v === 'string' && v.charAt(0) === '=' ? "'" + v : v; }); }
 
@@ -404,7 +433,7 @@ function runImport() {
     if (cursor.repairOnly) { // 오류 수정 실행: 행 복구가 끝난 자리
       var prev = cursor.repairPrevState, fixedN = cursor.repairedTotal || 0, retry = cursor.retryFiles || [];
       delete cursor.repairOnly; delete cursor.repairPrevState; delete cursor.repairedTotal; delete cursor.retryFiles;
-      var doneMsg = (fixedN ? '오류 수정 완료: ' + fixedN + '건의 라벨·폴더·대화 묶음을 고쳤습니다' : '오류 수정 완료');
+      var doneMsg = (fixedN ? '오류 수정 완료: ' + fixedN + '건의 라벨·폴더·대화 묶음을 고쳤습니다' : '오류 수정 완료') + (cursor.movedFiles ? ' · 파일 ' + cursor.movedFiles + '개를 맞는 폴더로 옮김' : '') + (cursor.errors ? ' · 오류 ' + cursor.errors + '건 (마지막: ' + (cursor.lastError || '') + ')' : ''); delete cursor.movedFiles;
       if (retry.length) { // 실패한 메일이 있던 파일은 완료 표시를 풀어 다시 훑는다 (이미 저장된 메일은 건너뛰므로 실패분만 추가됨)
         var unmarked = unmarkImportFiles_(sheet, retry);
         saveImportFailedMap_({});
