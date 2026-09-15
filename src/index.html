@@ -653,6 +653,7 @@
           <div class="step"><div class="n">2</div><div class="b"><b>가져오기 시작</b><div class="how">오른쪽 ▶ 가져오기 시작을 누르면 서버가 메일을 한 통씩 해석해 <b>메일 자체의 속성</b>으로 분류합니다. Gmail 내보내기(mbox)의 라벨 정보가 있으면 백업과 똑같은 규칙(사용자 라벨 › 보낸편지함 › 받은편지함 › 보관됨)으로, 없으면 보낸사람이 나면 보낸편지함·아니면 받은편지함으로 넣어 같은 폴더에 저장합니다. 컴퓨터를 꺼도 계속되고, 백업과 동시에 돌아도 됩니다.</div></div></div>
           <div class="step"><div class="n">3</div><div class="b"><b>끝나면</b><div class="how">메일함에서 다른 메일과 똑같이 검색·열람됩니다. 처리한 파일은 기록되어 다시 처리되지 않으니 <code>_import</code> 폴더는 비워도 되고, 파일을 더 넣고 다시 시작하면 새 것만 처리합니다.</div></div></div>
         </div>
+        <p class="muted" style="margin:8px 0 0">라벨은 <b>이 계정의 Gmail에 실제로 있는 라벨만</b> 폴더로 만듭니다. 내보내기 파일에 섞여 있는 Gmail 내부 표시("열림", "수신확인 보냄", "…카테고리" 등)는 무시하고, 이미 지운 라벨의 메일은 받은편지함·보관됨으로 갑니다. 옛 라벨을 살리고 싶으면 Gmail에서 같은 이름의 라벨을 먼저 만든 뒤 가져오세요.</p>
         <p class="muted" style="margin:8px 0 0">지원: .eml(30MB까지) · .mbox · .mbox.gz · .zip(4GB까지, 안의 .mbox/.eml) — GB급도 4MB씩 스트리밍으로 읽고 풀면서 처리하고, 구간이 끝나면 압축 해제 상태를 저장해 다음 구간에서 그 자리부터 이어갑니다 · multipart · base64/quoted-printable · UTF-8/EUC-KR 등. 같은 메일(Message-ID)이 여러 파일에 있어도 한 번만 저장됩니다. Outlook .pst/.msg는 먼저 .eml이나 .mbox로 변환해야 합니다.</p>
       </div>
       <div class="card">

@@ -90,12 +90,33 @@ function sha1Hex_(s) { return Utilities.computeDigest(Utilities.DigestAlgorithm.
 
 /** 메일 속성으로 카테고리 결정: X-Gmail-Labels → Gmail 백업과 같은 규칙, 없으면 보낸사람 기준 */
 function classifyImported_(m, settings) { return classifyLabels_(m.gmailLabels, m.headers.from, settings); }
-/** 디코딩된 라벨 목록(쉼표 구분)과 From 으로 카테고리·라벨명을 정한다 (가져오기와 복구 공용) */
+// ---------- 진짜 라벨만: 이 계정의 Gmail 에 실제로 있는 사용자 라벨 이름 (10분 캐시). 헤더의 나머지 이름("수신확인 보냄" 같은 내부 표시)은 라벨로 만들지 않는다 ----------
+var KNOWN_LABELS_PROP = 'IMPORT_KNOWN_LABELS_JSON', knownLabelsMem_ = null;
+function knownUserLabels_() {
+  if (knownLabelsMem_) return knownLabelsMem_;
+  var cached = null; try { cached = JSON.parse(getProp_(KNOWN_LABELS_PROP, '') || 'null'); } catch (e) { /* 무시 */ }
+  if (cached && cached.at && Date.now() - cached.at < 10 * 60 * 1000 && cached.names) { knownLabelsMem_ = setOf_(cached.names); return knownLabelsMem_; }
+  try {
+    var res = Gmail.Users.Labels.list('me'), names = [];
+    (res.labels || []).forEach(function (l) { if (l.type === 'user') names.push(l.name); });
+    try { props_().setProperty(KNOWN_LABELS_PROP, JSON.stringify({ at: Date.now(), names: names })); } catch (e2) { /* 무시 */ }
+    knownLabelsMem_ = setOf_(names); return knownLabelsMem_;
+  } catch (e3) { Logger.log('라벨 목록 조회 실패: %s', e3.message); return cached && cached.names ? setOf_(cached.names) : null; } // null = 확인 불가 → 걸러내지 않음
+}
+function setOf_(names) { var s = {}; (names || []).forEach(function (n) { s[labelKey_(n)] = true; }); return s; }
+function labelKey_(n) { return String(n || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+/** 'user:이름' id 가 Gmail 의 실제 라벨인지 (목록을 못 얻으면 true) */
+function isRealUserLabel_(name, known) { if (!known) return true; return !!known[labelKey_(name)] || !!known[labelKey_(String(name).replace(/-/g, '/'))]; }
+/** 디코딩된 라벨 목록(쉼표 구분)과 From 으로 카테고리·라벨명을 정한다 (가져오기와 복구 공용). 실제 Gmail 라벨이 아닌 이름은 버린다 */
 function classifyLabels_(labelsCsv, fromHeader, settings) {
   var me = (Session.getEffectiveUser().getEmail() || '').toLowerCase();
   var sent = !!me && String(fromHeader || '').toLowerCase().indexOf(me) >= 0;
   var labelIds = [], labelMap = {};
-  if (labelsCsv) { var g = gmailLabelsToIds(labelsCsv); labelIds = g.labelIds; labelMap = g.labelMap; }
+  if (labelsCsv) {
+    var g = gmailLabelsToIds(labelsCsv), known = knownUserLabels_();
+    labelIds = g.labelIds.filter(function (id) { return id.indexOf('user:') !== 0 || isRealUserLabel_(g.labelMap[id], known); });
+    labelIds.forEach(function (id) { if (g.labelMap[id]) labelMap[id] = g.labelMap[id]; });
+  }
   if (!labelsCsv) labelIds = [sent ? 'SENT' : 'INBOX']; // 라벨 정보가 아예 없는 .eml 만 기본값 (라벨이 있는데 전부 무시된 경우 = 보관됨)
   else if (sent && labelIds.indexOf('SENT') < 0 && labelIds.indexOf('INBOX') < 0) labelIds.push('SENT');
   return { category: categorize(labelIds, labelMap, { splitGmailTabs: settings.splitGmailTabs }), labelNames: labelNamesOf(labelIds, labelMap) };
@@ -136,7 +157,7 @@ function importThreadId_(hint) {
 }
 
 // ---------- 예전 버전이 남긴 행 복구: 인코딩된 라벨명이 수식(#ERROR!)으로 들어간 셀, 원본 파일 ID로 묶인 threadId ----------
-var IMPORT_REPAIR_RULES = 5; // 감지 규칙을 넓힐 때마다 올린다 → "고칠 것 없음" 캐시가 무효화돼 다시 훑는다
+var IMPORT_REPAIR_RULES = 6; // 감지 규칙을 넓힐 때마다 올린다 → "고칠 것 없음" 캐시가 무효화돼 다시 훑는다
 var IMPORT_REPAIR_PROP = 'IMPORT_REPAIR_DONE_R' + IMPORT_REPAIR_RULES;
 /** 복구할 행이 있는지 (한 번 끝나면 속성으로 기억해 다시 훑지 않음) */
 function importRepairNeeded_() {
@@ -157,8 +178,8 @@ function repairBadCategory_(v) {
   v = String(v || '').trim();
   if (v === '#ERROR!' || v.indexOf('=?') === 0 || v.indexOf(',') >= 0 || /\uFFFD/.test(v)) return true; // 수식·미해독·목록 통째·깨진 글자
   if (!v || SYSTEM_CATEGORY_NAMES[v]) return false; // 정상 시스템 폴더명
-  var ids = gmailLabelsToIds(v).labelIds; // 시스템 라벨 표기("중요편지함", "개인정보 카테고리", "열림" 등)가 폴더가 된 것
-  for (var i = 0; i < ids.length; i++) if (ids[i].indexOf('user:') === 0) return false;
+  var g = gmailLabelsToIds(v), ids = g.labelIds, known = knownUserLabels_(); // 시스템 라벨 표기("중요편지함", "개인정보 카테고리", "열림" 등)가 폴더가 된 것
+  for (var i = 0; i < ids.length; i++) if (ids[i].indexOf('user:') === 0) return !isRealUserLabel_(g.labelMap[ids[i]], known); // 사용자 라벨이라도 Gmail 에 없는 이름("수신확인 보냄")이면 고칠 대상
   return true;
 }
 /**
