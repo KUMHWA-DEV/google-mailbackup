@@ -72,13 +72,20 @@ function loginInteractive(oauth) {
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end('<h2>Mail Backup MCP 로그인 완료. 이 창을 닫으세요.</h2>');
         server.close(); resolve(oauth);
       } catch (e) { res.writeHead(500); res.end(String(e.message)); server.close(); reject(e); }
-    }).listen(0, '127.0.0.1', () => {
+    });
+    // 고정 포트(기본 51234)를 먼저 시도한다. "데스크톱 앱" 클라이언트는 127.0.0.1의 어떤 포트든 허용되지만,
+    // 관리자가 실수로 "웹 애플리케이션" 유형으로 만들었으면 콘솔에 http://127.0.0.1:51234 를 리디렉션 URI로 등록해 두면 동작한다.
+    const FIXED_PORT = Number(process.env.MAIL_BACKUP_OAUTH_PORT) || 51234;
+    server.on('error', (e) => { if (e.code === 'EADDRINUSE' && !server.listening) { log(`포트 ${FIXED_PORT} 사용 중 → 임의 포트로 대체`); server.listen(0, '127.0.0.1'); } else reject(e); });
+    server.on('listening', () => {
       oauth.redirectUri = `http://127.0.0.1:${server.address().port}`;
       const url = oauth.generateAuthUrl({ access_type: 'offline', prompt: 'consent', scope: ALL_SCOPES });
       log('브라우저에서 로그인하세요:', url);
+      log(`redirect_uri_mismatch(400)가 뜨면: GCP 콘솔의 OAuth 클라이언트가 "데스크톱 앱" 유형인지 확인하세요. "웹 애플리케이션" 유형이면 승인된 리디렉션 URI에 ${oauth.redirectUri} 를 추가하거나 데스크톱 앱으로 새로 만드세요.`);
       const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start ""' : 'xdg-open';
       require('child_process').exec(`${opener} "${url}"`);
     });
+    server.listen(FIXED_PORT, '127.0.0.1');
   });
 }
 
