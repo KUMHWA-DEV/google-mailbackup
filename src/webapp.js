@@ -144,8 +144,38 @@ function getRawLabels(id) {
   var cls = classifyLabels_(decoded, mimeDecodeWords_(h['from'] || '', decodeCharsetGas_), settings);
   return { raw: raw, decoded: decoded, ids: g.labelIds, labels: check, thrid: String(h['x-gm-thrid'] || ''), category: cls.category };
 }
-function getMessageBody(id) {
-  return { id: id, body: loadBodyPreview_(id) };
+function getMessageBody(id, hint) {
+  return { id: id, body: loadBodyPreview_(id, hint) };
+}
+/** 여러 통의 본문 미리보기를 한 번에 (열어 본 메일 + 앞뒤 메일 미리 받기) */
+function getMessageBodies(items) {
+  var out = {};
+  (items || []).slice(0, 12).forEach(function (it) { try { out[it.id] = loadBodyPreview_(it.id, it.hint); } catch (e) { out[it.id] = ''; } });
+  return out;
+}
+/**
+ * 원본 .eml 에서 HTML 본문을 꺼내 준다 (cid: 이미지는 data: URI 로 삽입). 스크립트·이벤트 속성은 제거. 클라이언트는 sandbox iframe 에 넣는다.
+ * @returns {{html:string|null, images:number, skipped:string}}
+ */
+function getMessageHtml(id, hint) {
+  var loc = rowForId_(id, hint); if (!loc) return { html: null, skipped: '인덱스에 없음' };
+  var fileId = String(loc.sheet.getRange(loc.row, INDEX_HEADERS.indexOf('driveFileId') + 1).getValue() || '');
+  if (!fileId) return { html: null, skipped: '원본 파일 없음' };
+  var file; try { file = DriveApp.getFileById(fileId); } catch (e) { return { html: null, skipped: '원본 파일을 열 수 없음' }; }
+  if (file.getSize() > 15 * 1024 * 1024) return { html: null, skipped: '원본이 커서(15MB 초과) 텍스트만 표시' };
+  var m = parseEml(bytesToBin_(file.getBlob().getBytes()), decodeCharsetGas_);
+  if (!m.bodyHtml) return { html: null, skipped: 'HTML 본문 없음' };
+  var html = m.bodyHtml, budget = 4 * 1024 * 1024, images = 0;
+  (m.inlineParts || []).forEach(function (p) {
+    var b64 = p.dataB64 || (p.data ? Utilities.base64Encode(Utilities.newBlob(p.data.split('').map(function (c) { return c.charCodeAt(0) & 255; })).getBytes()) : '');
+    if (!b64 || b64.length > budget) return;
+    var re = new RegExp('cid:' + p.cid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+    if (!re.test(html)) return;
+    html = html.replace(re, 'data:' + (p.mime || 'image/png') + ';base64,' + b64); budget -= b64.length; images += 1;
+  });
+  html = html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<(iframe|object|embed|form|meta|link)[^>]*>[\s\S]*?<\/\1>/gi, '').replace(/<(iframe|object|embed|form|meta|link)[^>]*\/?>/gi, '')
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '').replace(/(href|src)\s*=\s*("|')\s*javascript:[^"']*\2/gi, '$1="#"');
+  return { html: html, images: images, skipped: '' };
 }
 
 function getCategories() {

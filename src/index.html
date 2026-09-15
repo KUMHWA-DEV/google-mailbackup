@@ -384,6 +384,7 @@
   .gm-hd .l table td:first-child { color: #5f6368; text-align: right; white-space: nowrap; }
   .gm-hd .r { font-size: 12px; color: #5f6368; white-space: nowrap; display: flex; align-items: center; gap: 2px; }
   .gm-bd { font-size: 14px; line-height: 1.6; color: #202124; white-space: pre-wrap; word-break: break-word; padding: 4px 0 8px 54px; }
+  .gm-bd iframe.gm-html { display: block; width: 100%; border: 0; min-height: 80px; background: #fff; }
   .gm-bd blockquote { margin: 0 0 0 .8ex; border-left: 1px solid #ccc; padding-left: 1ex; color: #3c4043; }
   .gm-bd .gm-qtoggle { display: inline-block; margin: 10px 0 2px; padding: 0 10px; height: 18px; line-height: 18px; border-radius: 9px; background: #e8eaed; color: #444746; font-size: 12px; letter-spacing: 2px; cursor: pointer; border: 0; }
   .gm-bd .gm-qtoggle:hover { background: #dadce0; }
@@ -1582,8 +1583,10 @@
     $('rdNext').onclick = function () { if (idx < hits.length - 1) openMessage(hits[idx + 1]); };
     $('rdFrom').onclick = function () { setQuery('from:' + qv(emailOf(r.from) || nameOnly(r.from))); };
     if ($('rdRawLoad')) $('rdRawLoad').onclick = function (e) { e.preventDefault(); $('rdRawLabels').textContent = '읽는 중…'; call('getRawLabels', r.id).then(function (x) { if (state.ex.selected !== r.id) return; $('rdRawLabels').innerHTML = x.error ? esc(x.error) : '<code>' + esc(x.decoded || '(헤더 없음)') + '</code><br><span style="color:var(--muted)">해석: ' + esc((x.ids || []).join(', ') || '(없음)') + (x.labels && x.labels.length ? ' · ' + x.labels.map(function (l) { return esc(l.name) + (l.ignored ? ' <span class="pill gray">무시 설정</span>' : l.inGmail === false ? ' <span class="pill gray">Gmail에 없음</span>' : l.hidden ? ' <span class="pill gray">Gmail에 있음 · 숨김</span>' : l.inGmail ? ' <span class="pill gray">Gmail에 있음</span>' : ''); }).join(', ') : '') + ' → 폴더 <b>' + esc(x.category) + '</b>' + (x.category !== r.category ? ' <span style="color:var(--red-ink)">(현재 ' + esc(r.category) + ' · 오류 수정으로 옮겨집니다)</span>' : '') + '</span>'; }).catch(function (err) { $('rdRawLabels').textContent = '실패: ' + (err.message || err); }); };
-    call('getMessageBody', r.id).then(function (res) { if (state.ex.selected !== r.id) return; var b = (res && res.body) ? res.body : (r.snippet || '(본문 미리보기 없음 — Drive의 원본을 열어 확인하세요)'); bodyCache[r.id] = b; $('readerBody').innerHTML = renderBody(b); })
-      .catch(function () { $('readerBody').textContent = r.snippet || ''; });
+    var showBody = function (b) { if (state.ex.selected !== r.id) return; $('readerBody').innerHTML = renderBody(b); upgradeHtml(r, function () { return state.ex.selected === r.id ? $('readerBody') : null; }); };
+    if (bodyCache[r.id] != null) showBody(bodyCache[r.id]);
+    fetchBodies(r, [hits[idx - 1], hits[idx + 1], hits[idx + 2]]).then(function (b) { if (bodyCache[r.id] != null && $('readerBody').textContent === '본문을 불러오는 중…') showBody(b); else if (!$('readerBody').querySelector('iframe')) showBody(b); })
+      .catch(function () { if (state.ex.selected === r.id && $('readerBody').textContent === '본문을 불러오는 중…') $('readerBody').textContent = r.snippet || ''; });
   }
   function msgBlock(m, open, hit) {
     var out = isSentRec(m), atts = parseAtts(m), av = AV_COLORS[hash(emailOf(m.from)) % AV_COLORS.length];
@@ -1630,12 +1633,30 @@
   }
   function linkify(escaped) { return escaped.replace(/(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)])/g, '<a href="$1" target="_blank" rel="noopener">$1</a>'); }
   document.addEventListener('click', function (e) { var b = e.target.closest('.gm-qtoggle'); if (!b) return; var q = b.nextElementSibling; if (q) { q.hidden = !q.hidden; b.title = q.hidden ? '인용된 내용 표시' : '인용된 내용 숨기기'; } });
-  var bodyCache = {};
+  var bodyCache = {}, htmlCache = {}, bodyInflight = null;
+  function hintOf(r) { return r && r._r ? { s: r._s, r: r._r } : null; }
+  /** 본문 미리보기를 받아 온다: 요청한 메일 + 앞뒤 메일을 한 번의 호출로 (다음 클릭이 즉시 뜨게) */
+  function fetchBodies(main, neighbors) {
+    var want = [main].concat(neighbors || []).filter(function (r) { return r && bodyCache[r.id] == null; });
+    if (!want.length) return Promise.resolve(bodyCache[main.id]);
+    var seen = {}; want = want.filter(function (r) { if (seen[r.id]) return false; seen[r.id] = true; return true; });
+    return call('getMessageBodies', want.map(function (r) { return { id: r.id, hint: hintOf(r) }; })).then(function (map) {
+      want.forEach(function (r) { bodyCache[r.id] = (map && map[r.id]) ? map[r.id] : (r.snippet || '(본문 미리보기 없음 — Drive의 원본을 열어 확인하세요)'); });
+      return bodyCache[main.id];
+    });
+  }
+  /** 원본 .eml 의 HTML 본문(이미지 포함)으로 바꿔 끼운다. 없으면 텍스트 그대로 */
+  function upgradeHtml(r, el) {
+    if (!el) return;
+    var apply = function (h) { if (!h || !h.html) return; var target = typeof el === 'function' ? el() : el; if (!target) return; target.innerHTML = '<iframe class="gm-html" sandbox="allow-same-origin allow-popups" referrerpolicy="no-referrer" title="메일 본문"></iframe>'; var f = target.querySelector('iframe'); f.srcdoc = '<!doctype html><html><head><meta charset="utf-8"><base target="_blank"><style>body{margin:0;font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;color:#202124;word-break:break-word}img{max-width:100%;height:auto}blockquote{border-left:3px solid #dadce0;margin:8px 0;padding-left:10px;color:#5f6368}</style></head><body>' + h.html + '</body></html>'; f.onload = function () { try { var d = f.contentDocument; var fit = function () { f.style.height = Math.min(20000, Math.max(80, d.documentElement.scrollHeight + 16)) + 'px'; }; fit(); Array.prototype.forEach.call(d.images, function (im) { im.addEventListener('load', fit); im.addEventListener('error', fit); }); setTimeout(fit, 800); } catch (e) { f.style.height = '600px'; } }; };
+    if (htmlCache[r.id]) { apply(htmlCache[r.id]); return; }
+    call('getMessageHtml', r.id, hintOf(r)).then(function (h) { htmlCache[r.id] = h || { html: null }; apply(htmlCache[r.id]); }).catch(function () { htmlCache[r.id] = { html: null }; });
+  }
   function loadBody(m) {
     var el = $('mb_' + m.id); if (!el || el.dataset.loaded) return; el.dataset.loaded = '1';
-    if (bodyCache[m.id] != null) { el.innerHTML = renderBody(bodyCache[m.id]); return; }
-    call('getMessageBody', m.id).then(function (res) { var b = (res && res.body) ? res.body : (m.snippet || '(본문 미리보기 없음 — Drive의 원본을 열어 확인하세요)'); bodyCache[m.id] = b; var el2 = $('mb_' + m.id); if (el2) el2.innerHTML = renderBody(b); })
-      .catch(function () { var el2 = $('mb_' + m.id); if (el2) el2.textContent = m.snippet || ''; });
+    var show = function (b) { var el2 = $('mb_' + m.id); if (el2) { el2.innerHTML = renderBody(b); upgradeHtml(m, function () { return $('mb_' + m.id); }); } };
+    if (bodyCache[m.id] != null) { show(bodyCache[m.id]); return; }
+    fetchBodies(m, []).then(show).catch(function () { var el2 = $('mb_' + m.id); if (el2) el2.textContent = m.snippet || ''; });
   }
   function openThread(t) {
     state.ex.selected = t.id;

@@ -137,7 +137,7 @@ function mimeWalk_(bin, acc, decodeCharset, depth) {
   if (isAttachment) {
     // base64 첨부는 디코딩하지 않고 base64 텍스트로 넘긴다 (Apps Script에서 Utilities.base64Decode가 훨씬 가볍다). 그 외는 바이너리 문자열.
     var isB64 = String(enc).toLowerCase().trim() === 'base64';
-    acc.attachments.push({ name: filename || ('attachment-' + (acc.attachments.length + 1)), mime: ct.type || 'application/octet-stream', data: isB64 ? null : mimeDecodeTransfer_(sp.body, enc), dataB64: isB64 ? mimeCleanB64_(sp.body) : null, inline: cd.type === 'inline' || (!!cid && !filename) });
+    acc.attachments.push({ name: filename || ('attachment-' + (acc.attachments.length + 1)), mime: ct.type || 'application/octet-stream', data: isB64 ? null : mimeDecodeTransfer_(sp.body, enc), dataB64: isB64 ? mimeCleanB64_(sp.body) : null, inline: cd.type === 'inline' || (!!cid && !filename), cid: cid || '' });
     return;
   }
   var data = mimeDecodeTransfer_(sp.body, enc);
@@ -149,7 +149,7 @@ function mimeWalk_(bin, acc, decodeCharset, depth) {
     return;
   }
   // 그 밖의 파트(예: 파일명 없는 바이너리)는 첨부로
-  if (data && data.length) acc.attachments.push({ name: filename || ('attachment-' + (acc.attachments.length + 1)), mime: ct.type || 'application/octet-stream', data: data, inline: cd.type === 'inline' || !!cid });
+  if (data && data.length) acc.attachments.push({ name: filename || ('attachment-' + (acc.attachments.length + 1)), mime: ct.type || 'application/octet-stream', data: data, inline: cd.type === 'inline' || !!cid, cid: cid || '' });
 }
 
 function mimeParseDate_(v) {
@@ -177,6 +177,8 @@ function parseEml(bin, decodeCharset) {
     date: mimeParseDate_(h['date']),
     headers: { from: mimeDecodeWords_(h['from'], decodeCharset), to: mimeDecodeWords_(h['to'], decodeCharset), cc: mimeDecodeWords_(h['cc'], decodeCharset), subject: mimeDecodeWords_(h['subject'], decodeCharset) },
     bodyText: body,
+    bodyHtml: acc.html || '',
+    inlineParts: acc.attachments.filter(function (a) { return a.inline && a.cid; }), // cid: 로 참조되는 본문 이미지
     attachments: atts,
     // Google Takeout mbox: "Inbox,Important,Category Promotions,라벨명" — 한글 라벨은 =?UTF-8?B?…?= 로 인코딩돼 있으므로 항목별로 푼다
     threadHint: mimeThreadHint_(h),

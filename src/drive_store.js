@@ -163,11 +163,13 @@ function loadIndexRecords_() {
   indexSheets_().forEach(function (sheet) {
     var last = sheet.getLastRow();
     if (last < 2) return;
-    values = values.concat(sheet.getRange(2, 1, last - 1, INDEX_LIST_COLUMNS).getValues());
+      var rows = sheet.getRange(2, 1, last - 1, INDEX_LIST_COLUMNS).getValues(), tag = sheet.getName() === IMPORT_SHEET_NAME ? 'i' : 'm';
+    for (var r = 0; r < rows.length; r++) { rows[r]._r = r + 2; rows[r]._s = tag; } // 행 위치 힌트: 본문을 열 때 시트 전체를 검색하지 않게
+    values = values.concat(rows);
   });
   values = values.filter(function (row) { return String(row[0] || '').indexOf('emldup:') !== 0; }); // 가져오기 중복 표시 행은 메일이 아님
   return values.map(function (row) {
-    var rec = rowToRecord(row);
+    var rec = rowToRecord(row); rec._r = row._r; rec._s = row._s;
     if (rec.date instanceof Date) rec.date = rec.date.toISOString();
     if (rec.backedUpAt instanceof Date) rec.backedUpAt = rec.backedUpAt.toISOString();
     return rec;
@@ -187,13 +189,18 @@ function loadRecordById_(id) {
   return rec;
 }
 
-/** 메시지 id로 해당 행의 본문 미리보기만 읽는다. */
-function loadBodyPreview_(id) {
-  var sheet = sheetForId_(id);
-  var last = sheet.getLastRow();
-  if (last < 2) return '';
+/** id 의 행 번호. hint {s:'m'|'i', r} 가 맞으면 검색 없이 그 행, 아니면 TextFinder */
+function rowForId_(id, hint) {
+  var sheet = hint && hint.s === 'i' ? (indexSheet_().getParent().getSheetByName(IMPORT_SHEET_NAME) || indexSheet_()) : hint && hint.s === 'm' ? indexSheet_() : sheetForId_(id);
+  if (hint && hint.r > 1 && hint.r <= sheet.getLastRow() && String(sheet.getRange(hint.r, 1).getValue()) === String(id)) return { sheet: sheet, row: hint.r };
+  sheet = sheetForId_(id);
+  var last = sheet.getLastRow(); if (last < 2) return null;
   var hit = sheet.getRange(2, 1, last - 1, 1).createTextFinder(String(id)).matchEntireCell(true).findNext();
-  if (!hit) return '';
-  var v = sheet.getRange(hit.getRow(), INDEX_HEADERS.length).getValue();
+  return hit ? { sheet: sheet, row: hit.getRow() } : null;
+}
+/** 메시지 id로 해당 행의 본문 미리보기만 읽는다. */
+function loadBodyPreview_(id, hint) {
+  var loc = rowForId_(id, hint); if (!loc) return '';
+  var v = loc.sheet.getRange(loc.row, INDEX_HEADERS.length).getValue();
   return v == null ? '' : String(v);
 }

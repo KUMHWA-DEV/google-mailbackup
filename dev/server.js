@@ -73,6 +73,8 @@ let labelOrder = [];
 const api = {
   getDashboard: dashboard,
   getStatus: dashboard,
+  getMessageBodies: (items) => { const out = {}; (items || []).forEach(it => { out[it.id] = api.getMessageBody(it.id).body; }); return out; },
+  getMessageHtml: (id) => ({ html: '<div style="font-family:sans-serif"><p>HTML 본문 <b>미리보기</b>입니다.</p><img src="data:image/svg+xml;base64,' + Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="240" height="80"><rect width="240" height="80" fill="#4f8cff"/><text x="20" y="48" font-size="20" fill="#fff">inline image</text></svg>').toString('base64') + '"></div>', images: 1, skipped: '' }),
   getRawLabels: (id) => ({ raw: '=?UTF-8?B?...?=', decoded: '받은편지함,중요편지함,열림,프로젝트A', ids: ['INBOX', 'IMPORTANT', 'user:프로젝트A'], thrid: '1811234567890123456', category: '프로젝트A' }),
   saveLabelOrder: (order) => { labelOrder = Array.isArray(order) ? order : []; return { ok: true, labelOrder }; },
   getExplorerData: () => ({ labelOrder, records: filterRecords(listRecords(), {}), total: listRecords().length, capped: false, summary: summarizeRecords(listRecords()), history }),
