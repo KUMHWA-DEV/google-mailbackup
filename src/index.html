@@ -133,6 +133,10 @@
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
   .banner { border-radius: 12px; padding: 10px 14px; font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; gap: 12px; align-items: center; border: 1px solid; }
   .banner.error { background: var(--red-bg); border-color: var(--red-line); color: var(--red-ink); }
+  .banner.info { background: var(--blue-bg); border-color: var(--blue-line); color: var(--blue-ink); }
+  .banner.info a { color: inherit; text-decoration: underline; margin-left: 6px; }
+  .exstale { margin: 0 0 8px; padding: 6px 10px; border-radius: 8px; background: var(--blue-bg); border: 1px solid var(--blue-line); color: var(--blue-ink); font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .exstale button { font-size: 12px; padding: 3px 10px; }
   .banner button { background: transparent; border: 0; color: inherit; padding: 0; }
 
   /* settings */
@@ -530,6 +534,7 @@
               <button type="button" class="fchip on" id="exThreads" style="height:26px;padding:0 9px;font-size:12px;margin-left:10px" title="같은 대화를 한 줄로 묶기">🧵 대화 묶기</button>
               <div class="pg"><span id="exPage">0 / 0</span><button type="button" class="gm-ib" id="exPrev" title="이전">‹</button><button type="button" class="gm-ib" id="exNext" title="다음">›</button></div>
             </div>
+            <div class="exstale" id="exStale" hidden><span>📬 그 사이 저장된 메일이 있습니다</span><button type="button" id="exStaleReload">목록 새로고침</button></div>
             <div class="gm-list" id="mlist"><div class="gm-empty">불러오는 중…</div></div>
           </div>
           <div class="gm-split" id="gmSplit" title="끌어서 목록/미리보기 너비 조절 · 더블클릭: 기본값"></div>
@@ -731,10 +736,10 @@
   function dur(a, b) { if (!a || !b) return ''; var s = Math.max(0, Math.round((new Date(b) - new Date(a)) / 1000)); return s < 60 ? s + '초' : Math.round(s / 60) + '분'; }
   var toastTimer;
   function toast(msg, isErr) { var t = $('toast'); t.textContent = msg; t.className = 'toast' + (isErr ? ' error' : ''); t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, 3000); }
-  function banner(msg) {
-    var slot = $('banner-slot');
+  function banner(msg, level) {
+    var slot = $('banner-slot'), info = level === 'info';
     slot.hidden = !msg;
-    slot.innerHTML = msg ? '<div class="banner error"><span>⚠️ ' + esc(msg) + '</span><button type="button" id="bannerClose">✕</button></div>' : '';
+    slot.innerHTML = msg ? '<div class="banner ' + (info ? 'info' : 'error') + '"><span>' + (info ? '🆕 ' : '⚠️ ') + esc(msg) + (info ? ' <a href="#" onclick="location.reload();return false">새로고침</a>' : '') + '</span><button type="button" id="bannerClose">✕</button></div>' : '';
     if (msg) $('bannerClose').onclick = function () { slot.hidden = true; };
   }
 
@@ -761,7 +766,7 @@
     if (name === 'import') loadImport(true);
     if (name === 'overview' && state.dash && Date.now() - (state.dashAt || 0) > 5000) loadDashboard(); // 다른 탭에서 시작한 가져오기/백업 현황을 바로 반영
     document.querySelectorAll('#tabs button').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === name); });
-    if (name === 'explorer' && !state.explorer) loadExplorer();
+    if (name === 'explorer' && (!state.explorer || state.explorerStale)) { state.explorerStale = false; $('exStale').hidden = true; loadExplorer(); } // 처음이거나 낡았으면 다시 읽음
     if (name === 'settings' && state.dash) fillSettings(state.dash.settings);
   }
   $('tabs').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) showTab(b.dataset.tab); });
@@ -846,7 +851,11 @@
     if (state.tab === 'ai' || $('aiInstallCmd').innerHTML.indexOf('불러오는 중') >= 0) renderAi();
     banner(failed ? '백업 실패: ' + (d.lastError || d.message) + (d.errorStack ? '\n' + d.errorStack.split('\n').slice(0, 3).join(' · ') : '') + ' — "지금 백업"으로 다시 시도하면 저장된 위치부터 이어갑니다' : (d.lastError && !running ? d.lastError : ''));
     var impPoll = /^(running|queued|stopping)$/.test(ir.state || ''); // 가져오기가 도는 동안에도 대시보드 현황을 갱신
-    if ((running || impPoll) && !state.pollTimer) state.pollTimer = setTimeout(function tickPoll() { state.pollTimer = null; if (state.tab !== 'overview') return; loadDashboard().then(function () { var dd = state.dash || {}; if (state.pollTimer === null && (/^(running|queued|stopping)$/.test(dd.state) || /^(running|queued|stopping)$/.test((dd.importRun || {}).state || ''))) state.pollTimer = setTimeout(tickPoll, 4000); }); }, 4000); // 이전 응답이 온 뒤에만 다음 폴링 (겹치지 않게)
+    scheduleDashPoll(running || impPoll); // 항상 주기 갱신: 실행 중 4초, 평소 30초 (탭이 보일 때만)
+    if (state.gitSha && d.gitSha && d.gitSha !== state.gitSha) banner('새 버전이 배포됐습니다. 새로고침하면 반영됩니다.', 'info'); else if (d.gitSha) state.gitSha = d.gitSha;
+    var exKey = (sum.total || 0) + '|' + (sum.lastBackedUpAt || ''); // 메일함 목록이 낡았는지 (저장 건수·마지막 저장 시각이 바뀌면)
+    if (state.explorer && state.explorerKey && exKey !== state.explorerKey) { state.explorerStale = true; if (state.tab === 'explorer') $('exStale').hidden = false; }
+    state.explorerKey = exKey;
     if (!running && state.pollTimer) { clearTimeout(state.pollTimer); state.pollTimer = null; }
     if (running && !state.tickTimer) state.tickTimer = setInterval(tickRun, 1000);
     if (!running && state.tickTimer) { clearInterval(state.tickTimer); state.tickTimer = null; }
@@ -1035,17 +1044,23 @@
     $('impRepair').hidden = !s.repairNeeded; $('impRepair').disabled = running; $('impRepair').title = running ? '가져오기가 끝나거나 중지된 뒤 누를 수 있습니다' : '예전 버전이 잘못 기록한 행을 고칩니다: #ERROR! 라벨·폴더, 한 대화로 묶인 메일'; // 고칠 행이 감지됐을 때만 보이고, 실행 중이면 눌리지 않음
     $('impRepairNote').hidden = !s.repairNeeded; $('impRepairRun').hidden = !running;
     $('impHist').innerHTML = (s.history || []).map(function (h) { return '<tr' + (h.status === 'cancelled' ? ' class="held"' : '') + '><td>' + (h.status === 'cancelled' ? '✖ ' : h.errors ? '⚠️ ' : '✅ ') + fmtDate(h.startedAt) + '</td><td>' + fmtDate(h.finishedAt) + '</td><td><b style="color:var(--blue-ink)">' + fmtNum(h.processed) + '</b></td><td>' + fmtNum(h.skipped) + '</td><td>' + fmtNum(h.errors) + '</td><td>' + fmtBytes(h.bytes) + '</td></tr>'; }).join('') || '<tr><td colspan="6" class="empty">아직 가져오기 이력이 없습니다</td></tr>';
-    if (running && !impTimer) impTimer = setTimeout(function tick() { impTimer = null; if (state.tab !== 'import') return; loadImport().then(function () { if (!impTimer && /^(running|queued|stopping)$/.test((state.imp || {}).state || '')) impTimer = setTimeout(tick, 5000); }); }, 5000);
+    clearTimeout(impTimer); impTimer = setTimeout(function tick() { impTimer = null; if (state.tab !== 'import' || document.visibilityState !== 'visible') { impTimer = setTimeout(tick, 5000); return; } loadImport(); }, running ? 5000 : 20000); // 탭이 열려 있는 동안 계속 갱신 (실행 중 5초, 평소 20초)
     state.imp = s;
   }
   $('tab-import').addEventListener('click', function (e) { if (e.target.id !== 'impMkdir') return; e.target.disabled = true; call('ensureImportFolder').then(function (r) { toast('📁 폴더를 만들었습니다'); if (r && r.url) window.open(r.url, '_blank'); loadImport(true); }).catch(function (err) { toast('폴더 생성 실패: ' + (err.message || err), true); e.target.disabled = false; }); });
-  function impAction(fn, okMsg) { busyAll(IMP_BTNS, true); call(fn).then(function (s) { renderImport(s); if (okMsg) toast(okMsg); }).catch(function (e) { busyAll(IMP_BTNS, false); toast('실패: ' + (e.message || e), true); }); }
+  function impAction(fn, okMsg) { busyAll(IMP_BTNS, true); call(fn).then(function (s) { renderImport(s); if (okMsg) toast(okMsg); loadDashboard(); /* 대시보드 현황도 바로 반영 */ }).catch(function (e) { busyAll(IMP_BTNS, false); toast('실패: ' + (e.message || e), true); }); }
   $('impStart').addEventListener('click', function () { impAction('startImport', '⏳ 대기열에 넣었습니다 · 곧 시작'); });
   $('impResume').addEventListener('click', function () { impAction('startImport', '▶ 이어서 실행'); });
   $('impStop').addEventListener('click', function () { impAction('stopImport'); });
   $('impCancel').addEventListener('click', function () { impAction('cancelImport', '취소됨'); });
   $('impRepair').addEventListener('click', function () { impAction('startImportRepair', '🛠 오류 수정을 예약했습니다 · 곧 시작'); });
 
+  function scheduleDashPoll(active) {
+    clearTimeout(state.pollTimer); state.pollTimer = null;
+    var ms = active ? 4000 : 30000;
+    state.pollTimer = setTimeout(function () { state.pollTimer = null; if (document.visibilityState !== 'visible') { scheduleDashPoll(active); return; } loadDashboard(); }, ms);
+  }
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && state.dash && Date.now() - (state.dashAt || 0) > 5000) loadDashboard(); }); // 다른 창에 있다 돌아오면 바로 갱신
   function loadDashboard(showBusy) {
     if (showBusy) busyAll(DASH_BTNS, true, '불러오는 중'); // 첫 로드·재조회: 데이터가 올 때까지 버튼 비활성 + 스피너 (주기 폴링은 제외)
     return call('getDashboard').then(renderDashboard).catch(function (e) { busyAll(DASH_BTNS, false); $('stateText').textContent = '연결 실패'; banner(e.message || String(e)); });
@@ -1434,7 +1449,8 @@
   $('exClear').addEventListener('click', function () { setQuery(''); });
   $('exPrev').addEventListener('click', function () { state.ex.page -= 1; renderExplorer(); $('mlist').scrollTop = 0; });
   $('exNext').addEventListener('click', function () { state.ex.page += 1; renderExplorer(); $('mlist').scrollTop = 0; });
-  $('exRefresh').addEventListener('click', function () { state.explorer = null; loadExplorer(); });
+  $('exRefresh').addEventListener('click', function () { state.explorer = null; state.explorerStale = false; $('exStale').hidden = true; loadExplorer(); });
+  $('exStaleReload').addEventListener('click', function () { state.explorerStale = false; $('exStale').hidden = true; loadExplorer($('exQ') ? $('exQ').value : ''); });
   // 전체 너비 토글 (기억됨)
   function setWide(on) { document.body.classList.toggle('wide', !!on); $('exWide').classList.toggle('on', !!on); try { localStorage.setItem('mb.wide', on ? '1' : '0'); } catch (e) { /* 무시 */ } }
   $('exWide').addEventListener('click', function () { setWide(!document.body.classList.contains('wide')); });
