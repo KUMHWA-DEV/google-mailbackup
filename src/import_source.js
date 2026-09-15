@@ -213,7 +213,12 @@ function getImportState() {
     if (!pending && importCursor_()) { try { scheduleImport_(5 * 1000); } catch (e) { /* 무시 */ } setImportStatus_({ state: 'queued', message: '실행이 끊겨 다시 예약함' }); st = importStatus_(); }
   }
   var pendingCount = null, folderExists = false;
-  try { folderExists = !!importFolder_(false); pendingCount = folderExists ? countImportPending_(loadBackedUpIds_(), 2000) : 0; } catch (e) { pendingCount = null; }
+  try {
+    folderExists = !!importFolder_(false);
+    pendingCount = folderExists ? countImportPending_(loadBackedUpIds_(), 2000) : 0;
+    // 대기 0인데 예전 버전이 실패한 파일에 남긴 완료 표시가 있으면 여기서 복구 (시작 버튼은 대기 0이면 눌리지 않으므로)
+    if (folderExists && !pendingCount && !/^(running|queued|stopping)$/.test(st.state || '') && repairFailedImportMarkers_() > 0) pendingCount = countImportPending_(loadBackedUpIds_(), 2000);
+  } catch (e) { pendingCount = null; }
   return {
     state: st.state || 'idle', message: st.message || '', updatedAt: st.updatedAt || null,
     cursor: { startedAt: c.startedAt || null, processed: c.processed || 0, skipped: c.skipped || 0, errors: c.errors || 0, chunks: c.chunks || 0, bytes: c.bytes || 0, files: c.files || 0, lastError: c.lastError || null, activeSeconds: c.activeSeconds || 0, curFile: c.cur ? c.cur.name : null, curOffset: c.cur ? c.cur.offset : 0, curSize: c.cur ? c.cur.size : 0 },
