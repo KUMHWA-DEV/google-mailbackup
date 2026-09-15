@@ -262,7 +262,29 @@ function runBackupLocked_() {
   var maxPerRun = settings.maxPerRun || 0;
 
   try {
-    while (true) {
+    // ---- 가져오기 단계: _import 폴더의 .eml 파일을 먼저 처리 (구간 시간을 나눠 씀) ----
+    if (!cursor.importDone && !stopRequested_()) {
+      var entries = listImportFiles_(backedUp, 200);
+      for (var k = 0; k < entries.length; k++) {
+        if (Date.now() > deadline) { outOfTime = true; break; }
+        if (Date.now() - lastStopCheck > 10 * 1000) { lastStopCheck = Date.now(); if (stopRequested_()) { cursor.paused = true; break; } }
+        var en = entries[k], srcKey = 'src:' + en.file.getId();
+        try {
+          var r = importOne_(en, backedUp, settings);
+          pending.push(r.row || r.sourceRow);
+          backedUp[srcKey] = true;
+          if (!r.skipped) { backedUp[r.id] = true; cursor.processed += 1; cursor.imported = (cursor.imported || 0) + 1; noteRowStats_(cursor, r.row); }
+          else cursor.skipped += 1;
+        } catch (e) {
+          cursor.errors += 1; cursor.lastError = (en.file.getName() || srcKey) + ': ' + e.message;
+          Logger.log('가져오기 실패 %s: %s', en.file.getName(), e.stack || e.message);
+        }
+        if (pending.length >= CONFIG.INDEX_FLUSH_EVERY) { var ts0 = Date.now(); appendIndexRows_(sheet, pending); pending = []; tick_('sheet', ts0); }
+        if ((cursor.processed + cursor.errors) % CONFIG.STATUS_EVERY === 0) { updateRate(cursor); setStatus_({ state: 'running', message: '가져오는 중 ' + cursor.processed + '건' + (cursor.expectedTotal ? ' / ' + cursor.expectedTotal : ''), cursor: cursor }); }
+      }
+      if (!outOfTime && !cursor.paused && entries.length < 200) cursor.importDone = true; // 더 볼 파일 없음
+    }
+    while (!outOfTime && !cursor.paused) {
       var retrying = !!(cursor.retryIds && cursor.retryIds.length);
       var page = retrying ? { ids: cursor.retryIds.slice(), nextPageToken: null } : listMessageIds_(windowQuery_(cursor), cursor.pageToken);
       var startAt = cursor.pageOffset || 0; // 구간이 페이지 중간에서 끊겼으면 그 위치부터 (같은 페이지를 다시 세지 않는다)
@@ -513,6 +535,7 @@ function previewBackup_(scope, sinceDate) {
   var newCount = newIds.length;
   if (truncated && wholeBox && mailboxTotal > found) newCount = Math.max(newCount, mailboxTotal - skipped);
   var agg = aggregatePreview({ found: found, skipped: skipped, newCount: newCount, metas: metas, detailed: metas.length });
+  try { agg.importPending = countImportPending_(backedUp, 5000); agg.importFolderUrl = importFolderUrl_(); } catch (e) { agg.importPending = 0; }
   // 표본은 최신 메일부터라 mailFrom이 표본(300건)의 최소 날짜가 된다. 새 메일이 표본보다 많으면 실제 가장 오래된 날짜로 바꾼다.
   //  - 목록을 끝까지 셌으면(잘리지 않음): 목록은 최신순이므로 마지막 id가 가장 오래된 메일 → 1회 조회
   //  - 목록이 잘렸으면: before: 이진 탐색
@@ -575,7 +598,7 @@ function nameOrAddress_(addr) {
   var m = s.match(/^\s*"?([^"<]*)"?\s*<([^>]+)>/);
   return m ? (m[1].trim() || m[2]) : s.trim();
 }
-function savePreview_(p) { props_().setProperty(PROP.PREVIEW_JSON, JSON.stringify({ newCount: p.newCount, bytes: p.bytes, manual: true, previewedAt: p.previewedAt, scope: p.scope, sinceDate: p.sinceDate || '', mailFrom: p.mailFrom || '', mailFromExact: !!p.mailFromExact })); }
+function savePreview_(p) { props_().setProperty(PROP.PREVIEW_JSON, JSON.stringify({ newCount: (Number(p.newCount) || 0) + (Number(p.importPending) || 0), importPending: p.importPending || 0, bytes: p.bytes, manual: true, previewedAt: p.previewedAt, scope: p.scope, sinceDate: p.sinceDate || '', mailFrom: p.mailFrom || '', mailFromExact: !!p.mailFromExact })); }
 function loadPreview_() { try { return JSON.parse(getProp_(PROP.PREVIEW_JSON, '') || 'null'); } catch (e) { return null; } }
 
 // ---------- 커서 / 상태 ----------

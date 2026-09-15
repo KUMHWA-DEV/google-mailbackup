@@ -24,7 +24,7 @@ const SCRIPT_ID = process.env.MAIL_BACKUP_SCRIPT_ID || ''; // 설정되면 Apps 
 const SCOPES = ['https://www.googleapis.com/auth/drive.readonly', 'https://www.googleapis.com/auth/spreadsheets.readonly', 'https://www.googleapis.com/auth/drive.file'];
 // Apps Script API로 스크립트 함수를 실행하려면 스크립트가 요구하는 스코프를 토큰이 모두 가져야 한다 (appsscript.json과 동일)
 const SCRIPT_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.addons.execute', 'https://www.googleapis.com/auth/gmail.addons.current.message.metadata', 'https://www.googleapis.com/auth/script.locale',
-  'https://www.googleapis.com/auth/drive', 'https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/script.scriptapp', 'https://www.googleapis.com/auth/script.send_mail', 'https://www.googleapis.com/auth/userinfo.email'];
+  'https://www.googleapis.com/auth/drive.file', 'https://www.googleapis.com/auth/drive.readonly', 'https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/script.scriptapp', 'https://www.googleapis.com/auth/script.send_mail', 'https://www.googleapis.com/auth/userinfo.email'];
 const ALL_SCOPES = SCRIPT_ID ? SCOPES.concat(SCRIPT_SCOPES) : SCOPES;
 const CONFIG_DIR = process.env.MAIL_BACKUP_MCP_DIR || path.join(os.homedir(), '.config', 'mail-backup-mcp');
 const TOKEN_PATH = path.join(CONFIG_DIR, 'token.json');

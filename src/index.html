@@ -560,7 +560,7 @@
       </div>
       <div class="divider"></div>
       <div class="grid3">
-        <div class="field"><label class="t">📁 Drive 폴더 <a id="folderLink" target="_blank" rel="noopener" href="#" hidden>열기 ↗</a></label><div style="font-size:13px;color:var(--ink2);padding-top:8px" id="folderPathText">내 드라이브 › Mail Backup (자동 생성)</div><input type="hidden" name="folderId"></div>
+        <div class="field"><label class="t">📁 Drive 폴더 <a id="folderLink" target="_blank" rel="noopener" href="#" hidden>열기 ↗</a></label><div style="font-size:13px;color:var(--ink2);padding-top:8px" id="folderPathText">내 드라이브 › Mail Backup (자동 생성)</div><input type="hidden" name="folderId"><div class="note" id="importHint" style="margin-top:8px;font-size:12px"></div></div>
         <div class="field"><label class="t">📆 하위 폴더</label><div class="seg" id="layoutRadios"><button type="button" data-v="flat">없음</button><button type="button" data-v="yearly">연도</button><button type="button" data-v="monthly">연·월</button></div></div>
       </div>
     </form>
@@ -975,6 +975,7 @@
       '<div class="pv-num"><div class="k">📧 새로 저장</div><div class="v">' + fmtNum(p.newCount) + '건' + (s.maxPerRun && p.newCount > s.maxPerRun ? ' <small>이번엔 ' + fmtNum(s.maxPerRun) + '건</small>' : '') + '</div></div>' +
       '<div class="pv-num"><div class="k">💾 용량</div><div class="v">' + est + fmtBytes(p.bytes) + '</div></div>' +
       '<div class="pv-num"><div class="k">📅 메일 기간' + (p.truncated && !p.mailFromExact ? ' <small title="최신 표본 기준. 실제 실행은 더 오래된 메일도 포함">(표본)</small>' : '') + '</div><div class="v" style="font-size:14px">' + (p.mailFrom ? fmtDay(p.mailFrom).slice(0, 12) + ' ~ ' + fmtDayShort(p.mailTo) : '–') + '</div></div>' +
+      (p.importPending ? '<div class="pv-num"><div class="k">📥 가져올 .eml</div><div class="v">' + fmtNum(p.importPending) + '건</div></div>' : '') +
       '<div class="pv-num"><div class="k">🔍 감지 / 이미 있음</div><div class="v">' + fmtNum(p.found) + ' <small>/ ' + fmtNum(p.skipped) + '</small></div></div>' +
       '</div>' +
       (p.newCount ? '<div class="pv-cols"><div><div class="pv-title">🏷 라벨별' + (p.estimated ? ' (추정)' : '') + '</div>' + distSmall(p.byCategory) + '</div>' +
@@ -1036,6 +1037,7 @@
     setRadio('layoutRadios', s.folderLayout);
     $('folderLink').hidden = !(state.dash && state.dash.folderUrl); if (state.dash && state.dash.folderUrl) $('folderLink').href = state.dash.folderUrl;
     if (state.dash && state.dash.folderPath) $('folderPathText').textContent = state.dash.folderPath;
+    $('importHint').innerHTML = state.dash && state.dash.importFolderUrl ? '📥 예전 .eml 백업이 있으면 <a href="' + esc(state.dash.importFolderUrl) + '" target="_blank" rel="noopener">Mail Backup › _import</a> 폴더에 넣어 두세요(하위 폴더는 라벨이 됩니다). 다음 백업 때 자동으로 해석해 저장합니다. 처리한 원본은 남겨 두니 나중에 폴더를 비워도 됩니다.' : '';
     $('notifyEmail').placeholder = '비우면 ' + ((state.dash && state.dash.user) || '내 계정');
   }
   function setRadio(id, v) { $(id).dataset.value = v; document.querySelectorAll('#' + id + ' button').forEach(function (b) { b.classList.toggle('active', b.dataset.v === v); }); }

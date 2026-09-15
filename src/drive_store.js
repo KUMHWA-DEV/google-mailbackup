@@ -118,8 +118,11 @@ function loadBackedUpIds_(sheet) {
   var set = {};
   var last = sheet.getLastRow();
   if (last < 2) return set;
-  var ids = sheet.getRange(2, 1, last - 1, 1).getValues();
-  for (var i = 0; i < ids.length; i++) if (ids[i][0]) set[String(ids[i][0])] = true;
+  var vals = sheet.getRange(2, 1, last - 1, 2).getValues(); // A: id, B: threadId 또는 가져온 원본 'src:<fileId>'
+  for (var i = 0; i < vals.length; i++) {
+    if (vals[i][0]) set[String(vals[i][0])] = true;
+    if (vals[i][1] && String(vals[i][1]).indexOf('src:') === 0) set[String(vals[i][1])] = true;
+  }
   return set;
 }
 

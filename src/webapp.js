@@ -49,6 +49,7 @@ function getDashboard() {
     triggerInstalled: scheduledTriggerInstalled_(),
     folderUrl: links.folderUrl || null,
     folderPath: rootFolderPath_(),
+    importFolderUrl: (function () { try { return importFolderUrl_() || (importFolder_() && importFolderUrl_()); } catch (e) { return ''; } })(), // _import 폴더 (없으면 생성)
     indexSheetUrl: links.indexSheetUrl || null,
     webAppUrl: links.webAppUrl || null,
     user: Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail(),
