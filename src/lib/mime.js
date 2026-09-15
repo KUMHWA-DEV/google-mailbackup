@@ -236,7 +236,7 @@ function gmailLabelsToIds(value) {
     '중요편지함': 'IMPORTANT', '별표': 'STARRED', '읽지 않음': 'UNREAD', '읽음': null, '열어봄': null, '스팸': 'SPAM', '휴지통으로 이동': 'TRASH', '채팅': 'CHAT', '전체보관함': null, '보관메일함': null, '모든 메일': null, '보관됨': null, '보관': null,
     '프로모션 카테고리': 'CATEGORY_PROMOTIONS', '소셜 카테고리': 'CATEGORY_SOCIAL', '업데이트 카테고리': 'CATEGORY_UPDATES', '포럼 카테고리': 'CATEGORY_FORUMS', '개인 카테고리': 'CATEGORY_PERSONAL',
     '프로모션': 'CATEGORY_PROMOTIONS', '소셜': 'CATEGORY_SOCIAL', '업데이트': 'CATEGORY_UPDATES', '포럼': 'CATEGORY_FORUMS', '기본': 'CATEGORY_PERSONAL', '구매': 'CATEGORY_PURCHASES',
-    '마지막으로 연 시간': null, '마지막으로 연시간': null, '마지막으로 열어본 시간': null, 'last opened': null, '청구서': null, '영수증': null, '예약': null, '여행': null, // Gmail 이 자동으로 붙이는 표시·스마트 분류: 라벨로 만들지 않음 'category purchases': 'CATEGORY_PURCHASES', 'category_purchases': 'CATEGORY_PURCHASES', 'purchases': 'CATEGORY_PURCHASES' };
+    '마지막으로 연 시간': null, '마지막으로 연시간': null, '마지막으로 열어본 시간': null, 'last opened': null, '청구서': null, '영수증': null, '예약': null, '여행': null, /* Gmail 이 자동으로 붙이는 표시·스마트 분류: 라벨로 만들지 않음 */ 'category purchases': 'CATEGORY_PURCHASES', 'category_purchases': 'CATEGORY_PURCHASES', 'purchases': 'CATEGORY_PURCHASES' };
   var SYS_NOSPACE = {}; Object.keys(SYS).forEach(function (k) { SYS_NOSPACE[k.replace(/\s+/g, '')] = SYS[k]; });
   String(value || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (name) {
     var key = name.toLowerCase(), key2 = key.replace(/\s+/g, '');
