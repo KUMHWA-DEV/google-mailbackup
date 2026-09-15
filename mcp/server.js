@@ -37,7 +37,7 @@ const DOWNLOAD_DIR = process.env.MAIL_BACKUP_DOWNLOAD_DIR || path.join(os.homedi
 const log = (...a) => console.error('[mail-backup-mcp]', ...a);
 
 // ---------- auth ----------
-async function getAuth() {
+async function getAuth(onUrl) {
   let raw;
   if (process.env.MAIL_BACKUP_OAUTH_JSON) {
     const v = process.env.MAIL_BACKUP_OAUTH_JSON.trim();
@@ -56,10 +56,10 @@ async function getAuth() {
     oauth.on('tokens', t => saveToken({ ...oauth.credentials, ...t }));
     return oauth;
   }
-  return await loginInteractive(oauth);
+  return await loginInteractive(oauth, onUrl);
 }
 function saveToken(t) { fs.mkdirSync(CONFIG_DIR, { recursive: true }); fs.writeFileSync(TOKEN_PATH, JSON.stringify(t, null, 2), { mode: 0o600 }); }
-function loginInteractive(oauth) {
+function loginInteractive(oauth, onUrl) {
   return new Promise((resolve, reject) => {
     const server = http.createServer(async (req, res) => {
       try {
@@ -81,9 +81,10 @@ function loginInteractive(oauth) {
       oauth.redirectUri = `http://127.0.0.1:${server.address().port}`;
       const url = oauth.generateAuthUrl({ access_type: 'offline', prompt: 'consent', scope: ALL_SCOPES });
       log('브라우저에서 로그인하세요:', url);
+      if (onUrl) onUrl(url);
       log(`redirect_uri_mismatch(400)가 뜨면: GCP 콘솔의 OAuth 클라이언트가 "데스크톱 앱" 유형인지 확인하세요. "웹 애플리케이션" 유형이면 승인된 리디렉션 URI에 ${oauth.redirectUri} 를 추가하거나 데스크톱 앱으로 새로 만드세요.`);
       const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start ""' : 'xdg-open';
-      require('child_process').exec(`${opener} "${url}"`);
+      if (!process.env.MAIL_BACKUP_NO_BROWSER) require('child_process').exec(`${opener} "${url}"`);
     });
     server.listen(FIXED_PORT, '127.0.0.1');
   });
@@ -153,8 +154,19 @@ async function main() {
     const off = async () => { throw new Error('fixture 모드에서는 Drive 파일을 읽을 수 없습니다'); };
     ctx = { drive: { files: { get: off, copy: off, export: off, delete: off, list: off } }, sheets: { spreadsheets: { values: { get: off } } } };
   } else {
-    const auth = await getAuth();
-    ctx = { drive: google.drive({ version: 'v3', auth }), sheets: google.sheets({ version: 'v4', auth }), script: SCRIPT_ID ? google.script({ version: 'v1', auth }) : null };
+    // 토큰이 이미 있으면 바로 연결. 없으면 서버는 즉시 뜨고(앱이 타임아웃되지 않게), 첫 도구 호출 때 브라우저 로그인을 시작한다.
+    const build = (auth) => ({ drive: google.drive({ version: 'v3', auth }), sheets: google.sheets({ version: 'v4', auth }), script: SCRIPT_ID ? google.script({ version: 'v1', auth }) : null });
+    if (fs.existsSync(TOKEN_PATH)) {
+      ctx = build(await getAuth());
+    } else {
+      const st = { real: null, pending: null, url: null };
+      const need = () => {
+        if (st.real) return st.real;
+        if (!st.pending) st.pending = getAuth(u => { st.url = u; }).then(a => { st.real = build(a); log('로그인 완료'); return st.real; }).catch(e => { st.pending = null; log('로그인 실패:', e.message); throw e; });
+        throw new Error('로그인이 필요합니다. 브라우저에 열린 Google 로그인 창에서 회사 계정으로 로그인한 뒤 다시 질문하세요.' + (st.url ? ' 창이 안 열렸으면 이 주소를 여세요: ' + st.url : ' (로그인 창을 여는 중입니다. 잠시 후 다시 시도하세요)'));
+      };
+      ctx = { get drive() { return need().drive; }, get sheets() { return need().sheets; }, get script() { return need().script; } };
+    }
   }
   const server = new McpServer({ name: 'mail-backup', version: '1.0.0' });
 
