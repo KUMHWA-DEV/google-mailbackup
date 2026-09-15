@@ -968,9 +968,12 @@
   function histRow(h, i, full) {
     var ok = h.status === 'cancelled' ? '<span title="취소됨 · ' + fmtNum(h.processed) + '건은 저장됨">✖</span>' : h.errors ? '<span title="오류 ' + h.errors + '건">⚠️</span>' : '<span title="정상">✅</span>';
     var range = h.mailFrom ? fmtDayShort(h.mailFrom) + ' ~ ' + fmtDayShort(h.mailTo) : '-';
-    var imp = h.kind === 'import';
-    var how = imp ? '<span class="pill blue" title="예전 백업 가져오기" style="margin-left:4px">📥 가져오기</span>' : h.manual ? '<span title="수동 실행">🖱</span>' : '<span title="자동 실행">⏱</span>';
+    var imp = h.kind === 'import' || h.kind === 'repair', rep = h.kind === 'repair';
+    var how = rep ? '<span class="pill gray" title="가져온 메일 오류 수정" style="margin-left:4px">🛠 오류 수정</span>' : imp ? '<span class="pill blue" title="예전 백업 가져오기" style="margin-left:4px">📥 가져오기</span>' : h.manual ? '<span title="수동 실행">🖱</span>' : '<span title="자동 실행">⏱</span>';
     if (imp) range = '-';
+    if (rep) return '<tr><td>' + (h.errors ? '<span title="오류 ' + h.errors + '건 · ' + esc(h.lastError || '') + '">⚠️</span>' : '<span title="정상">✅</span>') + ' ' + fmtDate(h.startedAt) + ' ' + how + '</td>' + (full ? '<td>' + fmtDate(h.finishedAt) + '</td>' : '') +
+      '<td>' + (h.activeSeconds ? secs(Math.round(h.activeSeconds)) : dur(h.startedAt, h.finishedAt)) + '</td><td colspan="2"><span style="color:var(--muted);font-size:12px">고침 <b>' + fmtNum(h.fixed) + '</b>행 · 옮김 <b>' + fmtNum(h.moved) + '</b>개' + (h.retryFiles ? ' · 재시도 파일 ' + fmtNum(h.retryFiles) + '개' : '') + '</span></td>' +
+      '<td' + (h.errors ? ' style="color:var(--red);font-weight:700"' : '') + '>' + fmtNum(h.errors) + '</td><td>–</td><td style="color:var(--muted)">-</td><td><span style="color:var(--muted);font-size:12px">라벨·폴더·대화 묶음</span></td><td>–</td><td></td></tr>';
     return '<tr' + (h.status === 'cancelled' ? ' class="held"' : '') + '><td>' + ok + ' ' + fmtDate(h.startedAt) + ' ' + how + '</td>' + (full ? '<td>' + fmtDate(h.finishedAt) + '</td>' : '') +
       '<td title="' + esc(timingTip(h)) + '">' + (h.activeSeconds ? secs(h.activeSeconds) : dur(h.startedAt, h.finishedAt)) + (h.timing ? ' <span style="color:var(--faint)">⏱</span>' : '') + '</td>' +
       '<td>' + fmtNum(runTarget(h)) + (h.skipped ? ' <small style="color:var(--faint)" title="이미 저장돼 있어 건너뜀">(' + fmtNum(h.skipped) + ' 기존)</small>' : '') + '</td><td><b style="color:var(--blue-ink)">' + fmtNum(h.processed) + '</b></td>' +
@@ -1004,7 +1007,7 @@
     var ir = d.importRun || {}, impRunning = /^(running|queued|stopping|paused|error)$/.test(ir.state || '');
     // 백업 이력 + 가져오기 이력을 시작 시각순으로 합쳐 보여준다 (📬 버튼은 백업 회차에만)
     var all = hist.map(function (h, i) { return Object.assign({ kind: 'backup', _bi: i }, h); })
-      .concat((d.importHistory || []).map(function (h) { return Object.assign({ kind: 'import' }, h); }))
+      .concat((d.importHistory || []).map(function (h) { return Object.assign({}, h, { kind: h.kind || 'import' }); }))
       .sort(function (a, b) { return String(b.startedAt || '').localeCompare(String(a.startedAt || '')); });
     $('histCount').textContent = all.length + (running ? 1 : 0) + (impRunning ? 1 : 0);
     var empty = (running || impRunning) ? '' : '<tr><td colspan="12" class="empty">아직 실행 이력이 없습니다</td></tr>';
@@ -1062,7 +1065,9 @@
     $('impRepairNote').hidden = !s.repairNeeded || repairing; $('impRepairRun').hidden = !running || repairing; // 오류 수정이 도는 동안은 안내 대신 진행 상자
     var what = []; if (s.failedMsgs) what.push('저장에 실패한 메일 ' + fmtNum(s.failedMsgs) + '건을 다시 시도합니다 (원본 파일을 다시 훑되 이미 저장된 메일은 건너뜀)'); if (s.repairNeeded) what.push('예전 버전이 잘못 기록한 행이 있으면 라벨명 복원·파일 이동·대화 다시 묶기를 합니다');
     $('impRepairWhat').textContent = what.join(' · ') + '.';
-    $('impHist').innerHTML = (s.history || []).map(function (h) { return '<tr' + (h.status === 'cancelled' ? ' class="held"' : '') + '><td>' + (h.status === 'cancelled' ? '✖ ' : h.errors ? '⚠️ ' : '✅ ') + fmtDate(h.startedAt) + '</td><td>' + fmtDate(h.finishedAt) + '</td><td><b style="color:var(--blue-ink)">' + fmtNum(h.processed) + '</b></td><td>' + fmtNum(h.skipped) + '</td><td>' + fmtNum(h.errors) + '</td><td>' + fmtBytes(h.bytes) + '</td></tr>'; }).join('') || '<tr><td colspan="6" class="empty">아직 가져오기 이력이 없습니다</td></tr>';
+    $('impHist').innerHTML = (s.history || []).map(function (h) {
+      if (h.kind === 'repair') return '<tr><td>' + (h.errors ? '⚠️ ' : '✅ ') + fmtDate(h.startedAt) + ' <span class="pill gray">🛠 오류 수정</span></td><td>' + fmtDate(h.finishedAt) + '</td><td colspan="3"><span style="color:var(--muted);font-size:12px">고침 <b>' + fmtNum(h.fixed) + '</b>행 · 옮김 <b>' + fmtNum(h.moved) + '</b>개' + (h.retryFiles ? ' · 재시도 파일 ' + fmtNum(h.retryFiles) + '개' : '') + (h.errors ? ' · 오류 ' + fmtNum(h.errors) : '') + '</span></td><td>' + (h.activeSeconds ? secs(Math.round(h.activeSeconds)) : dur(h.startedAt, h.finishedAt)) + '</td></tr>';
+      return '<tr' + (h.status === 'cancelled' ? ' class="held"' : '') + '><td>' + (h.status === 'cancelled' ? '✖ ' : h.errors ? '⚠️ ' : '✅ ') + fmtDate(h.startedAt) + '</td><td>' + fmtDate(h.finishedAt) + '</td><td><b style="color:var(--blue-ink)">' + fmtNum(h.processed) + '</b></td><td>' + fmtNum(h.skipped) + '</td><td>' + fmtNum(h.errors) + '</td><td>' + fmtBytes(h.bytes) + '</td></tr>'; }).join('') || '<tr><td colspan="6" class="empty">아직 가져오기 이력이 없습니다</td></tr>';
     clearTimeout(impTimer); impTimer = setTimeout(function tick() { impTimer = null; if (state.tab !== 'import' || document.visibilityState !== 'visible') { impTimer = setTimeout(tick, 5000); return; } loadImport(); }, running ? 5000 : 20000); // 탭이 열려 있는 동안 계속 갱신 (실행 중 5초, 평소 20초)
     state.imp = s;
   }
@@ -1083,7 +1088,9 @@
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && state.dash && Date.now() - (state.dashAt || 0) > 5000) loadDashboard(); }); // 다른 창에 있다 돌아오면 바로 갱신
   function loadDashboard(showBusy) {
     if (showBusy) busyAll(DASH_BTNS, true, '불러오는 중'); // 첫 로드·재조회: 데이터가 올 때까지 버튼 비활성 + 스피너 (주기 폴링은 제외)
-    return call('getDashboard').then(renderDashboard).catch(function (e) { busyAll(DASH_BTNS, false); $('stateText').textContent = '연결 실패'; banner(e.message || String(e)); });
+    return call('getDashboard').then(function (d) {
+      try { renderDashboard(d); } catch (e) { console.error('renderDashboard', e); busyAll(DASH_BTNS, false); var act = /^(running|queued|stopping)$/.test(d.state || '') || /^(running|queued|stopping)$/.test((d.importRun || {}).state || ''); scheduleDashPoll(act); } // 그리기에서 예외가 나도 주기 갱신은 계속
+    }).catch(function (e) { busyAll(DASH_BTNS, false); $('stateText').textContent = '연결 실패'; banner(e.message || String(e)); scheduleDashPoll(false); });
   }
 
   function renderScopeSeg() {

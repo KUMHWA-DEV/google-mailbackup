@@ -344,12 +344,14 @@ function readZipEntryAll_(fileId, entry, dataStart) {
 
 // ---------- 실행 (백업과 독립: 자체 임대·트리거·상태) ----------
 function importStatus_() { try { return JSON.parse(getProp_(IMPORT_PROP.STATUS, '{}')) || {}; } catch (e) { return {}; } }
+var importRunClock_ = null; // { started, base } — 실행 중 상태 기록마다 경과 시간을 커서에 반영
 function setImportStatus_(patch) {
+  if (patch.cursor && importRunClock_) patch.cursor.activeSeconds = importRunClock_.base + (Date.now() - importRunClock_.started) / 1000;
   var st = importStatus_(); Object.keys(patch).forEach(function (k) { st[k] = patch[k]; }); st.updatedAt = new Date().toISOString();
   try { props_().setProperty(IMPORT_PROP.STATUS, JSON.stringify(st)); } catch (e) { delete st.cursor; props_().setProperty(IMPORT_PROP.STATUS, JSON.stringify(st)); }
 }
 function importCursor_() { try { return JSON.parse(getProp_(IMPORT_PROP.CURSOR, '') || 'null'); } catch (e) { return null; } }
-function saveImportCursor_(c) { props_().setProperty(IMPORT_PROP.CURSOR, JSON.stringify(c)); }
+function saveImportCursor_(c) { if (c && importRunClock_) c.activeSeconds = importRunClock_.base + (Date.now() - importRunClock_.started) / 1000; props_().setProperty(IMPORT_PROP.CURSOR, JSON.stringify(c)); }
 function importHistory_() { try { return JSON.parse(getProp_(IMPORT_PROP.HISTORY, '[]')) || []; } catch (e) { return []; } }
 function deleteImportTriggers_() { ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === IMPORT_FN) ScriptApp.deleteTrigger(t); }); }
 function scheduleImport_(delayMs) {
@@ -459,7 +461,9 @@ function getImportState() {
   };
 }
 function appendImportHistory_(c) {
-  var h = importHistory_(); h.unshift({ startedAt: c.startedAt, finishedAt: c.finishedAt, processed: c.processed, skipped: c.skipped, errors: c.errors, bytes: c.bytes, files: c.files, chunks: c.chunks, status: c.status || 'done', lastError: c.lastError || null });
+  var h = importHistory_();
+  if (c.kind === 'repair') h.unshift(c);
+  else h.unshift({ kind: 'import', startedAt: c.startedAt, finishedAt: c.finishedAt, processed: c.processed, skipped: c.skipped, errors: c.errors, bytes: c.bytes, files: c.files, chunks: c.chunks, activeSeconds: c.activeSeconds || 0, status: c.status || 'done', lastError: c.lastError || null });
   try { props_().setProperty(IMPORT_PROP.HISTORY, JSON.stringify(h.slice(0, 8))); } catch (e) { /* 무시 */ }
 }
 
@@ -472,6 +476,7 @@ function runImport() {
   props_().setProperty(IMPORT_PROP.LEASE, String(Date.now() + IMPORT_LEASE_MS));
   var cursor = importCursor_() || newImportCursor_();
   var started = Date.now(), deadline = started + maxRunSeconds_() * 1000;
+  importRunClock_ = { started: started, base: cursor.activeSeconds || 0 };
   var settings = getSettings_();
   var pending = [], sheet, outOfTime = false, stopped = false, lastStop = Date.now();
   var stopWanted = function () { if (Date.now() - lastStop > 10 * 1000) { lastStop = Date.now(); return getProp_(IMPORT_PROP.STOP, '') === '1'; } return false; };
@@ -492,6 +497,8 @@ function runImport() {
     if (cursor.repairOnly) { // 오류 수정 실행: 행 복구가 끝난 자리
       var prev = cursor.repairPrevState, fixedN = cursor.repairedTotal || 0, retry = cursor.retryFiles || [];
       delete cursor.repairOnly; delete cursor.repairPrevState; delete cursor.repairedTotal; delete cursor.retryFiles; cursor.wasRepair = true; // 이 실행은 오류 수정 실행: 끝나도 자동 수정을 다시 걸지 않음
+      cursor.activeSeconds = (cursor.activeSeconds || 0) + (Date.now() - started) / 1000; importRunClock_ = { started: Date.now(), base: cursor.activeSeconds };
+      appendImportHistory_({ kind: 'repair', startedAt: cursor.startedAt, finishedAt: new Date().toISOString(), fixed: fixedN, moved: cursor.movedFiles || 0, retryFiles: retry.length, errors: cursor.errors || 0, chunks: cursor.chunks, activeSeconds: cursor.activeSeconds, lastError: cursor.lastError || null, status: cursor.errors ? 'errors' : 'done' });
       var doneMsg = (fixedN ? '오류 수정 완료: ' + fixedN + '건의 라벨·폴더·대화 묶음을 고쳤습니다' : '오류 수정 완료') + (cursor.movedFiles ? ' · 파일 ' + cursor.movedFiles + '개를 맞는 폴더로 옮김' : '') + (cursor.errors ? ' · 오류 ' + cursor.errors + '건 (마지막: ' + (cursor.lastError || '') + ')' : ''); delete cursor.movedFiles;
       if (retry.length) { // 실패한 메일이 있던 파일은 완료 표시를 풀어 다시 훑는다 (이미 저장된 메일은 건너뛰므로 실패분만 추가됨)
         var unmarked = unmarkImportFiles_(sheet, retry);
@@ -598,6 +605,7 @@ function runImport() {
     if (cursor.retries <= 5) { try { scheduleImport_(5 * 60 * 1000); } catch (e3) { /* 무시 */ } setImportStatus_({ state: 'running', message: '오류 · 5분 뒤 재시도 (' + cursor.retries + '/5) · ' + cursor.lastError, cursor: cursor }); }
     else setImportStatus_({ state: 'error', message: '가져오기 실패: ' + cursor.lastError, cursor: cursor });
   } finally {
+    importRunClock_ = null;
     props_().deleteProperty(IMPORT_PROP.LEASE);
   }
 }
