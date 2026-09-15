@@ -178,7 +178,7 @@ function parseEml(bin, decodeCharset) {
     headers: { from: mimeDecodeWords_(h['from'], decodeCharset), to: mimeDecodeWords_(h['to'], decodeCharset), cc: mimeDecodeWords_(h['cc'], decodeCharset), subject: mimeDecodeWords_(h['subject'], decodeCharset) },
     bodyText: body,
     bodyHtml: acc.html || '',
-    inlineParts: acc.attachments.filter(function (a) { return a.inline && a.cid; }), // cid: 로 참조되는 본문 이미지
+    inlineParts: acc.attachments.filter(function (a) { return !!a.cid; }), // cid: 로 참조되는 본문 이미지 (Outlook 처럼 disposition 이 attachment 여도 cid 가 있으면 본문 참조 가능)
     attachments: atts,
     // Google Takeout mbox: "Inbox,Important,Category Promotions,라벨명" — 한글 라벨은 =?UTF-8?B?…?= 로 인코딩돼 있으므로 항목별로 푼다
     threadHint: mimeThreadHint_(h),

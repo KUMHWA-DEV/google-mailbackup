@@ -165,17 +165,23 @@ function getMessageHtml(id, hint) {
   if (file.getSize() > 15 * 1024 * 1024) return { html: null, skipped: '원본이 커서(15MB 초과) 텍스트만 표시' };
   var m = parseEml(bytesToBin_(file.getBlob().getBytes()), decodeCharsetGas_);
   if (!m.bodyHtml) return { html: null, skipped: 'HTML 본문 없음' };
-  var html = m.bodyHtml, budget = 4 * 1024 * 1024, images = 0;
-  (m.inlineParts || []).forEach(function (p) {
-    var b64 = p.dataB64 || (p.data ? Utilities.base64Encode(Utilities.newBlob(p.data.split('').map(function (c) { return c.charCodeAt(0) & 255; })).getBytes()) : '');
-    if (!b64 || b64.length > budget) return;
-    var re = new RegExp('cid:' + p.cid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+  var html = m.bodyHtml, budget = 8 * 1024 * 1024, images = 0, missing = 0;
+  // cid 참조 → data: URI (대소문자 무시, 작은 것부터 넣어 예산 안에 최대한 많이)
+  var parts = (m.inlineParts || []).map(function (p) { return { p: p, b64: p.dataB64 || (p.data ? Utilities.base64Encode(Utilities.newBlob(p.data.split('').map(function (c) { return c.charCodeAt(0) & 255; })).getBytes()) : '') }; })
+    .filter(function (x) { return x.b64; }).sort(function (a, b) { return a.b64.length - b.b64.length; });
+  parts.forEach(function (x) {
+    var re = new RegExp('cid:\\s*' + x.p.cid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
     if (!re.test(html)) return;
-    html = html.replace(re, 'data:' + (p.mime || 'image/png') + ';base64,' + b64); budget -= b64.length; images += 1;
+    if (x.b64.length > budget) { missing += 1; return; }
+    html = html.replace(re, 'data:' + (x.p.mime || 'image/png') + ';base64,' + x.b64); budget -= x.b64.length; images += 1;
   });
+  // 남은 cid 참조(원본에 없는 이미지)는 깨진 아이콘 대신 안내 문구
+  html = html.replace(/<img([^>]*?)src\s*=\s*("|')?cid:[^"'\s>]*("|')?([^>]*)>/gi, function (_, a, q1, q2, b) { missing += 1; return '<span style="display:inline-block;padding:2px 8px;border:1px dashed #dadce0;border-radius:6px;color:#5f6368;font-size:12px">🖼 이미지 없음(원본에 포함되지 않음)</span>'; });
+  // https 페이지 안에서는 http 이미지가 차단되므로 https 로 (대부분 서버가 지원)
+  html = html.replace(/(<img[^>]*?\ssrc\s*=\s*("|'))http:\/\//gi, '$1https://').replace(/url\((['"]?)http:\/\//gi, 'url($1https://');
   html = html.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<(iframe|object|embed|form|meta|link)[^>]*>[\s\S]*?<\/\1>/gi, '').replace(/<(iframe|object|embed|form|meta|link)[^>]*\/?>/gi, '')
     .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '').replace(/(href|src)\s*=\s*("|')\s*javascript:[^"']*\2/gi, '$1="#"');
-  return { html: html, images: images, skipped: '' };
+  return { html: html, images: images, missing: missing, skipped: '' };
 }
 
 function getCategories() {
