@@ -696,6 +696,14 @@
       google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[fn](arg);
     });
   }
+  /** 버튼을 "처리 중" 상태로: 비활성화 + 작은 스피너 (원래 내용은 data-busy에 보관, off 때 복원). 숨겨진 버튼은 건드리지 않는다 */
+  function busy(id, on, label) {
+    var b = $(id); if (!b) return;
+    if (on) { if (b.hidden) return; if (!b.dataset.busy) b.dataset.busy = b.innerHTML; b.disabled = true; b.innerHTML = '<span class="spin' + (/\b(primary|warn)\b/.test(b.className) ? '' : ' dark') + '"></span>' + (label ? ' ' + label : ''); }
+    else if (b.dataset.busy != null) { b.innerHTML = b.dataset.busy; delete b.dataset.busy; b.disabled = false; }
+  }
+  var DASH_BTNS = ['btnRun', 'btnStop', 'btnResume', 'btnCancel'], IMP_BTNS = ['impStart', 'impStop', 'impResume', 'impCancel'];
+  function busyAll(ids, on, label) { ids.forEach(function (id) { busy(id, on, label); }); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function fmtBytes(n) { n = Number(n) || 0; var u = ['B', 'KB', 'MB', 'GB', 'TB'], i = 0; while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; } return (i === 0 ? n : n.toFixed(n >= 100 ? 0 : 1)) + ' ' + u[i]; }
   function fmtNum(n) { return (Number(n) || 0).toLocaleString('ko-KR'); }
@@ -747,7 +755,7 @@
     state.tab = name;
     ['overview', 'explorer', 'settings', 'history', 'ai', 'import'].forEach(function (t) { $('tab-' + t).hidden = t !== name; });
     if (name === 'ai') renderAi();
-    if (name === 'import') loadImport();
+    if (name === 'import') loadImport(true);
     document.querySelectorAll('#tabs button').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === name); });
     if (name === 'explorer' && !state.explorer) loadExplorer();
     if (name === 'settings' && state.dash) fillSettings(state.dash.settings);
@@ -770,6 +778,7 @@
     }).join('') || '<div class="empty">-</div>';
   }
   function renderDashboard(d) {
+    busyAll(DASH_BTNS, false); // 로딩/처리 중 표시 해제 (아래에서 실제 상태로 다시 그림)
     state.dash = d;
     var s = d.settings || {}, sch = d.schedule || {}, sum = d.summary || {}, r = d.currentRun || {};
     var running = d.state === 'running' || d.state === 'queued' || d.state === 'stopping';
@@ -976,14 +985,18 @@
           var ra = d.currentRun && d.currentRun.resumeAt ? new Date(d.currentRun.resumeAt).getTime() - Date.now() : 0;
           setTimeout(step, Math.max(1500, Math.min(ra, 3 * 60 * 1000))); // 할당량 대기 시각까지 기다렸다가 재개
         } else { state.inlineRunning = false; toast(d.state === 'error' ? '백업 실패' : '✔ 백업 완료', d.state === 'error'); }
-      }).catch(function (e) { state.inlineRunning = false; toast('실행 실패: ' + (e.message || e), true); loadDashboard(); });
+      }).catch(function (e) { state.inlineRunning = false; toast('실행 실패: ' + (e.message || e), true); loadDashboard(true); });
     };
     step();
   }
   // ---------- 가져오기(마이그레이션) ----------
   var impTimer = null;
-  function loadImport() { return call('getImportState').then(renderImport).catch(function (e) { toast('가져오기 상태 조회 실패: ' + (e.message || e), true); }); }
+  function loadImport(showBusy) {
+    if (showBusy) busyAll(IMP_BTNS, true, '불러오는 중'); // 탭을 열 때·동작 뒤 재조회: 응답 전까지 버튼 비활성 + 스피너 (주기 폴링은 제외)
+    return call('getImportState').then(renderImport).catch(function (e) { busyAll(IMP_BTNS, false); toast('가져오기 상태 조회 실패: ' + (e.message || e), true); });
+  }
   function renderImport(s) {
+    busyAll(IMP_BTNS, false);
     var c = s.cursor || {}, running = /^(running|queued|stopping)$/.test(s.state), paused = s.state === 'paused', failed = s.state === 'error';
     $('impFolderPath').innerHTML = esc(s.folderPath || '내 드라이브 › Mail Backup › _import').replace(/_import$/, '<b>_import</b>');
     $('impFolderCtl').innerHTML = s.folderExists && s.folderUrl ? '<a href="' + esc(s.folderUrl) + '" target="_blank" rel="noopener">폴더 열기 ↗</a>' : '<span class="note" style="padding:2px 8px">아직 폴더가 없습니다</span> <button type="button" class="sm" id="impMkdir">📁 폴더 만들기</button>';
@@ -992,20 +1005,22 @@
     $('impPending').textContent = s.pending == null ? '-' : fmtNum(s.pending) + (s.pendingCapped ? '+' : '');
     $('impDone').textContent = fmtNum(c.processed); $('impDup').textContent = fmtNum(c.skipped); $('impErr').textContent = fmtNum(c.errors);
     $('impLastErr').hidden = !c.lastError; $('impLastErr').textContent = c.lastError ? '마지막 오류: ' + c.lastError : '';
-    $('impStart').hidden = running || paused || failed; $('impStart').disabled = !s.pending;
+    $('impStart').hidden = running || paused || failed; $('impStart').disabled = !s.pending; $('impStart').title = s.pending ? '' : (s.pending == null ? '대기 파일 수를 세지 못했습니다' : '_import 폴더에 가져올 파일이 없습니다');
     $('impStop').hidden = !running || s.state === 'stopping'; $('impResume').hidden = !(paused || failed); $('impCancel').hidden = !(paused || failed || s.state === 'stopping');
     $('impHist').innerHTML = (s.history || []).map(function (h) { return '<tr' + (h.status === 'cancelled' ? ' class="held"' : '') + '><td>' + (h.status === 'cancelled' ? '✖ ' : h.errors ? '⚠️ ' : '✅ ') + fmtDate(h.startedAt) + '</td><td>' + fmtDate(h.finishedAt) + '</td><td><b style="color:var(--blue-ink)">' + fmtNum(h.processed) + '</b></td><td>' + fmtNum(h.skipped) + '</td><td>' + fmtNum(h.errors) + '</td><td>' + fmtBytes(h.bytes) + '</td></tr>'; }).join('') || '<tr><td colspan="6" class="empty">아직 가져오기 이력이 없습니다</td></tr>';
     if (running && !impTimer) impTimer = setTimeout(function tick() { impTimer = null; if (state.tab !== 'import') return; loadImport().then(function () { if (!impTimer && /^(running|queued|stopping)$/.test((state.imp || {}).state || '')) impTimer = setTimeout(tick, 5000); }); }, 5000);
     state.imp = s;
   }
-  $('tab-import').addEventListener('click', function (e) { if (e.target.id !== 'impMkdir') return; e.target.disabled = true; call('ensureImportFolder').then(function (r) { toast('📁 폴더를 만들었습니다'); if (r && r.url) window.open(r.url, '_blank'); loadImport(); }).catch(function (err) { toast('폴더 생성 실패: ' + (err.message || err), true); e.target.disabled = false; }); });
-  $('impStart').addEventListener('click', function () { $('impStart').disabled = true; call('startImport').then(renderImport).catch(function (e) { toast('시작 실패: ' + (e.message || e), true); $('impStart').disabled = false; }); });
-  $('impResume').addEventListener('click', function () { call('startImport').then(renderImport).catch(function (e) { toast('실패: ' + (e.message || e), true); }); });
-  $('impStop').addEventListener('click', function () { call('stopImport').then(renderImport).catch(function (e) { toast('실패: ' + (e.message || e), true); }); });
-  $('impCancel').addEventListener('click', function () { call('cancelImport').then(renderImport).catch(function (e) { toast('실패: ' + (e.message || e), true); }); });
+  $('tab-import').addEventListener('click', function (e) { if (e.target.id !== 'impMkdir') return; e.target.disabled = true; call('ensureImportFolder').then(function (r) { toast('📁 폴더를 만들었습니다'); if (r && r.url) window.open(r.url, '_blank'); loadImport(true); }).catch(function (err) { toast('폴더 생성 실패: ' + (err.message || err), true); e.target.disabled = false; }); });
+  function impAction(fn, okMsg) { busyAll(IMP_BTNS, true); call(fn).then(function (s) { renderImport(s); if (okMsg) toast(okMsg); }).catch(function (e) { busyAll(IMP_BTNS, false); toast('실패: ' + (e.message || e), true); }); }
+  $('impStart').addEventListener('click', function () { impAction('startImport', '⏳ 대기열에 넣었습니다 · 곧 시작'); });
+  $('impResume').addEventListener('click', function () { impAction('startImport', '▶ 이어서 실행'); });
+  $('impStop').addEventListener('click', function () { impAction('stopImport'); });
+  $('impCancel').addEventListener('click', function () { impAction('cancelImport', '취소됨'); });
 
-  function loadDashboard() {
-    return call('getDashboard').then(renderDashboard).catch(function (e) { $('stateText').textContent = '연결 실패'; banner(e.message || String(e)); });
+  function loadDashboard(showBusy) {
+    if (showBusy) busyAll(DASH_BTNS, true, '불러오는 중'); // 첫 로드·재조회: 데이터가 올 때까지 버튼 비활성 + 스피너 (주기 폴링은 제외)
+    return call('getDashboard').then(renderDashboard).catch(function (e) { busyAll(DASH_BTNS, false); $('stateText').textContent = '연결 실패'; banner(e.message || String(e)); });
   }
 
   function renderScopeSeg() {
@@ -1084,9 +1099,9 @@
       .catch(function (e) { toast('실행 실패: ' + (e.message || e), true); })
       .then(function () { $('modal').hidden = true; $('modalOk').disabled = false; $('modalOk').textContent = '백업 시작'; });
   });
-  $('btnStop').addEventListener('click', function () { $('btnStop').disabled = true; call('stopBackup').then(function (d) { renderDashboard(d); toast('⏹ 중지 요청 · 현재 메일까지 저장 후 멈춥니다'); }).catch(function (e) { toast('실패: ' + (e.message || e), true); }); });
-  $('btnResume').addEventListener('click', function () { call('resumeBackup').then(function (d) { renderDashboard(d); toast('▶ 이어서 실행'); }).catch(function (e) { toast('실패: ' + (e.message || e), true); }); });
-  $('btnCancel').addEventListener('click', function () { call('cancelBackup').then(function (d) { renderDashboard(d); toast('취소됨'); }).catch(function (e) { toast('실패: ' + (e.message || e), true); }); });
+  $('btnStop').addEventListener('click', function () { busyAll(DASH_BTNS, true); call('stopBackup').then(function (d) { renderDashboard(d); toast('⏹ 중지 요청 · 현재 메일까지 저장 후 멈춥니다'); }).catch(function (e) { busyAll(DASH_BTNS, false); toast('실패: ' + (e.message || e), true); }); });
+  $('btnResume').addEventListener('click', function () { busyAll(DASH_BTNS, true); call('resumeBackup').then(function (d) { renderDashboard(d); toast('▶ 이어서 실행'); }).catch(function (e) { busyAll(DASH_BTNS, false); toast('실패: ' + (e.message || e), true); }); });
+  $('btnCancel').addEventListener('click', function () { busyAll(DASH_BTNS, true); call('cancelBackup').then(function (d) { renderDashboard(d); toast('취소됨'); }).catch(function (e) { busyAll(DASH_BTNS, false); toast('실패: ' + (e.message || e), true); }); });
   $('swAuto').addEventListener('change', function () {
     var on = this.checked; this.disabled = true;
     call(on ? 'installScheduledTrigger' : 'uninstallScheduledTrigger').then(function (d) { renderDashboard(d); toast(on ? '⏱ 자동 백업 켜짐' : '자동 백업 꺼짐'); })
@@ -1655,7 +1670,7 @@
   window.addEventListener('hashchange', function () { if (location.hash === '#ai') showTab('ai'); });
 
   // ---------- init ----------
-  loadDashboard();
+  loadDashboard(true);
 })();
 </script>
 </body>

@@ -155,6 +155,7 @@ http.createServer((req, res) => {
       try {
         if (!api[fn]) throw new Error('unknown function ' + fn);
         const arg = body ? JSON.parse(body) : undefined;
+        if (process.env.DEV_LATENCY_MS) await new Promise(r => setTimeout(r, Number(process.env.DEV_LATENCY_MS))); // 로딩 표시 확인용 지연
         const out = await api[fn](arg);
         res.writeHead(200, { 'content-type': 'application/json' });
         res.end(JSON.stringify(out === undefined ? null : out));
