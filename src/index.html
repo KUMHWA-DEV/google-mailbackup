@@ -156,7 +156,7 @@
   .qa .a { background: #fff; border: 1px solid var(--line); border-radius: 14px 14px 14px 4px; padding: 9px 12px; font-size: 12.5px; color: var(--ink2); white-space: pre-line; line-height: 1.55; }
   .qa .a b { color: var(--ink); }
   .ai-opt p { margin: 0 0 12px; color: var(--ink2); font-size: 13px; }
-  .ai-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+  .ai-hero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
   .ai-hero .card { min-width: 0; }
   .codewrap { min-width: 0; }
   .adminbox textarea { width: 100%; min-height: 90px; font: 11px/1.4 ui-monospace, Menlo, monospace; border: 1px solid #cbd5e1; border-radius: 10px; padding: 8px; }
@@ -552,29 +552,26 @@
 
     <div class="ai-hero">
       <div class="card ai-opt">
-        <div class="cardhead"><h3>🖥 한 줄 설치</h3><span class="pill green">터미널 · 1분</span></div>
-        <p>터미널(macOS: 터미널 앱, Windows: PowerShell)에 아래 한 줄을 붙여넣고 실행하면 선택한 앱의 MCP 설정에 항목이 추가됩니다. Node.js 18 이상이 필요합니다. AI에게 실행을 시키지 마세요. 대부분의 AI 도구는 정책상 외부 코드 실행을 하지 않습니다.</p>
-        <div id="aiInstallCmd"></div>
-        <ol style="margin:10px 0 0;padding-left:18px;font-size:13px;line-height:1.7">
-          <li>실행 후 앱을 완전히 종료했다가 다시 엽니다.</li>
-          <li>첫 질문을 하면 브라우저에 Google 로그인 창이 열립니다. <b>회사 계정</b>으로 로그인하고, 동의 화면의 권한이 아래 "권한" 표시와 같은지 확인합니다.</li>
-          <li>"내 백업 메일 상태 알려줘"로 테스트합니다.</li>
-        </ol>
-        <p class="note" id="aiNoOauth" style="margin-top:10px" hidden>관리자가 아직 OAuth 클라이언트를 등록하지 않아, 첫 실행 때 관리자에게 받은 파일 위치를 묻습니다.</p>
-      </div>
-      <div class="card ai-opt">
-        <div class="cardhead"><h3>🛠 직접 설정</h3><span class="pill gray">매뉴얼 · 경로 입력 없음</span></div>
-        <label class="sw" style="margin:0 0 10px;font-size:12px" title="켜면 AI가 백업 실행·감지·설정 변경·자동 백업 켜기까지 할 수 있습니다. 대신 로그인 때 Gmail 읽기, Apps Script 실행, 알림 메일 발송 권한을 추가로 요청합니다. 꺼져 있으면 Drive/시트 읽기 권한만 요청하는 읽기 전용입니다. 두 카드 모두에 적용됩니다."><input type="checkbox" id="aiExec"><i></i>⚡ 실행 모드 (백업 실행·설정 변경까지 · 권한 추가 요청) — 기본은 읽기 전용</label>
-        <p>쓰는 앱을 고르고 설정을 붙여넣습니다. 저장소를 받을 필요도, 경로를 적을 필요도 없습니다(Node.js 18+만 필요).</p>
+        <div class="cardhead"><h3>🖥 AI 앱에 연결</h3><span class="pill green">터미널 한 줄 · 1분</span></div>
         <div class="ai-clients" id="aiClients">
           <button type="button" data-c="claude-desktop" class="active">Claude Desktop</button>
           <button type="button" data-c="claude-code">Claude Code</button>
-          <button type="button" data-c="chatgpt">ChatGPT</button>
           <button type="button" data-c="gemini">Gemini CLI</button>
-          <button type="button" data-c="cursor">Cursor / VS Code</button>
+          <button type="button" data-c="cursor">Cursor</button>
+          <button type="button" data-c="chatgpt">ChatGPT</button>
         </div>
-        <div id="aiClientBody"></div>
+        <label class="sw" style="margin:0 0 12px;font-size:12px" title="켜면 AI가 백업 실행·감지·설정 변경·자동 백업 켜기까지 할 수 있습니다. 대신 로그인 때 Gmail 읽기, Apps Script 실행, 알림 메일 발송 권한을 추가로 요청합니다. 꺼져 있으면 Drive/시트 읽기 권한만 요청하는 읽기 전용입니다."><input type="checkbox" id="aiExec"><i></i>⚡ 실행 모드 (백업 실행·설정 변경까지 · 권한 추가 요청) — 기본은 읽기 전용</label>
+        <div id="aiInstallWrap">
+          <p>터미널(macOS: 터미널 앱, Windows: PowerShell)에 아래 한 줄을 붙여넣고 실행하면 선택한 앱의 MCP 설정에 항목이 추가됩니다. Node.js 18 이상이 필요합니다. AI에게 실행을 시키지 마세요. 대부분의 AI 도구는 정책상 외부 코드 실행을 하지 않습니다.</p>
+          <div id="aiInstallCmd"></div>
+          <ol style="margin:10px 0 0;padding-left:18px;font-size:13px;line-height:1.7">
+            <li>실행 후 앱을 완전히 종료했다가 다시 엽니다.</li>
+            <li>첫 질문을 하면 브라우저에 Google 로그인 창이 열립니다. <b>회사 계정</b>으로 로그인하고, 동의 화면의 권한이 아래 "권한" 표시와 같은지 확인합니다.</li>
+            <li>"내 백업 메일 상태 알려줘"로 테스트합니다.</li>
+          </ol>
+        </div>
         <div id="aiOauthRow" style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"></div>
+        <details id="aiManual" style="margin-top:12px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">고급 · 설정 파일을 직접 편집하려면 (ChatGPT·VS Code는 이 방법)</summary><div id="aiClientBody" style="margin-top:8px"></div></details>
       </div>
     </div>
 
@@ -1475,9 +1472,11 @@
     $('aiQa').innerHTML = AI_QA.map(function (q) { return '<div class="item"><div class="u">' + esc(q[0]) + '</div><div class="a">' + q[1] + '</div></div>'; }).join('');
     AI_PKG = AI_PKG_BASE + (d.gitSha ? '#' + d.gitSha : '');
     $('aiInstallCmd').innerHTML = codeBlock('npx -y -p ' + AI_PKG + ' mailbackup-setup' + (d.gitSha ? ' --ref ' + d.gitSha : '') + (aiExec() ? ' --script-id ' + AI_SCRIPT_ID : '') + (oauthB64() ? ' --oauth ' + oauthB64() : '') + ' --apps ' + ({ 'claude-desktop': 'claude-desktop', 'claude-code': 'claude-code', 'gemini': 'gemini', 'cursor': 'cursor' }[aiClient] || 'claude-desktop'));
-    $('aiNoOauth').hidden = !!d.oauthClientJson;
     document.querySelectorAll('#aiClients button').forEach(function (b) { b.classList.toggle('active', b.dataset.c === aiClient); });
     $('aiClientBody').innerHTML = AI_CLIENTS[aiClient]();
+    var chat = aiClient === 'chatgpt';
+    $('aiInstallWrap').hidden = chat; $('aiManual').open = chat || $('aiManual').open;
+    $('aiManual').querySelector('summary').textContent = chat ? 'ChatGPT는 원격(HTTPS) MCP만 연결됩니다 · 아래 방법으로' : '고급 · 설정 파일을 직접 편집하려면 (ChatGPT·VS Code는 이 방법)';
     $('aiOauthRow').innerHTML = d.oauthClientJson
       ? '<span style="font-size:12px;color:var(--muted)" title="MAIL_BACKUP_OAUTH_JSON 값은 이 파일을 base64로 넣은 것입니다. 파일로 받아 ~/.config/mail-backup-mcp/oauth_client.json 에 두면 그 값은 지워도 됩니다.">🔑 로그인용 앱 식별자 포함 · 별도 파일 불필요</span><button type="button" class="sm" id="oauthDl">⬇ OAuth 파일로 받기</button>'
       : '<span class="note">관리자가 OAuth 클라이언트를 아직 등록하지 않았습니다. 받은 JSON을 <code>~/.config/mail-backup-mcp/oauth_client.json</code>에 두세요.</span>';
