@@ -515,7 +515,7 @@
             <div class="btns"><button type="button" id="advReset">초기화</button><button type="submit" class="primary">🔍 검색</button></div>
           </form>
         </div>
-        <div class="right"><button type="button" class="gm-ib" id="exWide" title="전체 화면 너비로 보기 / 기본 너비">⛶</button><button type="button" class="gm-ib" id="exRefresh" title="새로고침">⟳</button></div>
+        <div class="right"><button type="button" class="gm-ib" id="exWide" title="너비 줄이기 / 전체 너비">⛶</button><button type="button" class="gm-ib" id="exRefresh" title="새로고침">⟳</button></div>
       </div>
       <div class="gm-chips" id="gmChips"></div>
       <div class="gm-navchips" id="exNavChips"></div>
@@ -1329,7 +1329,7 @@
   // 전체 너비 토글 (기억됨)
   function setWide(on) { document.body.classList.toggle('wide', !!on); $('exWide').classList.toggle('on', !!on); try { localStorage.setItem('mb.wide', on ? '1' : '0'); } catch (e) { /* 무시 */ } }
   $('exWide').addEventListener('click', function () { setWide(!document.body.classList.contains('wide')); });
-  try { if (localStorage.getItem('mb.wide') === '1') setWide(true); } catch (e) { /* 무시 */ }
+  (function () { var v = null; try { v = localStorage.getItem('mb.wide'); } catch (e) { v = null; } setWide(v !== '0'); })(); // 기본은 전체 너비, 버튼으로 줄이면 기억
   // 목록/미리보기 너비 조절 (끌기, 기억됨)
   (function () {
     var lw = document.querySelector('.gm-listwrap'), main = document.querySelector('.gm-main'), h = $('gmSplit');
