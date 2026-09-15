@@ -43,7 +43,7 @@ function dashboard() {
     summary: summarizeRecords(listRecords()),
     settings, triggerInstalled,
     folderUrl: 'https://drive.google.com/drive/folders/LOCAL', folderPath: '내 드라이브 › Mail Backup', indexSheetUrl: 'https://docs.google.com/spreadsheets/d/LOCAL',
-    webAppUrl: `http://localhost:${PORT}/`, user: 'kumhwa_dev@spris.com (local)', isOwner: true, hasOauthClient: !!oauthJson, scriptId: 'LOCAL',
+    webAppUrl: `http://localhost:${PORT}/`, user: 'kumhwa_dev@spris.com (local)', isOwner: true, hasOauthClient: !!oauthJson, scriptId: 'LOCAL', deploymentId: '',
   };
 }
 

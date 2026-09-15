@@ -1483,7 +1483,7 @@
       $('aiClientBody').innerHTML = ''; $('aiOauthRow').innerHTML = ''; $('aiAdmin').hidden = true;
       return;
     }
-    AI_PKG = AI_PKG_BASE + (d.gitSha ? '#' + d.gitSha : ''); AI_SCRIPT_ID = d.scriptId || '';
+    AI_PKG = AI_PKG_BASE + (d.gitSha ? '#' + d.gitSha : ''); AI_SCRIPT_ID = d.deploymentId || d.scriptId || ''; // 실행 모드는 배포 ID로 호출
     $('aiInstallCmd').innerHTML = !d.gitSha ? '<p class="note">배포 커밋 정보가 없어 설치 명령을 만들 수 없습니다. 관리자가 <code>npm run deploy</code>로 배포하면 생깁니다.</p>' : codeBlock('npx -y -p ' + AI_PKG + ' mailbackup-setup' + (d.gitSha ? ' --ref ' + d.gitSha : '') + (aiExec() ? ' --script-id ' + AI_SCRIPT_ID : '') + (oauthB64() ? ' --oauth ' + oauthB64() : '') + ' --apps ' + ({ 'claude-desktop': 'claude-desktop', 'claude-code': 'claude-code', 'gemini': 'gemini', 'cursor': 'cursor' }[aiClient] || 'claude-desktop'));
     document.querySelectorAll('#aiClients button').forEach(function (b) { b.classList.toggle('active', b.dataset.c === aiClient); });
     $('aiClientBody').innerHTML = AI_CLIENTS[aiClient]();

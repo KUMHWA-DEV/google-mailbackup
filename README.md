@@ -279,23 +279,20 @@ OAuth 클라이언트 탐색 순서: `MAIL_BACKUP_OAUTH_JSON`(JSON 또는 base64
 
 이후 "지난달 partner.co.kr에서 온 계약서 첨부 내용 요약해줘" 같은 요청이 `search_mail → get_mail → get_attachment_text` 순으로 처리됩니다.
 
-### 7-2. AI로 백업 실행·설정까지 (Apps Script API 모드)
+### 7-2. AI로 백업 실행·설정까지 (실행 모드)
 
 조회 도구만으로는 부족하고 AI가 **백업 실행, 감지, 설정 변경, 자동 백업 켜기/끄기, 이력 조회**까지 하게 하려면
-MCP 서버가 Apps Script API로 웹앱의 서버 함수를 호출하게 합니다. 도구: `backup_status`, `backup_history`,
+MCP 서버가 Apps Script API(`scripts.run`)로 웹앱의 서버 함수를 호출합니다. 도구: `backup_status`, `backup_history`,
 `backup_preview`, `backup_run`, `backup_settings_get`, `backup_settings_set`, `backup_auto` (실행은 호출자 본인 계정 = 웹앱과 같은 사용자별 상태).
 
-1. **GCP 표준 프로젝트에 스크립트 연결** (kumhwa_dev, 1회): Apps Script 편집기 → ⚙ 프로젝트 설정 → "Google Cloud Platform(GCP) 프로젝트" →
-   7-1에서 OAuth 클라이언트를 만든 프로젝트의 **번호** 입력. 그 프로젝트에서 **Apps Script API** 사용 설정.
-2. **API 실행 파일로 배포**: 편집기 → 배포 → 새 배포 → 유형 "API 실행 파일" → 액세스 "도메인 내 모든 사용자" → 배포.
-3. 각 사용자: 환경변수 `MAIL_BACKUP_SCRIPT_ID`에 스크립트 ID(`.clasp.json`의 scriptId, 편집기 URL의 `/d/…/edit` 부분)를 넣고
-   `~/.config/mail-backup-mcp/token.json`을 지운 뒤 다시 로그인(스코프가 늘어나므로). 예:
+웹앱 배포에는 이미 `executionApi` 설정이 들어 있어 **별도 배포는 필요 없습니다.** AI 연결 탭의 "⚡ 실행 모드"를 켜면 설정 명령에 배포 ID가 `MAIL_BACKUP_SCRIPT_ID`로 들어갑니다. 관리자가 1회 해 둘 것:
 
-```bash
-claude mcp add mail-backup -s user -e MAIL_BACKUP_SCRIPT_ID=1GRe3TOJy2G-riYt3TzWcAjF3B_roXbt27cjuuEZhip-8sk4FzJaWFkwF -- npx -y -p github:KUMHWA-DEV/google-mailbackup mailbackup-mcp
-```
+1. Apps Script 편집기 → ⚙ 프로젝트 설정 → "Google Cloud Platform(GCP) 프로젝트" → **프로젝트 변경** → OAuth 클라이언트를 만든 프로젝트의 **번호** 입력
+   (클라이언트 ID 앞의 숫자, 예: `309805655323`). Apps Script API는 OAuth 클라이언트와 스크립트가 같은 GCP 프로젝트에 있어야 호출을 허용합니다.
+2. 그 GCP 프로젝트에서 **Apps Script API** 사용 설정.
+3. 각 직원: 실행 모드 명령으로 다시 등록하고 `~/.config/mail-backup-mcp/token.json`을 지운 뒤 다시 로그인(스코프가 늘어남).
 
-OAuth 클라이언트와 스크립트가 **같은 GCP 프로젝트**에 있어야 Apps Script API 호출이 허용됩니다. 설정하지 않으면 조회 도구 7개만 동작합니다.
+실행 모드는 로그인 때 Gmail 읽기·Apps Script 실행·알림 발송 권한을 추가로 요청하고 그 토큰이 PC에 남으므로, 필요한 사람만 켜는 것을 권합니다.
 
 환경변수: `MAIL_BACKUP_SHEET_ID`(인덱스 시트 직접 지정), `MAIL_BACKUP_SCRIPT_ID`(실행 모드), `MAIL_BACKUP_DOWNLOAD_DIR`, `MAIL_BACKUP_MCP_DIR`.
 Google 없이 시험하려면 `npm run mcp:demo`(샘플 데이터, 첨부 도구는 비활성). `node dev/mcp_smoke.js` 가 도구 호출을 자동 검증합니다.

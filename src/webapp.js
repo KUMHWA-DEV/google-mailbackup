@@ -55,6 +55,8 @@ function getDashboard() {
     isOwner: isOwner_(),
     hasOauthClient: !!oauthClientJson_(), // 실제 값은 AI 연결 탭이 열릴 때 getOauthClientJson()으로만 내려준다
     scriptId: ScriptApp.getScriptId(),
+    // Apps Script API(scripts.run)로 실행할 때는 스크립트 ID 대신 배포 ID를 쓴다: 이 배포의 매니페스트에 executionApi가 있어 직원(편집자 아님)도 호출 가능
+    deploymentId: (function () { var m = String(links.webAppUrl || '').match(/\/s\/(AKfycb[\w-]+)\//); return m ? m[1] : ''; })(),
     gitSha: typeof MB_GIT_SHA !== 'undefined' ? MB_GIT_SHA : '', // 배포된 코드의 커밋 (npx 버전 고정용)
   };
 }
