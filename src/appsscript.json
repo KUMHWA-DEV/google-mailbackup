@@ -24,7 +24,9 @@
     "https://www.googleapis.com/auth/script.send_mail",
     "https://www.googleapis.com/auth/userinfo.email"
   ],
-  "executionApi": { "access": "DOMAIN" },
+  "executionApi": {
+    "access": "DOMAIN"
+  },
   "webapp": {
     "executeAs": "USER_ACCESSING",
     "access": "DOMAIN"
@@ -47,5 +49,8 @@
         }
       ]
     }
-  }
+  },
+  "urlFetchWhitelist": [
+    "https://www.googleapis.com/"
+  ]
 }
