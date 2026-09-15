@@ -650,7 +650,7 @@
       <div class="card">
         <div class="cardhead"><h3 id="impState">가져오기</h3><div style="display:flex;gap:8px"><button type="button" id="impRepair" hidden title="예전 버전이 잘못 기록한 행을 고칩니다: #ERROR! 라벨·폴더, 한 대화로 묶인 메일">🛠 오류 수정</button><button type="button" class="primary" id="impStart">▶ 가져오기 시작</button><button type="button" class="warn" id="impStop" hidden>⏹ 중지</button><button type="button" class="primary" id="impResume" hidden>▶ 이어서</button><button type="button" id="impCancel" hidden>✕ 취소</button></div></div>
         <div id="impSub" style="font-size:13px;color:var(--ink2);margin-bottom:10px"></div>
-        <div id="impRepairNote" hidden class="note" style="margin:0 0 12px;padding:8px 12px">🛠 예전 버전이 잘못 기록한 가져오기 행이 있습니다 (#ERROR! 라벨·폴더, 한 대화로 묶인 메일). 지금 작업이 끝난 뒤 <b>오류 수정</b>을 누르면 라벨명을 복원하고 파일을 맞는 폴더로 옮기고 대화를 다시 묶습니다. 백그라운드에서 돌며 몇 분 걸릴 수 있습니다.</div>
+        <div id="impRepairNote" hidden class="note" style="margin:0 0 12px;padding:8px 12px">🛠 예전 버전이 잘못 기록한 가져오기 행이 있습니다 (#ERROR! 라벨·폴더, 한 대화로 묶인 메일). 지금 작업이 끝난 뒤 <b>오류 수정</b>을 누르면 라벨명을 복원하고 파일을 맞는 폴더로 옮기고 대화를 다시 묶습니다. 백그라운드에서 돌며 몇 분 걸릴 수 있습니다. <span id="impRepairRun" hidden><b>지금은 가져오기가 실행 중이라 버튼이 잠겨 있습니다.</b></span></div>
         <div class="runbox" id="impBox" hidden style="margin:0 0 12px"></div>
         <div class="kpis" style="margin:0 0 12px"><div class="kpi"><span class="ic">📄</span><div class="txt"><div class="k">대기 중 파일</div><div class="v" id="impPending">-</div></div></div><div class="kpi"><span class="ic">✅</span><div class="txt"><div class="k">저장</div><div class="v" id="impDone">-</div></div></div><div class="kpi"><span class="ic">♻️</span><div class="txt"><div class="k">중복</div><div class="v" id="impDup">-</div></div></div><div class="kpi"><span class="ic">⚠️</span><div class="txt"><div class="k">오류</div><div class="v" id="impErr">-</div></div></div></div>
         <div class="note" id="impLastErr" hidden></div>
@@ -1032,8 +1032,8 @@
     $('impLastErr').hidden = !c.lastError; $('impLastErr').textContent = c.lastError ? '마지막 오류: ' + c.lastError : '';
     $('impStart').hidden = running || paused || failed; $('impStart').disabled = !s.pending; $('impStart').title = s.pending ? '' : (s.pending == null ? '대기 파일 수를 세지 못했습니다' : '_import 폴더에 가져올 파일이 없습니다');
     $('impStop').hidden = !running || s.state === 'stopping'; $('impResume').hidden = !(paused || failed); $('impCancel').hidden = !(paused || failed || s.state === 'stopping');
-    $('impRepair').hidden = !s.repairNeeded; $('impRepair').disabled = running; // 고칠 행이 감지됐을 때만 보이고, 실행 중이면 눌리지 않음
-    $('impRepairNote').hidden = !s.repairNeeded;
+    $('impRepair').hidden = !s.repairNeeded; $('impRepair').disabled = running; $('impRepair').title = running ? '가져오기가 끝나거나 중지된 뒤 누를 수 있습니다' : '예전 버전이 잘못 기록한 행을 고칩니다: #ERROR! 라벨·폴더, 한 대화로 묶인 메일'; // 고칠 행이 감지됐을 때만 보이고, 실행 중이면 눌리지 않음
+    $('impRepairNote').hidden = !s.repairNeeded; $('impRepairRun').hidden = !running;
     $('impHist').innerHTML = (s.history || []).map(function (h) { return '<tr' + (h.status === 'cancelled' ? ' class="held"' : '') + '><td>' + (h.status === 'cancelled' ? '✖ ' : h.errors ? '⚠️ ' : '✅ ') + fmtDate(h.startedAt) + '</td><td>' + fmtDate(h.finishedAt) + '</td><td><b style="color:var(--blue-ink)">' + fmtNum(h.processed) + '</b></td><td>' + fmtNum(h.skipped) + '</td><td>' + fmtNum(h.errors) + '</td><td>' + fmtBytes(h.bytes) + '</td></tr>'; }).join('') || '<tr><td colspan="6" class="empty">아직 가져오기 이력이 없습니다</td></tr>';
     if (running && !impTimer) impTimer = setTimeout(function tick() { impTimer = null; if (state.tab !== 'import') return; loadImport().then(function () { if (!impTimer && /^(running|queued|stopping)$/.test((state.imp || {}).state || '')) impTimer = setTimeout(tick, 5000); }); }, 5000);
     state.imp = s;

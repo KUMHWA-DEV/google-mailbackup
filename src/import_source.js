@@ -313,7 +313,7 @@ function getImportState() {
     var pending = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === IMPORT_FN; });
     if (!pending && importCursor_()) { try { scheduleImport_(5 * 1000); } catch (e) { /* 무시 */ } setImportStatus_({ state: 'queued', message: '실행이 끊겨 다시 예약함' }); st = importStatus_(); }
   }
-  var repairNeeded = false; try { repairNeeded = !/^(running|queued|stopping)$/.test(st.state || '') && importRepairNeeded_(); } catch (e) { /* 무시 */ } // 감지만 하고 실행은 사용자가 버튼으로
+  var repairNeeded = false; try { repairNeeded = importRepairNeeded_(); } catch (e) { /* 무시 */ } // 실행 중에도 감지 (버튼은 실행 중이면 비활성), 실행은 사용자가 버튼으로
   var pendingCount = null, folderExists = false;
   try {
     folderExists = !!importFolder_(false);
