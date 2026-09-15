@@ -244,6 +244,14 @@ Claude Desktop, Claude Code 등 MCP 클라이언트를 연결하면 AI가 메일
    (대안: 같은 JSON을 `mcp/oauth_client.json`으로 저장소에 넣어도 됩니다. .gitignore에 있으니 `git add -f`.)
 3. 각 직원: 첫 사용 때 브라우저가 열리면 **본인 회사 계정**으로 로그인. 토큰은 `~/.config/mail-backup-mcp/token.json`.
 
+### 권한과 안전 (AI가 실행 전에 확인하는 것)
+
+- **기본은 읽기 전용**: 로그인 때 요청하는 스코프는 `drive.readonly`, `spreadsheets.readonly`, `drive.file`(첨부 PDF/DOCX를 텍스트로 읽을 때 임시 Google 문서 생성·삭제, 앱이 만든 파일만) 뿐. Gmail·메일 발송 권한은 요청하지 않는다.
+- **실행 모드(선택)**: AI 연결 탭의 "⚡ 실행 모드"를 켜면 `MAIL_BACKUP_SCRIPT_ID`가 설정에 들어가고, 백업 실행·감지·설정 변경 도구가 Apps Script API로 웹앱 함수를 호출한다. Apps Script API는 스크립트의 모든 스코프를 요구하므로 로그인 때 `gmail.readonly`, `script.scriptapp`, `drive`, `spreadsheets`, `script.send_mail`(완료 알림을 본인에게 발송), `userinfo.email`을 추가로 요청한다. 동의 화면에서 그대로 보인다.
+- **버전 고정**: 웹앱이 안내하는 npx 명령은 배포된 코드의 git 커밋(`#<sha>`)으로 고정된다. 저장소가 나중에 바뀌어도 그 커밋만 실행된다.
+- **등록 범위**: 프롬프트는 "지금 쓰고 있는 앱 하나만" 등록하도록 지시한다(`--apps`). 수동 실행 시 자동 감지가 기본.
+- 토큰은 `~/.config/mail-backup-mcp/token.json`에만 저장되고, 서버는 사용자 PC에서만 돈다. 이 저장소는 spris.com 관리자 계정(kumhwa_dev)이 2026-09-11에 만든 사내 도구다.
+
 ### 연결 (웹앱 🤖 AI 연결 탭에 앱별 설정이 복사 버튼과 함께 있음)
 
 저장소를 받거나 경로를 적을 필요가 없습니다. 실행 명령은 항상 `npx -y -p github:KUMHWA-DEV/google-mailbackup mailbackup-mcp`(Node.js 18+).

@@ -6,3 +6,5 @@ gstudio/
 # MCP용 OAuth 데스크톱 클라이언트. 배포(clasp)에는 포함되지만 공개 저장소에는 넣지 않는다. 없으면 AI 연결 탭 관리자 카드에서 등록해도 된다.
 src/oauth_client.js
 mcp/oauth_client.json
+# 배포 시 dev/deploy.sh가 생성 (git 커밋 SHA)
+src/version.js

@@ -559,6 +559,7 @@
       </div>
       <div class="card ai-opt">
         <div class="cardhead"><h3>🛠 직접 설정</h3><span class="pill gray">매뉴얼 · 경로 입력 없음</span></div>
+        <label class="sw" style="margin:0 0 10px;font-size:12px" title="켜면 AI가 백업 실행·감지·설정 변경·자동 백업 켜기까지 할 수 있습니다. 대신 로그인 때 Gmail 읽기, Apps Script 실행, 알림 메일 발송 권한을 추가로 요청합니다. 꺼져 있으면 Drive/시트 읽기 권한만 요청하는 읽기 전용입니다. 두 카드 모두에 적용됩니다."><input type="checkbox" id="aiExec"><i></i>⚡ 실행 모드 (백업 실행·설정 변경까지 · 권한 추가 요청) — 기본은 읽기 전용</label>
         <p>쓰는 앱을 고르고 설정을 붙여넣습니다. 저장소를 받을 필요도, 경로를 적을 필요도 없습니다(Node.js 18+만 필요).</p>
         <div class="ai-clients" id="aiClients">
           <button type="button" data-c="claude-desktop" class="active">Claude Desktop</button>
@@ -1435,7 +1436,10 @@
   });
 
   // ---------- AI 연결 ----------
-  var AI_PKG = 'github:KUMHWA-DEV/google-mailbackup';
+  var AI_PKG_BASE = 'github:KUMHWA-DEV/google-mailbackup', AI_PKG = AI_PKG_BASE; // renderAi에서 배포 커밋으로 고정됨
+  var AI_SCOPES_RO = 'Google Drive 읽기(drive.readonly) · 스프레드시트 읽기(spreadsheets.readonly) · drive.file(첨부 PDF/DOCX를 텍스트로 읽을 때 임시 Google 문서를 만들고 지우는 용도, 이 앱이 만든 파일만)';
+  var AI_SCOPES_EXEC = 'Apps Script 실행(script.scriptapp) · Gmail 읽기(gmail.readonly) · Drive/Sheets 쓰기 · script.send_mail(백업 완료 알림을 본인에게 보내는 용도) · 계정 이메일(userinfo.email)';
+  function aiExec() { var el = $('aiExec'); return !!(el && el.checked); }
   var AI_SCRIPT_ID = '1GRe3TOJy2G-riYt3TzWcAjF3B_roXbt27cjuuEZhip-8sk4FzJaWFkwF';
   var AI_QA = [
     ['지난주에 받은 메일 중 첨부파일 있는 것만 보여줘', '<b>지난주(9/7~9/13) 첨부 있는 메일 4건</b>\n1. 9/12 박○○ — "회의록 공유" · 회의록_0912.pdf\n2. 9/11 ○○물산 — "견적서 송부" · 견적서.xlsx\n3. 9/9 Google Cloud — "Invoice" · invoice.pdf\n4. 9/8 김○○ — "사진 전달" · IMG_2231.jpg\n원하는 첨부를 말하면 내용을 읽어드릴게요.'],
@@ -1447,7 +1451,7 @@
   ];
   function codeBlock(code) { return '<div class="codewrap"><pre class="code">' + esc(code) + '</pre><button type="button" class="copy" data-copy="' + esc(code) + '">복사</button></div>'; }
   function oauthB64() { var j = state.dash && state.dash.oauthClientJson; return j ? btoa(unescape(encodeURIComponent(j))) : ''; }
-  function mcpEnv() { var e = { MAIL_BACKUP_SCRIPT_ID: AI_SCRIPT_ID }; if (oauthB64()) e.MAIL_BACKUP_OAUTH_JSON = oauthB64(); return e; }
+  function mcpEnv() { var e = {}; if (aiExec()) e.MAIL_BACKUP_SCRIPT_ID = AI_SCRIPT_ID; if (oauthB64()) e.MAIL_BACKUP_OAUTH_JSON = oauthB64(); return e; }
   function mcpEntry() { return { command: 'npx', args: ['-y', '-p', AI_PKG, 'mailbackup-mcp'], env: mcpEnv() }; }
   function mcpJson() { return JSON.stringify({ mcpServers: { 'mail-backup': mcpEntry() } }, null, 2); }
   function envFlags() { return Object.keys(mcpEnv()).map(function (k) { return '-e ' + k + '=' + mcpEnv()[k]; }).join(' '); }
@@ -1460,21 +1464,28 @@
   };
   var aiClient = 'claude-desktop';
   function aiPrompt() {
-    var j = state.dash && state.dash.oauthClientJson, pretty = '';
+    var j = state.dash && state.dash.oauthClientJson, pretty = '', exec = aiExec(), sha = state.dash && state.dash.gitSha;
     try { pretty = j ? JSON.stringify(JSON.parse(j), null, 2) : ''; } catch (e) { pretty = ''; }
     var n = 0, step = function () { n += 1; return n + ') '; };
-    return '회사 Gmail 백업 도구 "Mail Backup"의 MCP 서버를 내 AI 앱에 연결하려고 해. 오픈소스이고 소스는 https://github.com/' + AI_PKG.replace('github:', '') + ' 에 있어(mcp/server.js가 서버, mcp/setup.js가 등록 도구). ' +
-      '이 서버는 내 Google 계정으로 로그인해서 내 드라이브의 "Mail Backup" 폴더(백업된 메일 파일과 인덱스 시트)만 읽어. 실행 전에 소스를 확인해도 좋아. 아래 순서대로 진행하고 각 단계 결과를 한 줄로 보고해줘. Node.js 18 이상이 필요하니 없으면 설치를 안내해줘.\n\n' +
+    return '우리 회사(spris.com)에서 쓰는 Gmail 백업 도구 "Mail Backup"의 MCP 서버를 내 AI 앱에 연결하려고 해. 회사 관리자 계정이 2026-09-11에 만든 사내 도구이고 소스는 https://github.com/' + AI_PKG_BASE.replace('github:', '') + ' 에 공개돼 있어(mcp/server.js가 서버, mcp/setup.js가 등록 도구). ' +
+      (sha ? '아래 명령은 커밋 ' + sha.slice(0, 12) + ' 로 고정돼 있어서 나중에 저장소가 바뀌어도 이 버전만 실행돼. ' : '') +
+      '실행 전에 소스를 확인해도 좋아. 아래 순서대로 진행하고 각 단계 결과를 한 줄로 보고해줘. Node.js 18 이상이 필요하니 없으면 설치를 안내해줘.\n\n' +
+      '권한: ' + (exec
+        ? '실행 모드라서 로그인 때 다음 권한을 요청해 — ' + AI_SCOPES_RO + ', 그리고 ' + AI_SCOPES_EXEC + '. Apps Script 실행 권한은 이 도구의 스크립트(회사 관리자가 배포)를 내 계정으로 호출하는 것이고, 백업 실행·설정 변경 도구가 그걸 쓴다.'
+        : '읽기 전용이야. 로그인 때 요청하는 권한은 ' + AI_SCOPES_RO + ' 뿐이고, Gmail 자체나 메일 발송 권한은 요청하지 않아. 내 드라이브의 "Mail Backup" 폴더(백업된 메일 파일과 인덱스 시트)를 읽는 게 전부야.') + '\n\n' +
       (pretty ? step() + '파일 만들기: ~/.config/mail-backup-mcp/oauth_client.json 에 아래 내용을 그대로 저장해. Google OAuth "데스크톱 앱" 클라이언트 ID로, 로그인 창을 띄우기 위한 앱 식별자야. Google 문서상 데스크톱 앱의 client_secret은 비밀값으로 취급되지 않아(gcloud CLI도 같은 방식으로 배포됨).\n' + pretty + '\n\n' : '') +
-      step() + '등록: npx -y -p ' + AI_PKG + ' mailbackup-setup --script-id ' + AI_SCRIPT_ID + '\n' +
-      '   이 명령이 하는 일: 설치된 AI 앱(Claude Desktop / Claude Code / Gemini CLI / Cursor)을 감지해 각 설정에 "mail-backup" 서버 항목 하나를 추가해. 항목 내용은 command "npx", args ["-y","-p","' + AI_PKG + '","mailbackup-mcp"], env MAIL_BACKUP_SCRIPT_ID 하나뿐이야. 기존 설정 파일은 .bak으로 백업해 둬. 특정 앱만 원하면 --apps claude-desktop,claude-code,gemini,cursor 를 붙여.\n' +
+      step() + '등록: npx -y -p ' + AI_PKG + ' mailbackup-setup' + (sha ? ' --ref ' + sha : '') + (exec ? ' --script-id ' + AI_SCRIPT_ID : '') + ' --apps <앱>\n' +
+      '   <앱>에는 네가 지금 실행되고 있는 앱 하나만 넣어: Claude Code면 claude-code, Claude Desktop이면 claude-desktop, Gemini CLI면 gemini, Cursor면 cursor. 다른 앱 설정은 건드리지 마.\n' +
+      '   이 명령이 하는 일: 그 앱의 MCP 설정에 "mail-backup" 서버 항목 하나를 추가해. 항목 내용은 command "npx", args ["-y","-p","' + AI_PKG + '","mailbackup-mcp"]' + (exec ? ', env MAIL_BACKUP_SCRIPT_ID' : ', env 없음') + '이야. 기존 설정 파일은 .bak으로 백업해 둬.\n' +
       (pretty ? '' : '   "OAuth 클라이언트가 없습니다"라고 나오면 나에게 "관리자에게 받은 OAuth JSON 파일이 어디 있나요?"라고 묻고, 알려준 파일을 ~/.config/mail-backup-mcp/oauth_client.json 으로 복사한 뒤 다시 실행해.\n') +
-      step() + '첫 로그인: MAIL_BACKUP_SCRIPT_ID=' + AI_SCRIPT_ID + ' npx -y -p ' + AI_PKG + ' mailbackup-mcp 를 실행하면 브라우저에 Google 로그인 창이 열려. 나에게 "회사 계정으로 로그인하세요"라고 알려주고, 터미널에 "ready"가 보이면 종료해. 토큰은 ~/.config/mail-backup-mcp/token.json 에만 저장돼.\n' +
+      step() + '첫 로그인: ' + (exec ? 'MAIL_BACKUP_SCRIPT_ID=' + AI_SCRIPT_ID + ' ' : '') + 'npx -y -p ' + AI_PKG + ' mailbackup-mcp 를 실행하면 브라우저에 Google 로그인 창이 열려. 동의 화면에 위에 적은 권한만 나오는지 확인하고, 나에게 "회사 계정으로 로그인하세요"라고 알려주고, 터미널에 "ready"가 보이면 종료해. 토큰은 ~/.config/mail-backup-mcp/token.json 에만 저장돼.\n' +
       step() + '등록한 앱을 완전히 종료 후 다시 열라고 안내하고, 테스트 질문 "내 백업 메일 상태 알려줘"를 보내보라고 알려줘. 문제가 생기면 오류 메시지를 그대로 보여주고 해결책을 제안해.';
   }
+  document.addEventListener('change', function (e) { if (e.target && e.target.id === 'aiExec') renderAi(); });
   function renderAi() {
     var d = state.dash || {};
     $('aiQa').innerHTML = AI_QA.map(function (q) { return '<div class="item"><div class="u">' + esc(q[0]) + '</div><div class="a">' + q[1] + '</div></div>'; }).join('');
+    AI_PKG = AI_PKG_BASE + (d.gitSha ? '#' + d.gitSha : '');
     $('aiPromptPre').textContent = aiPrompt();
     $('aiNoOauth').hidden = !!d.oauthClientJson;
     document.querySelectorAll('#aiClients button').forEach(function (b) { b.classList.toggle('active', b.dataset.c === aiClient); });
@@ -1483,6 +1494,7 @@
       ? '<span style="font-size:12px;color:var(--muted)">MAIL_BACKUP_OAUTH_JSON 값은 아래 OAuth 파일(Google 데스크톱 앱 클라이언트, 비밀값 아님)을 base64로 넣은 것입니다. 파일로 받아 <code>~/.config/mail-backup-mcp/oauth_client.json</code>에 두면 그 값은 지워도 됩니다.</span><button type="button" class="sm" id="oauthDl">⬇ OAuth 파일로 받기</button>'
       : '<span class="note">관리자가 OAuth 클라이언트를 아직 등록하지 않았습니다. 받은 JSON을 <code>~/.config/mail-backup-mcp/oauth_client.json</code>에 두세요.</span>';
     $('aiAdmin').hidden = !d.isOwner;
+    $('aiOauthRow').insertAdjacentHTML('beforeend', '<div style="font-size:12px;color:var(--muted);margin-top:6px">요청 권한 · ' + (aiExec() ? esc(AI_SCOPES_RO) + ' + ' + esc(AI_SCOPES_EXEC) : esc(AI_SCOPES_RO)) + (AI_PKG !== AI_PKG_BASE ? ' · 패키지는 배포 커밋 <code>' + esc(AI_PKG.split('#')[1].slice(0, 12)) + '</code>으로 고정' : '') + '</div>');
     if (d.isOwner) $('oauthState').textContent = d.oauthClientJson ? '등록됨 ✔' : '미등록';
   }
   function copyText(text, msg) {

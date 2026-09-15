@@ -54,6 +54,7 @@ function getDashboard() {
     isOwner: isOwner_(),
     oauthClientJson: PropertiesService.getScriptProperties().getProperty('OAUTH_CLIENT_JSON') || (typeof DEFAULT_OAUTH_CLIENT_JSON !== 'undefined' ? DEFAULT_OAUTH_CLIENT_JSON : null), // 관리자 등록값 > 배포에 동봉된 src/oauth_client.js(git 제외)
     scriptId: ScriptApp.getScriptId(),
+    gitSha: typeof MB_GIT_SHA !== 'undefined' ? MB_GIT_SHA : '', // 배포된 코드의 커밋 (npx 버전 고정용)
   };
 }
 

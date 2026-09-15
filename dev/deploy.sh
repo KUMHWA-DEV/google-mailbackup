@@ -2,6 +2,8 @@
 # push 후 웹앱 배포. 첫 배포의 deployment ID를 .deployment-id 에 저장해 이후엔 같은 URL로 재배포한다.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# 배포되는 코드의 git 커밋을 앱에 심는다 (AI 연결 탭이 npx 패키지를 이 커밋으로 고정해 안내). src/version.js는 git 제외.
+echo "var MB_GIT_SHA = '$(git rev-parse HEAD)';" > src/version.js
 npx clasp push -f
 DESC="${1:-$(date +%Y-%m-%d) web app}"
 if [ -f .deployment-id ]; then

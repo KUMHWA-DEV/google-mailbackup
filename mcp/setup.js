@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Mail Backup MCP 설치 도우미. 경로 입력 없이 AI 앱 설정에 mail-backup 서버를 등록한다.
- *   npx -y -p github:KUMHWA-DEV/google-mailbackup mailbackup-setup [--oauth <파일|base64>] [--script-id <id>] [--apps claude-desktop,claude-code,gemini,cursor]
+ *   npx -y -p github:KUMHWA-DEV/google-mailbackup mailbackup-setup [--ref <커밋>] [--oauth <파일|base64>] [--script-id <id>] [--apps claude-desktop,claude-code,gemini,cursor]
+ *   --ref: 등록되는 실행 명령을 그 커밋으로 고정. --script-id: 실행 모드(백업 실행/설정)까지 허용, 없으면 읽기 전용.
  * 등록되는 실행 명령은 `npx -y -p github:KUMHWA-DEV/google-mailbackup mailbackup-mcp` 이라 저장소를 받거나 경로를 적을 필요가 없다.
  */
 const fs = require('fs');
@@ -9,12 +10,15 @@ const os = require('os');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const PKG = 'github:KUMHWA-DEV/google-mailbackup';
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
-const SCRIPT_ID = opt('--script-id', process.env.MAIL_BACKUP_SCRIPT_ID || '1GRe3TOJy2G-riYt3TzWcAjF3B_roXbt27cjuuEZhip-8sk4FzJaWFkwF');
+const REF = opt('--ref', '');                       // 커밋 SHA/태그로 고정 (없으면 최신)
+const PKG = 'github:KUMHWA-DEV/google-mailbackup' + (REF ? '#' + REF : '');
+// 실행 모드(백업 실행·설정 변경)는 --script-id 를 명시할 때만. 기본은 읽기 전용(Drive/Sheets 읽기 스코프만).
+const SCRIPT_ID = opt('--script-id', process.env.MAIL_BACKUP_SCRIPT_ID || '');
 const CONFIG_DIR = path.join(os.homedir(), '.config', 'mail-backup-mcp');
-const entry = { command: 'npx', args: ['-y', '-p', PKG, 'mailbackup-mcp'], env: { MAIL_BACKUP_SCRIPT_ID: SCRIPT_ID } };
+const env = SCRIPT_ID ? { MAIL_BACKUP_SCRIPT_ID: SCRIPT_ID } : {};
+const entry = { command: 'npx', args: ['-y', '-p', PKG, 'mailbackup-mcp'], env };
 const log = (...a) => console.log('[mailbackup-setup]', ...a);
 
 // 1) OAuth 클라이언트 저장
@@ -56,7 +60,7 @@ for (const app of apps) {
     upsertJson(path.join(dir, 'claude_desktop_config.json'), o => { o.mcpServers = o.mcpServers || {}; o.mcpServers['mail-backup'] = entry; });
   } else if (app === 'claude-code') {
     try { execSync(`claude mcp remove mail-backup -s user`, { stdio: 'ignore' }); } catch (e) { /* 없으면 무시 */ }
-    execSync(`claude mcp add mail-backup -s user -e MAIL_BACKUP_SCRIPT_ID=${SCRIPT_ID} -- npx -y -p ${PKG} mailbackup-mcp`, { stdio: 'inherit' });
+    execSync(`claude mcp add mail-backup -s user ${SCRIPT_ID ? '-e MAIL_BACKUP_SCRIPT_ID=' + SCRIPT_ID + ' ' : ''}-- npx -y -p ${PKG} mailbackup-mcp`, { stdio: 'inherit' });
     log('Claude Code 등록 완료');
   } else if (app === 'gemini') {
     upsertJson(path.join(os.homedir(), '.gemini', 'settings.json'), o => { o.mcpServers = o.mcpServers || {}; o.mcpServers['mail-backup'] = entry; });

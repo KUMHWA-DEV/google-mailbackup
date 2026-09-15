@@ -13,8 +13,14 @@ function fmtBytes_(n) {
   while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
   return (i === 0 ? n : n.toFixed(n >= 100 ? 0 : 1)) + ' ' + units[i];
 }
-function fmtDay_(iso) { return iso ? String(iso).slice(0, 10) : '-'; }
-function fmtDateTime_(iso) { return iso ? String(iso).replace('T', ' ').slice(0, 16) + ' UTC' : '-'; }
+/** ISO(UTC) → 한국 표준시(KST, UTC+9, 서머타임 없음) 문자열. Node/Apps Script 공용이라 Utilities 없이 계산. */
+function kstParts_(iso) {
+  var d = new Date(iso); if (isNaN(d.getTime())) return null;
+  var k = new Date(d.getTime() + 9 * 3600 * 1000), p = function (n) { return (n < 10 ? '0' : '') + n; };
+  return { day: k.getUTCFullYear() + '-' + p(k.getUTCMonth() + 1) + '-' + p(k.getUTCDate()), time: p(k.getUTCHours()) + ':' + p(k.getUTCMinutes()) };
+}
+function fmtDay_(iso) { var k = iso ? kstParts_(iso) : null; return k ? k.day : '-'; }
+function fmtDateTime_(iso) { var k = iso ? kstParts_(iso) : null; return k ? k.day + ' ' + k.time + ' (KST)' : '-'; }
 
 /**
  * @param {Object} run 실행 요약 (found, processed, skipped, errors, bytes, mailFrom, mailTo, startedAt, finishedAt)
