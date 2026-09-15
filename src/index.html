@@ -66,6 +66,9 @@
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
   .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
   .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .dash2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
+  .stat2x2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+  @media (max-width: 900px) { .dash2, .stat2x2 { grid-template-columns: 1fr; } }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   @media (max-width: 1000px) { .grid4, .grid3 { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 600px) { .grid4, .grid3, .grid2 { grid-template-columns: 1fr; } }
@@ -293,7 +296,9 @@
   .gm-main { flex: 1; display: flex; min-width: 0; background: #fff; border-radius: 16px 0 0 0; box-shadow: 0 0 0 1px #e0e3e7 inset; }
   .gm-split { width: 7px; flex: none; cursor: col-resize; background: transparent; margin: 0 -3px; position: relative; z-index: 2; }
   .gm-split:hover, .gm-split.drag { background: #d3e3fd; }
-  body.wide .wrap, body.wide header .inner { max-width: none; }
+  /* 전체 너비: 메일함 섹션만 뷰포트 폭으로 넓힌다 (헤더·다른 탭은 그대로) */
+  body.wide #tab-explorer { width: calc(100vw - 64px); position: relative; left: 50%; transform: translateX(-50%); }
+  @media (max-width: 1500px) { body.wide #tab-explorer { width: calc(100vw - 48px); } }
   .gm-listwrap { width: var(--listw, 52%); min-width: 380px; display: flex; flex-direction: column; border-right: 1px solid #e0e3e7; min-height: 0; }
   .gm-tools { display: flex; align-items: center; gap: 4px; padding: 6px 8px 6px 14px; border-bottom: 1px solid #e0e3e7; font-size: 12px; color: #444746; min-height: 48px; }
   .gm-tools .pg { margin-left: auto; display: flex; align-items: center; gap: 2px; white-space: nowrap; }
@@ -439,21 +444,19 @@
       <div class="runbox" id="runBox" hidden></div>
     </div>
 
-    <div class="grid4">
+    <div class="dash2">
+      <div class="stat2x2">
       <div class="stat"><div class="ic">📧</div><div class="txt"><div class="k">보관 메일</div><div class="v" id="stTotal">-</div><div class="d" id="stTotalD"></div></div></div>
       <div class="stat"><div class="ic">💾</div><div class="txt"><div class="k">용량</div><div class="v" id="stBytes">-</div><div class="d" id="stBytesD"></div></div></div>
       <div class="stat"><div class="ic">📅</div><div class="txt"><div class="k">보관 기간</div><div class="v" id="stRange">-</div><div class="d" id="stRangeD"></div></div></div>
       <div class="stat"><div class="ic">✅</div><div class="txt"><div class="k">최근 실행</div><div class="v" id="stRun">-</div><div class="d" id="stRunD"></div></div></div>
-    </div>
-
-    <div class="grid3">
+      </div>
       <div class="card"><div class="cardhead"><h3>🏷 라벨별</h3><span class="pill gray" id="distCatN"></span></div><div class="dist" id="distCat"></div></div>
-      <div class="card"><div class="cardhead"><h3>⚙️ 현재 정책</h3><button type="button" class="sm" data-goto="settings">변경 ›</button></div><div class="policy" id="policy"></div></div>
     </div>
 
     <div class="card">
       <div class="cardhead"><h3>🕘 최근 실행</h3><button type="button" class="sm" data-goto="history">전체 ›</button></div>
-      <div class="tablewrap"><table><thead><tr><th>시작</th><th>소요</th><th>감지</th><th>신규</th><th>중복</th><th>오류</th><th>용량</th><th>메일 기간</th><th>분포</th><th>알림</th><th></th></tr></thead><tbody id="histMini"></tbody></table></div>
+      <div class="tablewrap"><table><thead><tr><th>시작</th><th>소요</th><th>대상</th><th>저장</th><th>건너뜀</th><th>오류</th><th>용량</th><th>메일 기간</th><th>분포</th><th>알림</th><th></th></tr></thead><tbody id="histMini"></tbody></table></div>
     </div>
   </section>
 
@@ -575,7 +578,7 @@
   <section class="page" id="tab-history" hidden>
     <div class="card">
       <div class="cardhead"><h3>🕘 실행 이력 <span class="pill blue" id="histCount">0</span></h3></div>
-      <div class="tablewrap"><table><thead><tr><th>시작</th><th>종료</th><th>소요</th><th>감지</th><th>신규</th><th>중복</th><th>오류</th><th>용량</th><th>메일 기간</th><th>분포</th><th>알림</th><th></th></tr></thead><tbody id="histRows"></tbody></table></div>
+      <div class="tablewrap"><table><thead><tr><th>시작</th><th>종료</th><th>소요</th><th>대상</th><th>저장</th><th>건너뜀</th><th>오류</th><th>용량</th><th>메일 기간</th><th>분포</th><th>알림</th><th></th></tr></thead><tbody id="histRows"></tbody></table></div>
     </div>
   </section>
 </div>
@@ -734,24 +737,18 @@
     var last = (d.history || [])[0];
     if (!r.startedAt && last) r = last; // 실행 중이 아니면 최근 이력(취소된 실행 포함)
     if (r.startedAt) {
-      $('stRun').textContent = '+' + fmtNum(r.processed) + '건' + (r.errors ? ' ⚠️' + fmtNum(r.errors) : '') + (r.status === 'cancelled' ? ' ✖' : '');
-      $('stRunD').textContent = '감지 ' + fmtNum(r.found) + ' · 중복 ' + fmtNum(r.skipped) + ' · ' + fmtBytes(r.bytes) + (r.mailFrom ? ' · ' + fmtDayShort(r.mailFrom) + '~' + fmtDayShort(r.mailTo) : '');
+      $('stRun').textContent = fmtNum(r.processed) + '건 저장' + (r.errors ? ' · ⚠️ ' + fmtNum(r.errors) : '') + (r.status === 'cancelled' ? ' ✖' : '');
+      $('stRunD').textContent = '대상 ' + fmtNum(r.expectedTotal || r.found) + (r.skipped ? ' · 건너뜀 ' + fmtNum(r.skipped) : '') + ' · ' + fmtBytes(r.bytes) + (r.mailFrom ? ' · ' + fmtDayShort(r.mailFrom) + '~' + fmtDayShort(r.mailTo) : '');
     } else { $('stRun').textContent = '-'; $('stRunD').textContent = ''; }
     var catList = foldCategories(sum.categories || []);
     distBars($('distCat'), catList, 'category'); $('distCatN').textContent = catList.length + '개';
-    $('policy').innerHTML = [
-      ['blue', '🔁 ' + sch.intervalDays + '일'], ['blue', '📅 ' + (s.initialStartDate || '전체')], ['blue', '🔢 ' + (s.maxPerRun ? fmtNum(s.maxPerRun) + '건' : '무제한')],
-      [s.includeSent ? 'green' : 'gray', '📤 ' + (s.includeSent ? '수발신' : '수신만')], [s.saveAttachments ? 'green' : 'gray', '📎 ' + (s.saveAttachments ? '별도 저장' : '.eml만')],
-      ['purple', '🏷 라벨별' + (s.splitGmailTabs ? ' · Gmail 탭 분리' : '') + ' · ' + ({ flat: '누적', yearly: '연도', monthly: '연·월' }[s.folderLayout] || s.folderLayout)],
-      [s.notifyOnComplete ? 'green' : 'gray', '📨 ' + (s.notifyOnComplete ? (s.notifyEmail || '내 계정') : '꺼짐')],
-      s.filterQuery ? ['amber', '🔎 ' + esc(s.filterQuery)] : null,
-    ].filter(Boolean).map(function (p) { return '<span class="pill ' + p[0] + '" data-goto="settings">' + p[1] + '</span>'; }).join('');
     renderHistory(d.history || []);
     banner(failed ? '백업 실패: ' + (d.lastError || d.message) + (d.errorStack ? '\n' + d.errorStack.split('\n').slice(0, 3).join(' · ') : '') + ' — "지금 백업"으로 다시 시도하면 저장된 위치부터 이어갑니다' : (d.lastError && !running ? d.lastError : ''));
     if (running && !state.pollTimer) state.pollTimer = setInterval(loadDashboard, 4000);
     if (!running && state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
     if (running && !state.tickTimer) state.tickTimer = setInterval(tickRun, 1000);
     if (!running && state.tickTimer) { clearInterval(state.tickTimer); state.tickTimer = null; }
+    if (!running) state.eta = null;
     state.lastPollAt = Date.now();
   }
   function catChips(list, max) {
@@ -768,12 +765,31 @@
     $('runBox').innerHTML = runBoxHtml(d, true);
     if (d.currentRun && d.currentRun.startedAt) { var el = secs(liveElapsed(d.currentRun)); document.querySelectorAll('tr.runrow .el').forEach(function (n) { n.textContent = el; }); }
   }
+  /**
+   * 남은 시간 표시: 서버 추정치를 그대로 쓰지 않고 (1) 폴링 사이에는 초 단위로 줄어들고,
+   * (2) 새 추정치가 현재 표시값과 25% 이내면 무시하며, (3) 그 이상 다르면 40%만 반영한다 (히스테리시스 + 지수 평활).
+   */
+  function liveEta(p) {
+    var now = Date.now(), server = p && p.etaSeconds != null ? Number(p.etaSeconds) : null;
+    var e = state.eta;
+    if (server == null) { state.eta = null; return null; }
+    if (!e || now - e.at > 60 * 1000) { state.eta = { value: server, at: now, serverAt: p.etaAt || 0 }; return Math.round(server); }
+    if (e.serverAt !== (p.etaAt || 0)) {
+      var down = Math.max(0, e.value - (now - e.at) / 1000);
+      var blended = Math.abs(server - down) <= Math.max(30, down * 0.25) ? down : 0.6 * down + 0.4 * server;
+      state.eta = { value: blended, at: now, serverAt: p.etaAt || 0 };
+      return Math.round(blended);
+    }
+    return Math.round(Math.max(0, e.value - (now - e.at) / 1000));
+  }
   function liveElapsed(r) {
     // 서버가 준 실제 작업 시간 + 마지막 폴링 이후 경과 (구간 사이 대기 중이면 멈춤)
     var p = r.progress || {}, base = Number(p.elapsedSeconds) || 0;
     var waiting = r.resumeAt && new Date(r.resumeAt) > new Date();
     return Math.round(base + (waiting ? 0 : Math.max(0, (Date.now() - (state.lastPollAt || Date.now())) / 1000)));
   }
+  /** 남은 시간 문구: 2분 이상은 분 단위로만 (초가 튀는 것을 숨김) */
+  function etaText(s) { s = Math.max(0, Number(s) || 0); if (s < 60) return '1분 미만'; if (s < 120) return '1분'; if (s < 3600) return Math.round(s / 60) + '분'; return Math.floor(s / 3600) + '시간 ' + Math.round((s % 3600) / 60) + '분'; }
   function liveProcessed(r, p) {
     // 마지막 폴링 이후 처리율(rate)만큼 보간, 예상 총량은 넘지 않게
     var base = Number(r.processed) || 0, rate = p && p.rate ? p.rate : 0, dt = (Date.now() - (state.lastPollAt || Date.now())) / 1000;
@@ -784,12 +800,12 @@
     if (live && !queued && r.startedAt) {
       var lp = liveProcessed(r, p), el = liveElapsed(r);
       r = Object.assign({}, r, { processed: lp });
-      p = Object.assign({}, p, { elapsedSeconds: el, percent: r.expectedTotal ? Math.min(99, Math.floor(lp / r.expectedTotal * 100)) : p.percent, etaSeconds: (r.expectedTotal > lp && p.rate) ? Math.round((r.expectedTotal - lp) / p.rate) : p.etaSeconds });
+      p = Object.assign({}, p, { elapsedSeconds: el, percent: r.expectedTotal ? Math.min(99, Math.floor(lp / r.expectedTotal * 100)) : p.percent, etaSeconds: liveEta(p) });
     }
     var pct = p.percent, exp = r.expectedTotal || 0;
     var top = queued ? '⏳ 대기열 · 곧 시작' + (exp ? ' (예상 ' + fmtNum(exp) + '건)' : '')
       : '⚙️ 저장 중 ' + fmtNum(r.processed) + (exp ? ' / ' + fmtNum(exp) + '건' : '건') + (pct != null ? ' · ' + pct + '%' : '') + ' · ' + fmtBytes(r.bytes);
-    var right = queued ? '' : '구간 ' + fmtNum(r.chunks) + ' · 경과 ' + secs(p.elapsedSeconds) + (p.etaSeconds != null ? ' · 남은 약 ' + secs(p.etaSeconds) : '') + (r.errors ? ' · <span title="' + esc(d.lastError || '') + '">⚠️ 오류 ' + r.errors + '</span>' : '');
+    var right = queued ? '' : '구간 ' + fmtNum(r.chunks) + ' · 경과 ' + secs(p.elapsedSeconds) + (p.etaSeconds != null ? ' · 남은 약 ' + etaText(p.etaSeconds) : '') + (r.errors ? ' · <span title="' + esc(d.lastError || '') + '">⚠️ 오류 ' + r.errors + '</span>' : '');
     var resume = r.resumeAt && new Date(r.resumeAt) > new Date() ? '⏸ 구간 시간 제한 · ' + fmtDate(r.resumeAt) + ' 재개' : '';
     return '<div class="top"><span>' + top + '</span><span>' + right + '</span></div>' +
       '<div class="bar"><i style="width:' + (pct != null ? pct : (queued ? 0 : 30)) + '%"' + (pct == null && !queued ? ' class="due"' : '') + '></i></div>' +
@@ -798,7 +814,6 @@
       '<div class="meta">' + (state.inlineRunning ? '🖥 이 창에서 직접 실행 중 · 창을 닫으면 멈추고 다음에 이어서 진행' : '🖥 백그라운드에서 실행 · 창을 닫아도 계속됩니다') + (resume ? ' · ' + resume : '') + (r.manual ? ' · 🖱 수동' : ' · ⏱ 자동') + '</div>';
   }
   document.addEventListener('click', function (e) {
-    var g = e.target.closest('.policy [data-goto]'); if (g) { showTab(g.dataset.goto); return; }
     var b = e.target.closest('.dist .r'); if (b) { var p = {}; p[b.dataset.k] = b.dataset.v; openExplorer(p); }
   });
 
@@ -808,7 +823,7 @@
     var how = h.manual ? '<span title="수동 실행">🖱</span>' : '<span title="자동 실행">⏱</span>';
     return '<tr' + (h.status === 'cancelled' ? ' class="held"' : '') + '><td>' + ok + ' ' + fmtDate(h.startedAt) + ' ' + how + '</td>' + (full ? '<td>' + fmtDate(h.finishedAt) + '</td>' : '') +
       '<td>' + dur(h.startedAt, h.finishedAt) + '</td>' +
-      '<td>' + fmtNum(h.found) + '</td><td><b style="color:var(--blue-ink)">+' + fmtNum(h.processed) + '</b>' + (h.expectedTotal ? ' <small style="color:var(--faint)">/ ' + fmtNum(h.expectedTotal) + '</small>' : '') + '</td><td>' + fmtNum(h.skipped) + '</td>' +
+      '<td>' + fmtNum(h.expectedTotal || h.found) + '</td><td><b style="color:var(--blue-ink)">' + fmtNum(h.processed) + '</b></td><td>' + fmtNum(h.skipped) + '</td>' +
       '<td' + (h.errors ? ' style="color:var(--red);font-weight:700"' : '') + '>' + fmtNum(h.errors) + '</td><td>' + fmtBytes(h.bytes) + '</td>' +
       '<td style="color:var(--muted)">' + range + (h.limitHit ? ' <span class="pill gray" title="회당 최대 건수 도달">⏭</span>' : '') + '</td>' +
       '<td>' + catChips(h.byCategory, 3) + '</td>' +
@@ -821,10 +836,10 @@
     var label = queued ? '⏳ 대기열' : d.state === 'paused' ? '⏸ 중지됨' : d.state === 'error' ? '⚠️ 실패' : d.state === 'stopping' ? '⏹ 중지 중' : '⚙️ 진행 중';
     return '<tr class="runrow' + (d.state === 'paused' || d.state === 'error' ? ' held' : '') + '"><td>' + label + (r.startedAt ? ' ' + fmtDate(r.startedAt) : '') + (r.manual ? ' <span title="수동 실행">🖱</span>' : '') + '</td>' + (full ? '<td>–</td>' : '') +
       '<td>' + (queued ? '–' : '<span class="el">' + secs(p.elapsedSeconds) + '</span>') + '</td>' +
-      '<td>' + fmtNum(r.found) + '</td><td><span class="minibar"><i style="width:' + pct + '%"></i></span><b style="color:var(--blue-ink)">+' + fmtNum(r.processed) + '</b>' + (exp ? ' <small style="color:var(--faint)">/ ' + fmtNum(exp) + '</small>' : '') + '</td><td>' + fmtNum(r.skipped) + '</td>' +
+      '<td>' + fmtNum(exp || r.found) + '</td><td><span class="minibar"><i style="width:' + pct + '%"></i></span><b style="color:var(--blue-ink)">' + fmtNum(r.processed) + '</b></td><td>' + fmtNum(r.skipped) + '</td>' +
       '<td' + (r.errors ? ' style="color:var(--red);font-weight:700"' : '') + '>' + fmtNum(r.errors) + '</td><td>' + fmtBytes(r.bytes) + '</td>' +
       '<td style="color:var(--muted)">' + (r.mailFrom ? fmtDayShort(r.mailFrom) + ' ~ ' + fmtDayShort(r.mailTo) : '–') + '</td>' +
-      '<td>' + catChips(r.byCategory, 3) + '</td><td>–</td><td style="text-align:right">' + (p.etaSeconds != null ? '<span style="font-size:11px;color:var(--muted)">약 ' + secs(p.etaSeconds) + '</span>' : '') + '</td></tr>';
+      '<td>' + catChips(r.byCategory, 3) + '</td><td>–</td><td style="text-align:right">' + (p.etaSeconds != null ? '<span style="font-size:11px;color:var(--muted)">약 ' + etaText(liveEta(p)) + '</span>' : '') + '</td></tr>';
   }
   function renderHistory(hist) {
     var d = state.dash || {}, running = d.state === 'running' || d.state === 'queued' || d.state === 'stopping' || d.state === 'paused' || d.state === 'error';
@@ -1251,7 +1266,7 @@
   (function () {
     var lw = document.querySelector('.gm-listwrap'), main = document.querySelector('.gm-main'), h = $('gmSplit');
     function apply(px) { lw.style.setProperty('--listw', px ? px + 'px' : ''); }
-    try { var saved = Number(localStorage.getItem('mb.listw')); if (saved > 0) apply(saved); } catch (e) { /* 무시 */ }
+    try { var saved = Number(localStorage.getItem("mb.listw")); if (saved > 0) apply(Math.max(380, saved)); } catch (e) { /* 무시 */ }
     var dragging = false;
     h.addEventListener('mousedown', function (e) { dragging = true; h.classList.add('drag'); document.body.style.userSelect = 'none'; e.preventDefault(); });
     document.addEventListener('mousemove', function (e) {

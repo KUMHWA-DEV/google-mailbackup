@@ -216,6 +216,7 @@ function runBackupLocked_() {
   cursor.retries = 0; // 구간이 시작되면 재시도 횟수 초기화
   cursor.chunkStartedAt = new Date().toISOString();
   cursor.chunkStartProcessed = cursor.processed; // 남은 시간 계산용: 이번 구간 처리 속도
+  cursor.rateSampleAt = new Date().toISOString(); cursor.rateSampleProcessed = cursor.processed; // 구간 사이 대기가 속도 표본에 섞이지 않게 기준점 재설정
   setStatus_({ state: 'running', message: (isNewRun ? '새 백업 시작' : '이어서 실행') + ' (' + cursor.chunks + '번째 구간)', cursor: cursor });
   Logger.log('백업 %s: query="%s" pageToken=%s', isNewRun ? '시작' : '재개', cursor.query, cursor.pageToken || '-');
 
@@ -249,7 +250,7 @@ function runBackupLocked_() {
           Logger.log('메시지 %s 백업 실패: %s', id, e.stack || e.message);
         }
         if (pending.length >= CONFIG.INDEX_FLUSH_EVERY) { appendIndexRows_(sheet, pending); pending = []; }
-        if ((cursor.processed + cursor.errors) % CONFIG.STATUS_EVERY === 0) setStatus_({ state: 'running', message: '저장 중 ' + cursor.processed + '건' + (cursor.expectedTotal ? ' / ' + cursor.expectedTotal : ''), cursor: cursor });
+        if ((cursor.processed + cursor.errors) % CONFIG.STATUS_EVERY === 0) { updateRate(cursor); setStatus_({ state: 'running', message: '저장 중 ' + cursor.processed + '건' + (cursor.expectedTotal ? ' / ' + cursor.expectedTotal : ''), cursor: cursor }); }
         if (Date.now() > deadline) { cursor.pageOffset = i + 1; outOfTime = true; break; }
       }
       if (cursor.paused) break;

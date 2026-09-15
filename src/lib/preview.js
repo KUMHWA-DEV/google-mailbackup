@@ -47,6 +47,26 @@ function aggregatePreview(o) {
  * 진행률·소요·남은 시간. 소요는 실제 작업 시간(구간 합, 대기·지연 제외), 속도는 현재 구간(30초 이상 진행 시) 또는
  * 직전 구간의 속도를 쓴다. 시작 이후 전체 시간으로 나누면 중단·대기가 섞여 남은 시간이 엉뚱해진다.
  */
+/**
+ * 처리 속도(건/초)를 지수이동평균(EWMA)으로 갱신한다. 진행 이벤트(processed 증가) 때만 표본을 만들고,
+ * 표본은 직전 표본 이후의 건수/시간이라 상태 기록 사이의 공백이나 구간 사이 대기가 속도를 흔들지 않는다.
+ * 다운로드 관리자들이 쓰는 방식: 표본 α=0.3, 최소 표본 간격 5초.
+ */
+var RATE_ALPHA = 0.3, RATE_MIN_SECONDS = 5;
+function updateRate(run, nowMs) {
+  run = run || {};
+  var now = nowMs || Date.now();
+  var at = run.rateSampleAt ? new Date(run.rateSampleAt).getTime() : 0;
+  var processed = Number(run.processed) || 0;
+  if (!at) { run.rateSampleAt = new Date(now).toISOString(); run.rateSampleProcessed = processed; return run; }
+  var dt = (now - at) / 1000, dn = processed - (Number(run.rateSampleProcessed) || 0);
+  if (dt < RATE_MIN_SECONDS || dn <= 0) return run;
+  var sample = dn / dt;
+  run.rateEwma = run.rateEwma > 0 ? RATE_ALPHA * sample + (1 - RATE_ALPHA) * run.rateEwma : sample;
+  run.rateSampleAt = new Date(now).toISOString(); run.rateSampleProcessed = processed;
+  return run;
+}
+
 function runProgress(run, nowMs) {
   run = run || {};
   var now = nowMs || Date.now();
@@ -57,10 +77,12 @@ function runProgress(run, nowMs) {
   var active = (Number(run.activeSeconds) || 0) + chunkSecs;
   var elapsed = active > 0 ? active : (run.startedAt ? Math.max(1, (now - new Date(run.startedAt).getTime()) / 1000) : 0);
   var chunkDone = processed - (Number(run.chunkStartProcessed) || 0);
-  var rate = (chunkSecs >= 30 && chunkDone > 0) ? chunkDone / chunkSecs
+  // 속도 우선순위: EWMA(진행 이벤트 기반) > 이번 구간 평균(30초 이상) > 직전 구간 > 전체 평균
+  var rate = Number(run.rateEwma) > 0 ? Number(run.rateEwma)
+    : (chunkSecs >= 30 && chunkDone > 0) ? chunkDone / chunkSecs
     : (Number(run.lastRate) > 0 ? Number(run.lastRate) : (elapsed > 0 ? processed / elapsed : 0));
   var eta = (expected > processed && rate > 0) ? Math.round((expected - processed) / rate * 1.15) : null; // 구간 사이 대기 여유 15%
-  return { percent: percent, elapsedSeconds: Math.round(elapsed), rate: rate, etaSeconds: eta, remaining: expected > processed ? expected - processed : 0 };
+  return { percent: percent, elapsedSeconds: Math.round(elapsed), rate: rate, etaSeconds: eta, etaAt: now, remaining: expected > processed ? expected - processed : 0 };
 }
 
 /**
@@ -79,5 +101,5 @@ function estimateRunSeconds(count) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { aggregatePreview: aggregatePreview, addToBreakdown: addToBreakdown, breakdownList: breakdownList, runProgress: runProgress, estimateRunSeconds: estimateRunSeconds };
+  module.exports = { aggregatePreview: aggregatePreview, addToBreakdown: addToBreakdown, breakdownList: breakdownList, runProgress: runProgress, updateRate: updateRate, estimateRunSeconds: estimateRunSeconds };
 }

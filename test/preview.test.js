@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { aggregatePreview, addToBreakdown, breakdownList, runProgress } from '../src/lib/preview.js';
+import { aggregatePreview, addToBreakdown, breakdownList, runProgress, updateRate } from '../src/lib/preview.js';
 
 describe('aggregatePreview', () => {
   const metas = [
@@ -56,6 +56,21 @@ describe('runProgress', () => {
     expect(p.etaSeconds).toBe(460);        // 200 / 0.5 × 1.15
     const waiting = runProgress({ processed: 500, expectedTotal: 700, activeSeconds: 2000, chunkStartedAt: null, lastRate: 0.25 }, now);
     expect(waiting.rate).toBe(0.25);       // 구간 사이에는 직전 구간 속도
+  });
+});
+
+describe('updateRate (EWMA throughput)', () => {
+  it('samples only on progress and smooths', () => {
+    const t0 = Date.parse('2026-09-15T00:00:00Z');
+    const run = { processed: 0 };
+    updateRate(run, t0);                       // 기준점만 잡음
+    run.processed = 10; updateRate(run, t0 + 10000); // 1.0 건/초
+    expect(run.rateEwma).toBeCloseTo(1.0, 3);
+    updateRate(run, t0 + 12000);               // 진척 없음 → 표본 없음, 속도 유지
+    expect(run.rateEwma).toBeCloseTo(1.0, 3);
+    run.processed = 12; updateRate(run, t0 + 30000); // 직전 표본(t0+10s) 이후 2건/20초 = 0.1 → 0.3*0.1 + 0.7*1.0
+    expect(run.rateEwma).toBeCloseTo(0.73, 3);
+    expect(runProgress({ processed: 12, expectedTotal: 112, rateEwma: run.rateEwma, activeSeconds: 30 }, t0 + 30000).etaSeconds).toBe(Math.round(100 / run.rateEwma * 1.15));
   });
 });
 
