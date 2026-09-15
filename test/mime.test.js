@@ -80,6 +80,12 @@ describe('parseEml', () => {
     expect(parseEml(eml, decode).gmailLabels).toBe('Inbox,전략실,Important');
     expect(gmailLabelsToIds(parseEml(eml, decode).gmailLabels).labelMap).toEqual({ 'user:전략실': '전략실' });
   });
+  it('handles a whole label list wrapped in one encoded word (Takeout) — split after decoding', () => {
+    const eml = ['From: a@example.com', 'Subject: s', 'X-Gmail-Labels: =?UTF-8?B?67Cb7J2A7Y647KeA7ZWoLOykkeyalO2OuOyngO2VqCzsoITrnrXsi6Q=?=', '', 'hi'].join('\r\n');
+    const g = gmailLabelsToIds(parseEml(eml, decode).gmailLabels);
+    expect(g.labelIds).toEqual(['INBOX', 'IMPORTANT', 'user:전략실']);
+    expect(gmailLabelsToIds('INBOX, IMPORTANT, CATEGORY_UPDATES, 전략실').labelIds).toEqual(['INBOX', 'IMPORTANT', 'CATEGORY_UPDATES', 'user:전략실']);
+  });
   it('derives a thread hint: X-GM-THRID as Gmail hex thread id, else the References root, else own Message-ID', () => {
     const base = ['From: a@example.com', 'Subject: s', 'Message-ID: <own@x>'];
     expect(parseEml([...base, 'X-GM-THRID: 1811234567890123456', '', 'hi'].join('\r\n'), decode).threadHint).toBe('gm:' + (1811234567890123456n).toString(16));

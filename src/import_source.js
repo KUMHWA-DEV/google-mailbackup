@@ -82,11 +82,13 @@ function bytesToBin_(bytes) { return Utilities.newBlob(bytes).getDataAsString('I
 function sha1Hex_(s) { return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_1, s, Utilities.Charset.UTF_8).map(function (b) { return ('0' + ((b + 256) % 256).toString(16)).slice(-2); }).join(''); }
 
 /** 메일 속성으로 카테고리 결정: X-Gmail-Labels → Gmail 백업과 같은 규칙, 없으면 보낸사람 기준 */
-function classifyImported_(m, settings) {
+function classifyImported_(m, settings) { return classifyLabels_(m.gmailLabels, m.headers.from, settings); }
+/** 디코딩된 라벨 목록(쉼표 구분)과 From 으로 카테고리·라벨명을 정한다 (가져오기와 복구 공용) */
+function classifyLabels_(labelsCsv, fromHeader, settings) {
   var me = (Session.getEffectiveUser().getEmail() || '').toLowerCase();
-  var sent = !!me && String(m.headers.from || '').toLowerCase().indexOf(me) >= 0;
+  var sent = !!me && String(fromHeader || '').toLowerCase().indexOf(me) >= 0;
   var labelIds = [], labelMap = {};
-  if (m.gmailLabels) { var g = gmailLabelsToIds(m.gmailLabels); labelIds = g.labelIds; labelMap = g.labelMap; }
+  if (labelsCsv) { var g = gmailLabelsToIds(labelsCsv); labelIds = g.labelIds; labelMap = g.labelMap; }
   if (!labelIds.length) labelIds = [sent ? 'SENT' : 'INBOX'];
   else if (sent && labelIds.indexOf('SENT') < 0 && labelIds.indexOf('INBOX') < 0) labelIds.push('SENT');
   return { category: categorize(labelIds, labelMap, { splitGmailTabs: settings.splitGmailTabs }), labelNames: labelNamesOf(labelIds, labelMap) };
@@ -126,21 +128,23 @@ function importThreadId_(hint) {
 }
 
 // ---------- 예전 버전이 남긴 행 복구: 인코딩된 라벨명이 수식(#ERROR!)으로 들어간 셀, 원본 파일 ID로 묶인 threadId ----------
-var IMPORT_REPAIR_PROP = 'IMPORT_REPAIR_V1_DONE';
+var IMPORT_REPAIR_PROP = 'IMPORT_REPAIR_V2_DONE';
 /** 복구할 행이 있는지 (한 번 끝나면 속성으로 기억해 다시 훑지 않음) */
 function importRepairNeeded_() {
   if (getProp_(IMPORT_REPAIR_PROP, '') === '1') return false;
   try {
     var sheet = importSheet_(), last = sheet.getLastRow();
     if (last < 2) { props_().setProperty(IMPORT_REPAIR_PROP, '1'); return false; }
-    var vals = sheet.getRange(2, 1, last - 1, 2).getValues();
-    for (var i = 0; i < vals.length; i++) if (String(vals[i][0]).indexOf('eml:') === 0 && String(vals[i][1]).indexOf('src:') === 0) return true;
+    var vals = sheet.getRange(2, 1, last - 1, 4).getValues();
+    for (var i = 0; i < vals.length; i++) if (String(vals[i][0]).indexOf('eml:') === 0 && (String(vals[i][1]).indexOf('src:') === 0 || repairBadCategory_(String(vals[i][3])))) return true;
     var f = sheet.getRange(2, INDEX_HEADERS.indexOf('category') + 1, last - 1, 1).getFormulas();
     for (var j = 0; j < f.length; j++) if (f[j][0]) return true;
     props_().setProperty(IMPORT_REPAIR_PROP, '1');
     return false;
   } catch (e) { return false; }
 }
+/** 잘못된 카테고리 값: 수식 오류 표시, 안 풀린 인코딩, 라벨 목록 전체가 통째로 들어간 것(쉼표 포함) */
+function repairBadCategory_(v) { v = String(v || ''); return v === '#ERROR!' || v.indexOf('=?') === 0 || v.indexOf(',') >= 0; }
 /**
  * 복구 한 구간: 행마다 (1) 수식이 된 카테고리/라벨 셀을 디코딩한 텍스트로, (2) 파일을 올바른 카테고리 폴더로 이동, (3) threadId를 메일 헤더(X-GM-THRID 등)로.
  * @returns {{done:boolean, fixed:number, total:number}}
@@ -149,7 +153,7 @@ function repairImportRows_(cursor, deadline, settings) {
   var sheet = importSheet_(), last = sheet.getLastRow(), cols = INDEX_HEADERS.length;
   var out = { done: true, fixed: cursor.repairFixed || 0, total: Math.max(0, last - 1) };
   if (last < 2) return out;
-  var C = { id: 0, thread: 1, date: 2, category: 3, labels: 5, fileId: INDEX_HEADERS.indexOf('driveFileId') };
+  var C = { id: 0, thread: 1, date: 2, category: 3, labels: 5, from: INDEX_HEADERS.indexOf('from'), fileId: INDEX_HEADERS.indexOf('driveFileId') };
   var startRow = cursor.repairRow || 2;
   var BATCH = 100;
   for (var r0 = startRow; r0 <= last; r0 += BATCH) {
@@ -160,12 +164,15 @@ function repairImportRows_(cursor, deadline, settings) {
       var id = String(vals[i][C.id] || ''); if (id.indexOf('eml:') !== 0) continue;
       var touched = false;
       for (var c = 0; c < cols; c++) if (forms[i][c] && c !== C.category && c !== C.labels) { vals[i][c] = mimeDecodeWords_(forms[i][c], decodeCharsetGas_); touched = true; } // 수식이 된 다른 셀(제목 등)은 원문 텍스트로
-      if (forms[i][C.category]) { // '=?UTF-8?B?…?=' 가 수식으로 들어감 → 디코딩한 라벨명으로, 파일도 그 폴더로
-        var cat = mimeDecodeWords_(forms[i][C.category], decodeCharsetGas_).replace(/\//g, '-').trim() || '받은편지함';
-        vals[i][C.category] = cat; touched = true;
-        try { var f = DriveApp.getFileById(String(vals[i][C.fileId])); f.moveTo(ensureFolderPath_(buildFolderPath(cat, new Date(vals[i][C.date]), CONFIG.TIME_ZONE, settings.folderLayout))); } catch (e) { Logger.log('복구: 파일 이동 실패 %s', e.message); }
+      if (forms[i][C.category] || forms[i][C.labels] || repairBadCategory_(String(vals[i][C.category]))) {
+        // 라벨 목록 원문: 라벨 셀(수식이면 수식 원문) → 없으면 카테고리 셀. Takeout은 목록 전체를 인코딩 단어 하나로 싸기도 하므로 먼저 풀고 나서 쉼표로 나눠 다시 분류한다
+        var rawList = forms[i][C.labels] || String(vals[i][C.labels] || '') || forms[i][C.category] || String(vals[i][C.category] || '');
+        var decoded = mimeDecodeWords_(rawList, decodeCharsetGas_).replace(/#ERROR!/g, '');
+        var cls = classifyLabels_(decoded.split(/\s*,\s*/).filter(Boolean).join(','), String(vals[i][C.from] || ''), settings);
+        var moved = cls.category !== String(vals[i][C.category]);
+        vals[i][C.category] = cls.category; vals[i][C.labels] = cls.labelNames.join(', '); touched = true;
+        if (moved) { try { var f = DriveApp.getFileById(String(vals[i][C.fileId])); f.moveTo(ensureFolderPath_(buildFolderPath(cls.category, new Date(vals[i][C.date]), CONFIG.TIME_ZONE, settings.folderLayout))); } catch (e) { Logger.log('복구: 파일 이동 실패 %s', e.message); } }
       }
-      if (forms[i][C.labels]) { vals[i][C.labels] = forms[i][C.labels].split(',').map(function (x) { return mimeDecodeWords_(x.trim(), decodeCharsetGas_); }).join(', '); touched = true; }
       if (String(vals[i][C.thread] || '').indexOf('src:') === 0) { // 원본 파일 ID로 묶여 있던 대화 → 메일 헤더에서 다시
         var key = '';
         try { var head = u8ToBin(readFileRange_(String(vals[i][C.fileId]), 0, 16383)); var cut = head.search(/\r?\n\r?\n/); key = importThreadId_(mimeThreadHint_(mimeParseHeaders_(cut > 0 ? head.slice(0, cut) : head))); } catch (e2) { Logger.log('복구: 헤더 읽기 실패 %s', e2.message); }
@@ -179,7 +186,7 @@ function repairImportRows_(cursor, deadline, settings) {
   // 백업 시트도 수식이 된 셀(예: '=== 공지 ===' 제목)을 텍스트로
   try { repairSheetFormulas_(indexSheet_()); } catch (e4) { Logger.log('백업 시트 수식 복구 실패: %s', e4.message); }
   // 비어 버린 '=?…' 폴더 정리
-  try { var root = rootFolder_(), it = root.getFolders(); while (it.hasNext()) { var d = it.next(); if (/^=\?/.test(d.getName()) && !d.getFiles().hasNext() && !d.getFolders().hasNext()) d.setTrashed(true); } } catch (e3) { /* 무시 */ }
+  try { var root = rootFolder_(), it = root.getFolders(); while (it.hasNext()) { var d = it.next(); if ((/^=\?/.test(d.getName()) || d.getName().indexOf(',') >= 0) && !d.getFiles().hasNext() && !d.getFolders().hasNext()) d.setTrashed(true); } } catch (e3) { /* 무시 */ }
   props_().setProperty(IMPORT_REPAIR_PROP, '1');
   delete cursor.repairRow;
   return out;
@@ -354,7 +361,7 @@ function runImport() {
     cursor.chunks += 1;
     tickStatus('가져오는 중 (' + cursor.chunks + '번째 구간)');
     sheet = importSheet_();
-    if (importRepairNeeded_()) { // 예전 버전이 남긴 행 복구를 먼저 (라벨명·폴더·대화 묶음)
+    if (cursor.repairOnly && importRepairNeeded_()) { // "오류 수정" 버튼으로 예약된 실행에서만 복구 (일반 가져오기 구간에는 끼어들지 않음)
       tickStatus('가져온 메일 복구 중 (라벨·폴더·대화 묶음)' + (cursor.repairRow ? ' · ' + fmtRepair_(cursor) : ''));
       var rep = repairImportRows_(cursor, deadline, settings);
       cursor.repairedTotal = rep.fixed;

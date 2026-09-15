@@ -223,10 +223,17 @@ function gmailLabelsToIds(value) {
   var SYS = { 'inbox': 'INBOX', '받은편지함': 'INBOX', 'sent': 'SENT', '보낸편지함': 'SENT', 'draft': 'DRAFT', 'drafts': 'DRAFT', '임시보관함': 'DRAFT', 'spam': 'SPAM', '스팸함': 'SPAM', 'trash': 'TRASH', '휴지통': 'TRASH',
     'important': 'IMPORTANT', '중요': 'IMPORTANT', 'starred': 'STARRED', '별표편지함': 'STARRED', 'unread': 'UNREAD', '읽지않음': 'UNREAD', 'opened': null, '열림': null, 'archived': null, '보관처리됨': null, 'chat': 'CHAT',
     'category promotions': 'CATEGORY_PROMOTIONS', 'category social': 'CATEGORY_SOCIAL', 'category updates': 'CATEGORY_UPDATES', 'category forums': 'CATEGORY_FORUMS', 'category personal': 'CATEGORY_PERSONAL',
-    '카테고리 프로모션': 'CATEGORY_PROMOTIONS', '카테고리 소셜': 'CATEGORY_SOCIAL', '카테고리 업데이트': 'CATEGORY_UPDATES', '카테고리 포럼': 'CATEGORY_FORUMS', '카테고리 개인': 'CATEGORY_PERSONAL' };
+    '카테고리 프로모션': 'CATEGORY_PROMOTIONS', '카테고리 소셜': 'CATEGORY_SOCIAL', '카테고리 업데이트': 'CATEGORY_UPDATES', '카테고리 포럼': 'CATEGORY_FORUMS', '카테고리 개인': 'CATEGORY_PERSONAL',
+    'category_promotions': 'CATEGORY_PROMOTIONS', 'category_social': 'CATEGORY_SOCIAL', 'category_updates': 'CATEGORY_UPDATES', 'category_forums': 'CATEGORY_FORUMS', 'category_personal': 'CATEGORY_PERSONAL',
+    // 한국어 계정의 Takeout 표기 (Gmail 한국어 UI 이름)
+    '중요편지함': 'IMPORTANT', '별표': 'STARRED', '읽지 않음': 'UNREAD', '읽음': null, '열어봄': null, '스팸': 'SPAM', '휴지통으로 이동': 'TRASH', '채팅': 'CHAT', '전체보관함': null, '보관메일함': null, '모든 메일': null, '보관됨': null, '보관': null,
+    '프로모션 카테고리': 'CATEGORY_PROMOTIONS', '소셜 카테고리': 'CATEGORY_SOCIAL', '업데이트 카테고리': 'CATEGORY_UPDATES', '포럼 카테고리': 'CATEGORY_FORUMS', '개인 카테고리': 'CATEGORY_PERSONAL',
+    '프로모션': 'CATEGORY_PROMOTIONS', '소셜': 'CATEGORY_SOCIAL', '업데이트': 'CATEGORY_UPDATES', '포럼': 'CATEGORY_FORUMS', '기본': 'CATEGORY_PERSONAL' };
+  var SYS_NOSPACE = {}; Object.keys(SYS).forEach(function (k) { SYS_NOSPACE[k.replace(/\s+/g, '')] = SYS[k]; });
   String(value || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (name) {
-    var key = name.toLowerCase();
+    var key = name.toLowerCase(), key2 = key.replace(/\s+/g, '');
     if (key in SYS) { if (SYS[key]) ids.push(SYS[key]); return; }
+    if (key2 in SYS_NOSPACE) { if (SYS_NOSPACE[key2]) ids.push(SYS_NOSPACE[key2]); return; }
     var id = 'user:' + name; ids.push(id); map[id] = name;
   });
   return { labelIds: ids, labelMap: map };
