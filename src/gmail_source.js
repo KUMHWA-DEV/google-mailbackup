@@ -42,8 +42,15 @@ function fetchMessage_(id) {
   var t0 = Date.now();
   var api = Gmail.Users.Messages.get('me', id, { format: 'raw' });
   tick_('api', t0); t0 = Date.now();
-  var msg = GmailApp.getMessageById(id);
   var rawBytes = decodeRawBytes_(api.raw);
+  // 아주 큰 메일(원문 15MB 초과)은 첨부·본문을 따로 풀지 않는다: 메모리에 사본이 3~4개 생겨 실행이 죽는 것보다 원문(.eml)만이라도 확실히 남기는 쪽이 낫다.
+  if (rawBytes && Number(api.sizeEstimate) > LARGE_MESSAGE_BYTES) {
+    var hdr = headersFromRaw_(rawBytes);
+    tick_('gmailapp', t0);
+    return { id: api.id, threadId: api.threadId, labelIds: api.labelIds || [], snippet: api.snippet || '', sizeEstimate: api.sizeEstimate,
+      date: new Date(Number(api.internalDate)), headers: hdr, bodyPreview: api.snippet || '', rawBytes: rawBytes, attachments: [], large: true };
+  }
+  var msg = GmailApp.getMessageById(id);
   if (!rawBytes) rawBytes = Utilities.newBlob(msg.getRawContent(), 'message/rfc822').getBytes(); // API raw를 못 풀면 GmailApp 원문으로
   var date = msg.getDate();
   if (!(date instanceof Date) || isNaN(date.getTime())) date = new Date(Number(api.internalDate));
@@ -69,6 +76,16 @@ function fetchMessage_(id) {
     rawBytes: rawBytes,
     attachments: attachments,
   };
+}
+
+var LARGE_MESSAGE_BYTES = 15 * 1024 * 1024;
+/** 원문 앞부분(헤더 블록)에서 From/To/Cc/Subject만 뽑는다. 큰 메일용 최소 파싱 (encoded-word는 디코딩하지 않음). */
+function headersFromRaw_(bytes) {
+  var head = '';
+  try { head = Utilities.newBlob(bytes.slice(0, 64 * 1024)).getDataAsString('UTF-8'); } catch (e) { head = ''; }
+  head = head.split(/\r?\n\r?\n/)[0].replace(/\r?\n[ \t]+/g, ' ');
+  var get = function (n) { var m = head.match(new RegExp('^' + n + ':[ \\t]*(.*)$', 'im')); return m ? m[1].trim() : ''; };
+  return { from: get('From'), to: get('To'), cc: get('Cc'), subject: get('Subject') };
 }
 
 /**

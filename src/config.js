@@ -11,7 +11,8 @@ var CONFIG = {
   DEFAULT_MAX_RUN_SECONDS: 270,
   PAGE_SIZE: 100,
   INDEX_FLUSH_EVERY: 20,
-  STATUS_EVERY: 5,        // 진행 상태(건수·용량) 기록 주기 — 대시보드 실시간 표시용
+  STATUS_EVERY: 20,       // 진행 상태(건수·용량) 기록 주기 — 대시보드는 속도로 보간하므로 자주 쓸 필요 없음 (속성 쓰기 할당량)
+  ADMIN_EMAILS: ['kumhwa_dev@spris.com'], // 관리자 카드(OAuth 클라이언트 등록)를 볼 수 있는 계정
   CONTINUE_DELAY_MS: 60 * 1000,
   TRIGGER_HOUR: 3,
 };

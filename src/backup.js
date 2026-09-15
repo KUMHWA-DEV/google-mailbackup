@@ -9,13 +9,13 @@
  *     커서 삭제, 실행 이력 기록, 알림 메일 발송
  */
 function runBackup() {
+  try { deleteContinuationTriggers_(); } catch (e0) { /* 무시 */ } // 이미 발화한 일회성 트리거는 잠금과 무관하게 정리 (누적되면 20개 한도)
   var lock = LockService.getUserLock(); // 사용자별 잠금: 같은 사람의 백업만 겹치지 않게
   if (!lock.tryLock(10 * 1000)) {
     Logger.log('다른 백업 실행이 진행 중이라 건너뜁니다.');
     return;
   }
   try {
-    deleteContinuationTriggers_();
     runBackupLocked_();
   } catch (e) {
     var msg = String(e && e.message || e);
@@ -33,8 +33,13 @@ function runBackup() {
     // 그 외 예외: 저장된 위치부터 자동 재시도 (최대 RETRY_MAX회, 5분 간격). 넘으면 오류 상태로 두고 알림 메일.
     cur.lastError = msg;
     cur.failedAt = new Date().toISOString();
-    cur.retries = (cur.retries || 0) + 1;
+    cur.retries = (cur.retries || 0) + 1; // 성공적으로 메일을 저장한 구간이 있어야만 0으로 돌아간다
     Logger.log('runBackup 실패(%s회): %s', cur.retries, e && e.stack || e);
+    if (isTriggerLimitError_(msg)) { // 트리거 20개 한도: 대기해도 소용없으니 바로 오류로 알린다
+      saveCursor_(cur);
+      setStatus_({ state: 'error', message: '실행 실패: 이 계정의 Apps Script 트리거가 너무 많습니다. script.google.com → 내 트리거에서 Mail Backup 트리거를 정리한 뒤 ▶ 이어서를 누르세요', cursor: cur });
+      return;
+    }
     if (cur.startedAt && cur.retries <= RETRY_MAX) {
       cur.resumeAt = new Date(Date.now() + RETRY_DELAY_MS).toISOString(); cur.resumeReason = 'retry';
       saveCursor_(cur);
@@ -145,12 +150,32 @@ function reconcileStatus_() {
     if (cur && cur.startedAt) {
       delete cur.resumeAt; cur.pausedAt = new Date().toISOString(); saveCursor_(cur);
       setStatus_({ state: 'paused', message: '중지됨 · ' + (cur.processed || 0) + '건 저장 · "이어서"를 누르면 이 위치부터 계속', cursor: cur });
-    } else {
+    } else if (st.state === 'stopping') {
       props_().deleteProperty(PROP.CURSOR_JSON);
-      setStatus_({ state: 'idle', message: st.state === 'stopping' ? '중지됨' : '실행이 시작되지 않아 취소됨', cursor: {} });
+      setStatus_({ state: 'idle', message: '중지됨', cursor: {} });
+    } else { // 대기열 트리거가 오래 안 돌았음: 취소하지 말고 다시 예약
+      try { scheduleContinuation_(5 * 1000, true); } catch (e4) { /* 무시 */ }
+      setStatus_({ state: 'queued', message: '대기열 트리거가 늦어 다시 예약함', cursor: Object.assign({}, cur || {}, { queuedAt: new Date().toISOString() }) });
     }
   } finally { lock.releaseLock(); }
   return getStatus_();
+}
+
+/**
+ * 인덱스 요약(건수·용량·기간·라벨별)을 사용자 속성에 캐시한다. 대시보드 폴링·애드온·MCP가 4초마다 시트 전체를 읽지 않게.
+ * 구간이 끝날 때와 완료 때 갱신하고, 없으면(첫 방문) 한 번 계산해 둔다.
+ */
+function refreshSummary_() {
+  try {
+    var s = summarizeRecords(loadIndexRecords_());
+    s.categories = (s.categories || []).slice(0, 60); s.cachedAt = new Date().toISOString();
+    props_().setProperty('SUMMARY_JSON', JSON.stringify(s));
+    return s;
+  } catch (e) { Logger.log('요약 캐시 실패: %s', e.message); return null; }
+}
+function loadSummary_() {
+  try { var s = JSON.parse(getProp_('SUMMARY_JSON', '') || 'null'); if (s) return s; } catch (e) { /* 다시 계산 */ }
+  return refreshSummary_() || summarizeRecords([]);
 }
 
 /** 단계별 소요 시간(ms) 누적: api(Gmail 원문) · gmailapp(헤더/본문/첨부 파싱) · eml(Drive 저장) · att(첨부 저장) · sheet(인덱스). 속도 개선 판단용. */
@@ -178,7 +203,7 @@ var RETRY_MAX = 5, RETRY_DELAY_MS = 5 * 60 * 1000;
 function sendFailureNotice_(cursor, msg) {
   try {
     var settings = getSettings_();
-    var to = settings.notifyEmail || Session.getEffectiveUser().getEmail();
+    var to = safeNotifyTo_(settings);
     if (!to) return;
     var links = appLinks_();
     MailApp.sendEmail(to, '[Mail Backup] 백업이 중단됐습니다 (' + (cursor.processed || 0) + '건 저장됨)',
@@ -186,7 +211,8 @@ function sendFailureNotice_(cursor, msg) {
       '앱을 열어 "▶ 이어서"를 누르면 저장된 위치부터 다시 진행합니다. 다음 자동 백업 때도 자동으로 이어갑니다.\n' + (links.webAppUrl || ''));
   } catch (e) { Logger.log('실패 알림 메일 전송 실패: %s', e.message); }
 }
-function isQuotaError_(msg) { return /quota|rate ?limit|too many|429|user-rate/i.test(String(msg || '')); }
+function isTriggerLimitError_(msg) { return /trigger/i.test(String(msg || '')) && /too many|limit/i.test(String(msg || '')); }
+function isQuotaError_(msg) { return !isTriggerLimitError_(msg) && /quota|rate ?limit|too many|429|user-rate/i.test(String(msg || '')); }
 
 function runBackupLocked_() {
   var startedAt = Date.now();
@@ -209,6 +235,7 @@ function runBackupLocked_() {
       expectedTotal: preview ? preview.newCount : 0, // 미리보기에서 감지한 새 메일 수 (진행률용)
       cats: {}, // 라벨(카테고리)별 {count, bytes}
       manual: !!(preview && preview.manual),
+      retryIds: loadFailedIds_(), // 지난 실행에서 실패한 메일을 먼저 다시 시도
     };
     initWindows_(cursor, preview); // 가장 오래된 메일부터 7일 단위 창으로 진행 (45일 뒤 지워지는 메일을 먼저 확보)
     props_().deleteProperty(PROP.PREVIEW_JSON);
@@ -220,7 +247,6 @@ function runBackupLocked_() {
   }
   if (!isNewRun && !cursor.processed) { cursor.found = 0; cursor.errors = 0; cursor.skipped = 0; cursor.lastError = null; }
   cursor.chunks += 1;
-  cursor.retries = 0; // 구간이 시작되면 재시도 횟수 초기화
   cursor.chunkStartedAt = new Date().toISOString();
   cursor.chunkStartProcessed = cursor.processed; // 남은 시간 계산용: 이번 구간 처리 속도
   cursor.rateSampleAt = new Date().toISOString(); cursor.rateSampleProcessed = cursor.processed; // 구간 사이 대기가 속도 표본에 섞이지 않게 기준점 재설정
@@ -232,16 +258,18 @@ function runBackupLocked_() {
   catch (e0) { e0.cursor = cursor; throw e0; }
   var pending = [];
   var outOfTime = false;
+  var lastStopCheck = Date.now();
   var maxPerRun = settings.maxPerRun || 0;
 
   try {
     while (true) {
-      var page = listMessageIds_(windowQuery_(cursor), cursor.pageToken);
+      var retrying = !!(cursor.retryIds && cursor.retryIds.length);
+      var page = retrying ? { ids: cursor.retryIds.slice(), nextPageToken: null } : listMessageIds_(windowQuery_(cursor), cursor.pageToken);
       var startAt = cursor.pageOffset || 0; // 구간이 페이지 중간에서 끊겼으면 그 위치부터 (같은 페이지를 다시 세지 않는다)
-      if (!startAt) cursor.found += page.ids.length;
+      if (!startAt && !retrying) cursor.found += page.ids.length;
       for (var i = startAt; i < page.ids.length; i++) {
         var id = page.ids[i];
-        if (i % 3 === 2 && stopRequested_()) { cursor.pageOffset = i; cursor.paused = true; break; } // 사용자가 ⏹ 중지 (건너뛴 메일만 이어져도 확인)
+        if (Date.now() - lastStopCheck > 10 * 1000) { lastStopCheck = Date.now(); if (stopRequested_()) { cursor.pageOffset = i; cursor.paused = true; break; } } // 사용자가 ⏹ 중지 (10초마다 확인)
         if (backedUp[id]) { cursor.skipped += 1; continue; }
         if (maxPerRun && cursor.processed >= maxPerRun) { cursor.pageOffset = i; cursor.limitHit = true; break; }
         try {
@@ -254,6 +282,7 @@ function runBackupLocked_() {
           if (isQuotaError_(e && e.message)) { cursor.pageOffset = i; throw e; } // 할당량: 오류로 세지 않고 이 메일부터 재개
           cursor.errors += 1;
           cursor.lastError = id + ': ' + e.message;
+          rememberFailedId_(id); // 다음 실행에서 다시 시도
           Logger.log('메시지 %s 백업 실패: %s', id, e.stack || e.message);
         }
         if (pending.length >= CONFIG.INDEX_FLUSH_EVERY) { var ts = Date.now(); appendIndexRows_(sheet, pending); pending = []; tick_('sheet', ts); }
@@ -263,8 +292,9 @@ function runBackupLocked_() {
       if (cursor.paused) break;
       if (outOfTime || cursor.limitHit) break; // 시간 초과: 같은 pageToken + pageOffset 위치에서 재개
       cursor.pageOffset = 0;
+      if (retrying) { cursor.retryIds = []; clearFailedIds_(); continue; } // 재시도 목록 끝 → 본 목록으로
       cursor.pageToken = page.nextPageToken || null;
-      if (!cursor.pageToken && !advanceWindow_(cursor)) break; // 이 창이 끝나면 다음(더 최신) 창으로
+      if (!cursor.pageToken && !advanceWindow_(cursor, page.ids.length)) break; // 이 창이 끝나면 다음(더 최신) 창으로
       if (Date.now() > deadline) { outOfTime = true; break; }
       if (stopRequested_()) { cursor.paused = true; break; }
     }
@@ -276,6 +306,8 @@ function runBackupLocked_() {
   } finally {
     appendIndexRows_(sheet, pending);
     noteChunkEnd_(cursor);
+    if (cursor.processed > (cursor.chunkStartProcessed || 0)) cursor.retries = 0; // 이 구간에서 저장이 있었으면 실패 연속 횟수 초기화
+    refreshSummary_();
   }
 
   if (cursor.paused) {
@@ -295,8 +327,13 @@ function runBackupLocked_() {
     return;
   }
 
-  // 회당 최대 건수에 걸렸으면 다음 실행에서 이어받도록 마지막 동기화 시각을 올리지 않는다.
-  if (!cursor.limitHit) props_().setProperty(PROP.LAST_SYNC_EPOCH, String(cursor.runStartEpoch));
+  if (cursor.limitHit) {
+    // 회당 최대 건수: 커서(페이지·창 위치)를 남겨 다음 실행이 그 자리부터 잇게 한다. 마지막 동기화 시각은 올리지 않는다.
+    delete cursor.limitHit; delete cursor.resumeAt; saveCursor_(cursor);
+    setStatus_({ state: 'paused', message: '회당 최대 ' + maxPerRun + '건 도달 · ' + cursor.processed + '건 저장 · 다음 실행(또는 ▶ 이어서)에서 계속', cursor: cursor });
+    return;
+  }
+  props_().setProperty(PROP.LAST_SYNC_EPOCH, String(cursor.runStartEpoch));
   props_().deleteProperty(PROP.CURSOR_JSON);
   cursor.finishedAt = new Date().toISOString();
   appendRunHistory_(cursor);
@@ -321,7 +358,7 @@ function backupOne_(id, labelMap, settings) {
   var t0 = Date.now();
   var saved = saveEml_(folder, fileName, m.rawBytes);
   tick_('eml', t0); t0 = Date.now();
-  var attachmentFiles = saveAttachments_(m.id, m.attachments);
+  var attachmentFiles = saveAttachments_(m.id, m.attachments, m.date);
   tick_('att', t0);
   // 첨부 별도 저장을 껐어도 이름은 기록해 두어 목록/필터에 보이게 한다.
   var attachmentNames = attachmentFiles.length
@@ -341,12 +378,25 @@ function noteRowStats_(cursor, row) {
   cursor.bytes += Number(rec.sizeBytes) || 0;
   if (!cursor.cats) cursor.cats = {};
   addToBreakdown(cursor.cats, rec.category, rec.sizeBytes);
+  if (Object.keys(cursor.cats).length > 40) { // 라벨이 아주 많은 사용자: 작은 항목은 '기타'로 합쳐 상태 JSON 크기를 제한
+    var list = breakdownList(cursor.cats), keep = {}; list.slice(0, 30).forEach(function (c) { keep[c.name] = cursor.cats[c.name]; });
+    var etc = { name: '기타', count: 0, bytes: 0 }; list.slice(30).forEach(function (c) { etc.count += c.count; etc.bytes += c.bytes; });
+    if (keep['기타']) { etc.count += keep['기타'].count; etc.bytes += keep['기타'].bytes; } keep['기타'] = etc; cursor.cats = keep;
+  }
   var d = rec.date ? String(rec.date) : '';
   if (d && (!cursor.mailFrom || d < cursor.mailFrom)) cursor.mailFrom = d;
   if (d && (!cursor.mailTo || d > cursor.mailTo)) cursor.mailTo = d;
 }
 
-var RUN_HISTORY_MAX = 12;
+/** 알림 수신처는 본인 또는 같은 도메인 주소만 (설정이 외부 주소로 바뀌어도 메일함 정보가 밖으로 나가지 않게). */
+function safeNotifyTo_(settings) {
+  var me = Session.getEffectiveUser().getEmail() || '';
+  var to = String(settings.notifyEmail || '').trim();
+  if (!to) return me;
+  var myDomain = me.split('@')[1] || '', toDomain = to.split('@')[1] || '';
+  return (myDomain && toDomain.toLowerCase() === myDomain.toLowerCase()) ? to : me;
+}
+var RUN_HISTORY_MAX = 8;
 
 /** 완료된 실행 요약을 최근 12개까지 보관. */
 function appendRunHistory_(cursor) {
@@ -358,10 +408,22 @@ function appendRunHistory_(cursor) {
     limitHit: !!cursor.limitHit, notifiedTo: cursor.notifiedTo || null,
     manual: !!cursor.manual, expectedTotal: cursor.expectedTotal || 0, scope: cursor.scope || 'incremental',
     status: cursor.status || 'done', // done | cancelled
-    byCategory: breakdownList(cursor.cats || {}).slice(0, 12),
+    byCategory: breakdownList(cursor.cats || {}).slice(0, 6),
   });
-  props_().setProperty(PROP.RUN_HISTORY_JSON, JSON.stringify(hist.slice(0, RUN_HISTORY_MAX)));
+  saveHistory_(hist.slice(0, RUN_HISTORY_MAX));
 }
+/** 사용자 속성 값 한도(9KB)를 넘지 않게: 실패하면 오래된 항목을 줄여 다시 저장. 이력 저장 실패로 백업이 실패 처리되면 안 된다. */
+function saveHistory_(hist) {
+  for (var n = hist.length; n >= 1; n = Math.floor(n / 2)) {
+    try { props_().setProperty(PROP.RUN_HISTORY_JSON, JSON.stringify(hist.slice(0, n))); return; } catch (e) { if (n === 1) { Logger.log('이력 저장 실패: %s', e.message); return; } }
+  }
+}
+/** 실패한 메일 id 기억 (최대 300개). 다음 실행 시작 때 먼저 다시 시도한다. */
+function loadFailedIds_() { try { return JSON.parse(getProp_('FAILED_IDS_JSON', '[]')) || []; } catch (e) { return []; } }
+function rememberFailedId_(id) {
+  try { var ids = loadFailedIds_(); if (ids.indexOf(id) < 0) ids.push(id); props_().setProperty('FAILED_IDS_JSON', JSON.stringify(ids.slice(-300))); } catch (e) { /* 무시 */ }
+}
+function clearFailedIds_() { props_().deleteProperty('FAILED_IDS_JSON'); }
 function loadRunHistory_() {
   try { return JSON.parse(getProp_(PROP.RUN_HISTORY_JSON, '[]')) || []; } catch (e) { return []; }
 }
@@ -369,15 +431,15 @@ function loadRunHistory_() {
 /** 완료 알림 메일. 실패해도 백업 결과에는 영향 없음. */
 function sendCompletionNotice_(cursor, settings) {
   if (!settings.notifyOnComplete) return;
-  var to = settings.notifyEmail || Session.getEffectiveUser().getEmail();
+  var to = safeNotifyTo_(settings);
   if (!to) return;
   try {
-    var summary = summarizeRecords(loadIndexRecords_());
+    var summary = loadSummary_();
     var mail = buildCompletionEmail(cursor, summary, appLinks_(), Session.getEffectiveUser().getEmail());
     MailApp.sendEmail({ to: to, subject: mail.subject, htmlBody: mail.htmlBody, body: mail.textBody, name: 'Mail Backup' });
     cursor.notifiedTo = to;
     var hist = loadRunHistory_();
-    if (hist.length) { hist[0].notifiedTo = to; props_().setProperty(PROP.RUN_HISTORY_JSON, JSON.stringify(hist)); }
+    if (hist.length) { hist[0].notifiedTo = to; saveHistory_(hist); }
   } catch (e) {
     Logger.log('알림 메일 발송 실패: %s', e.message);
   }
@@ -489,7 +551,7 @@ function findOldestMailDate_(query) {
   };
   var fmt = function (ms) { return Utilities.formatDate(new Date(ms), 'UTC', 'yyyy/MM/dd'); };
   var DAY = 86400000;
-  var lo = Date.UTC(2004, 3, 1), hi = Date.now() + DAY; // [lo, hi): lo 이전엔 없음, hi 이전엔 있음
+  var lo = Date.UTC(1995, 0, 1), hi = Date.now() + DAY; // [lo, hi): lo 이전엔 없음, hi 이전엔 있음 (이관된 오래된 메일도 포함)
   try {
     if (!hasBefore(fmt(hi))) return null;
     while (hi - lo > DAY) {
@@ -529,7 +591,11 @@ function setStatus_(patch) {
   var status = getStatus_();
   Object.keys(patch).forEach(function (k) { status[k] = patch[k]; });
   status.updatedAt = new Date().toISOString();
-  props_().setProperty(PROP.STATUS_JSON, JSON.stringify(status));
+  try { props_().setProperty(PROP.STATUS_JSON, JSON.stringify(status)); }
+  catch (e) { // 9KB 한도: 부피 큰 필드를 빼고 다시
+    var slim = JSON.parse(JSON.stringify(status)); if (slim.cursor) { delete slim.cursor.cats; delete slim.cursor.timing; delete slim.cursor.retryIds; } delete slim.errorStack;
+    try { props_().setProperty(PROP.STATUS_JSON, JSON.stringify(slim)); } catch (e2) { Logger.log('상태 저장 실패: %s', e2.message); }
+  }
 }
 function getStatus_() {
   try { return JSON.parse(getProp_(PROP.STATUS_JSON, '{}')) || {}; } catch (e) { return {}; }
@@ -547,6 +613,7 @@ function resetBackupState() {
 var WINDOW_DAYS = 7;
 function initWindows_(cursor, preview) {
   var oldest = preview && preview.mailFromExact && preview.mailFrom ? new Date(preview.mailFrom).getTime() : null;
+  if (!oldest) { var m = String(cursor.query || '').match(/after:(\d{9,10})\b/); if (m) oldest = Number(m[1]) * 1000; } // 증분 실행: 마지막 동기화 시각부터 (탐색 호출 생략)
   if (!oldest) { var o = findOldestMailDate_(cursor.query); oldest = o ? new Date(o).getTime() : null; }
   if (!oldest) { cursor.winStart = null; return; } // 대상이 없거나 탐색 실패: 창 없이 최신순 그대로
   cursor.winStart = Math.floor(oldest / 1000) - 60;
@@ -556,10 +623,14 @@ function initWindows_(cursor, preview) {
 function windowQuery_(cursor) {
   return cursor.winStart == null ? cursor.query : cursor.query + ' after:' + cursor.winStart + ' before:' + cursor.winEnd;
 }
-function advanceWindow_(cursor) {
+function advanceWindow_(cursor, pageCount) {
   if (cursor.winStart == null || cursor.winEnd >= cursor.finalEnd) return false;
+  // 창 크기 적응: 한 창에 메일이 적으면 창을 키우고(빈 창마다 목록 호출 1번), 100건 페이지가 꽉 찼으면 줄인다. 7일~365일.
+  var days = cursor.winDays || WINDOW_DAYS;
+  if (pageCount != null) { if (pageCount < 20) days = Math.min(365, days * 2); else if (pageCount >= 100) days = Math.max(7, Math.floor(days / 2)); }
+  cursor.winDays = days;
   cursor.winStart = cursor.winEnd - 1; // 경계 1초 겹침 (중복은 id로 걸러짐)
-  cursor.winEnd = Math.min(cursor.winEnd + WINDOW_DAYS * 86400, cursor.finalEnd);
+  cursor.winEnd = Math.min(cursor.winEnd + days * 86400, cursor.finalEnd);
   cursor.pageToken = null;
   return true;
 }

@@ -14,8 +14,8 @@ function rootFolder_() {
       throw new Error('BACKUP_FOLDER_ID(' + id + ') 폴더를 열 수 없습니다. 공유 권한(편집자)을 확인하세요: ' + e.message);
     }
   } else {
-    var it = DriveApp.getRootFolder().getFoldersByName(CONFIG.ROOT_FOLDER_NAME);
-    folder = it.hasNext() ? it.next() : DriveApp.createFolder(CONFIG.ROOT_FOLDER_NAME);
+    // 이름이 같은 기존 폴더를 가져다 쓰지 않는다 (동명의 다른 폴더나 남이 공유한 폴더에 백업이 섞이지 않게). 항상 새로 만들고 ID를 기억.
+    folder = DriveApp.createFolder(CONFIG.ROOT_FOLDER_NAME);
     props_().setProperty(PROP.FOLDER_ID, folder.getId());
   }
   folderCache_['/'] = folder;
@@ -68,17 +68,19 @@ function saveEml_(folder, fileName, rawBytes) {
 }
 
 /**
- * 첨부파일을 <루트>/_attachments/<messageId>/ 에 저장.
+ * 첨부파일을 <루트>/_attachments/<YYYY-MM>/<messageId>_<파일명> 으로 저장.
+ * (메일마다 폴더를 만들면 수천 개 폴더가 생기고 폴더 조회가 느려지므로 월별 폴더 하나에 파일명 접두어로 구분)
  * @returns {{name:string, fileId:string, size:number, mime:string}[]} 저장된 파일 정보 (다운로드 링크용)
  */
-function saveAttachments_(messageId, attachments) {
+function saveAttachments_(messageId, attachments, date) {
   var files = [];
   if (!attachments || !attachments.length || !getSettings_().saveAttachments) return files;
-  var folder = ensureFolderPath_([CONFIG.ATTACHMENT_FOLDER_NAME, messageId]);
+  var month = Utilities.formatDate(date instanceof Date && !isNaN(date.getTime()) ? date : new Date(), CONFIG.TIME_ZONE, 'yyyy-MM');
+  var folder = ensureFolderPath_([CONFIG.ATTACHMENT_FOLDER_NAME, month]);
   attachments.forEach(function (att, i) {
     var name = att.getName() || ('attachment-' + (i + 1));
     try {
-      var f = folder.createFile(att.copyBlob().setName(name));
+      var f = folder.createFile(att.copyBlob().setName(messageId + '_' + name));
       files.push({ name: name, fileId: f.getId(), size: f.getSize(), mime: f.getMimeType() });
     } catch (e) {
       Logger.log('첨부 저장 실패 %s/%s: %s', messageId, name, e.message);
@@ -96,16 +98,10 @@ function indexSheet_() {
     try { ss = SpreadsheetApp.openById(id); } catch (e) { ss = null; }
   }
   if (!ss) {
+    // 기억된 ID가 없으면 새로 만든다 (이름이 같은 다른 시트를 가져다 쓰면 남의 인덱스로 중복 판정을 할 수 있음)
     var root = rootFolder_();
-    var it = root.getFilesByType(MimeType.GOOGLE_SHEETS);
-    while (it.hasNext()) {
-      var f = it.next();
-      if (f.getName() === CONFIG.INDEX_SHEET_NAME) { ss = SpreadsheetApp.openById(f.getId()); break; }
-    }
-    if (!ss) {
-      ss = SpreadsheetApp.create(CONFIG.INDEX_SHEET_NAME);
-      DriveApp.getFileById(ss.getId()).moveTo(root);
-    }
+    ss = SpreadsheetApp.create(CONFIG.INDEX_SHEET_NAME);
+    DriveApp.getFileById(ss.getId()).moveTo(root);
     props_().setProperty(PROP.INDEX_SHEET_ID, ss.getId());
   }
   var sheet = ss.getSheets()[0];

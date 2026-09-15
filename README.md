@@ -241,7 +241,6 @@ Claude Desktop, Claude Code 등 MCP 클라이언트를 연결하면 AI가 메일
 2. 웹앱 **🤖 AI 연결** 탭 맨 아래 **관리자 · MCP용 OAuth 클라이언트** 카드(스크립트 소유자에게만 보임)에 JSON을 붙여넣고 저장.
    이후 모든 직원의 프롬프트·설정 코드에 인증 정보가 자동으로 들어가고(`MAIL_BACKUP_OAUTH_JSON`, base64), **⬇ OAuth 파일로 받기** 버튼도 생깁니다.
    데스크톱 클라이언트 비밀은 공개되어도 무방하도록 설계된 값이라 전 직원이 같은 것을 씁니다.
-   (대안: 같은 JSON을 `mcp/oauth_client.json`으로 저장소에 넣어도 됩니다. .gitignore에 있으니 `git add -f`.)
 3. 각 직원: 첫 사용 때 브라우저가 열리면 **본인 회사 계정**으로 로그인. 토큰은 `~/.config/mail-backup-mcp/token.json`.
 
 ### 설치는 사용자가 직접 (AI 도구에 시키지 않음)

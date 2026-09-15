@@ -43,7 +43,7 @@ function dashboard() {
     summary: summarizeRecords(listRecords()),
     settings, triggerInstalled,
     folderUrl: 'https://drive.google.com/drive/folders/LOCAL', folderPath: '내 드라이브 › Mail Backup', indexSheetUrl: 'https://docs.google.com/spreadsheets/d/LOCAL',
-    webAppUrl: `http://localhost:${PORT}/`, user: 'kumhwa_dev@spris.com (local)', isOwner: true, oauthClientJson: oauthJson, scriptId: 'LOCAL',
+    webAppUrl: `http://localhost:${PORT}/`, user: 'kumhwa_dev@spris.com (local)', isOwner: true, hasOauthClient: !!oauthJson, scriptId: 'LOCAL',
   };
 }
 
@@ -70,7 +70,8 @@ function mockTicking() {
 const api = {
   getDashboard: dashboard,
   getStatus: dashboard,
-  getExplorerData: () => ({ records: filterRecords(listRecords(), {}), summary: summarizeRecords(listRecords()), history }),
+  getExplorerData: () => ({ records: filterRecords(listRecords(), {}), total: listRecords().length, capped: false, summary: summarizeRecords(listRecords()), history }),
+  getOauthClientJson: () => ({ json: oauthJson }),
   getMessageBody: (id) => ({ id, body: (fixtures.find(r => r.id === id) || {}).bodyPreview || '' }),
   getCategories: () => summarizeRecords(listRecords()).categories,
   getSettings: () => settings,

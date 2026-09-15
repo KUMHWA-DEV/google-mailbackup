@@ -537,7 +537,7 @@
       </div>
       <div class="divider"></div>
       <div class="grid3">
-        <div class="field"><label class="t">📁 Drive 폴더 <a id="folderLink" target="_blank" rel="noopener" href="#" hidden>열기 ↗</a></label><input type="text" name="folderId" placeholder="폴더 ID · 비우면 자동 생성"></div>
+        <div class="field"><label class="t">📁 Drive 폴더 <a id="folderLink" target="_blank" rel="noopener" href="#" hidden>열기 ↗</a></label><div style="font-size:13px;color:var(--ink2);padding-top:8px" id="folderPathText">내 드라이브 › Mail Backup (자동 생성)</div><input type="hidden" name="folderId"></div>
         <div class="field"><label class="t">📆 하위 폴더</label><div class="seg" id="layoutRadios"><button type="button" data-v="flat">없음</button><button type="button" data-v="yearly">연도</button><button type="button" data-v="monthly">연·월</button></div></div>
       </div>
     </form>
@@ -755,8 +755,8 @@
     renderHistory(d.history || []);
     if (state.tab === 'ai' || $('aiInstallCmd').innerHTML.indexOf('불러오는 중') >= 0) renderAi();
     banner(failed ? '백업 실패: ' + (d.lastError || d.message) + (d.errorStack ? '\n' + d.errorStack.split('\n').slice(0, 3).join(' · ') : '') + ' — "지금 백업"으로 다시 시도하면 저장된 위치부터 이어갑니다' : (d.lastError && !running ? d.lastError : ''));
-    if (running && !state.pollTimer) state.pollTimer = setInterval(loadDashboard, 4000);
-    if (!running && state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
+    if (running && !state.pollTimer) state.pollTimer = setTimeout(function tickPoll() { state.pollTimer = null; loadDashboard().then(function () { if (state.pollTimer === null && state.dash && /^(running|queued|stopping)$/.test(state.dash.state)) state.pollTimer = setTimeout(tickPoll, 4000); }); }, 4000); // 이전 응답이 온 뒤에만 다음 폴링 (겹치지 않게)
+    if (!running && state.pollTimer) { clearTimeout(state.pollTimer); state.pollTimer = null; }
     if (running && !state.tickTimer) state.tickTimer = setInterval(tickRun, 1000);
     if (!running && state.tickTimer) { clearInterval(state.tickTimer); state.tickTimer = null; }
     if (!running) state.eta = null;
@@ -986,6 +986,7 @@
     ['notifyOnComplete', 'includeSent', 'saveAttachments', 'splitGmailTabs'].forEach(function (k) { form.elements[k].checked = !!s[k]; });
     setRadio('layoutRadios', s.folderLayout);
     $('folderLink').hidden = !(state.dash && state.dash.folderUrl); if (state.dash && state.dash.folderUrl) $('folderLink').href = state.dash.folderUrl;
+    if (state.dash && state.dash.folderPath) $('folderPathText').textContent = state.dash.folderPath;
     $('notifyEmail').placeholder = '비우면 ' + ((state.dash && state.dash.user) || '내 계정');
   }
   function setRadio(id, v) { $(id).dataset.value = v; document.querySelectorAll('#' + id + ' button').forEach(function (b) { b.classList.toggle('active', b.dataset.v === v); }); }
@@ -1047,9 +1048,9 @@
     if (key === 'attachments') return !!String(r.attachments || '').trim();
     return true;
   }
-  function loadExplorer() {
+  function loadExplorer(q) {
     $('mlist').innerHTML = '<div class="gm-empty">불러오는 중…</div>';
-    return call('getExplorerData').then(function (data) { state.explorer = data; if (typeof setSearchAliases === 'function') setSearchAliases(data.records || []); fillAdvLists(); renderExplorer(); })
+    return call('getExplorerData', { q: q || '' }).then(function (data) { state.explorer = data; if (typeof setSearchAliases === 'function') setSearchAliases(data.records || []); fillAdvLists(); renderExplorer(); if (data.capped) toast('메일이 많아 최근 ' + fmtNum(data.records.length) + '건만 불러왔습니다 · 검색하면 전체에서 찾습니다'); })
       .catch(function (e) { $('mlist').innerHTML = '<div class="gm-empty"><b>불러오기 실패</b>' + esc(e.message || e) + '</div>'; });
   }
   function allRecords() { return (state.explorer && state.explorer.records) || []; }
@@ -1077,7 +1078,7 @@
   function tokensOf(q) { return String(q || '').match(/-?(?:[a-zA-Z]+:)?(?:"[^"]*"|\S+)/g) || []; }
   function qWithout(q, keyRe) { return tokensOf(q).filter(function (t) { return !keyRe.test(t); }).join(' '); }
   function qv(v) { return /\s/.test(v) ? '"' + v + '"' : v; }
-  function setQuery(q) { state.ex.q = q.replace(/\s+/g, ' ').trim(); $('exQ').value = state.ex.q; state.ex.page = 1; renderExplorer(); }
+  function setQuery(q) { state.ex.q = q.replace(/\s+/g, ' ').trim(); $('exQ').value = state.ex.q; state.ex.page = 1; if (state.explorer && state.explorer.capped) { loadExplorer(state.ex.q); return; } renderExplorer(); }
   function toggleOp(keyRe, token) { var q = qWithout(state.ex.q, keyRe); setQuery(token ? q + ' ' + token : q); }
 
   function fillAdvLists() {
@@ -1444,7 +1445,7 @@
   var AI_SCOPES_RO = 'Google Drive 읽기(drive.readonly) · 스프레드시트 읽기(spreadsheets.readonly) · drive.file(첨부 PDF/DOCX를 텍스트로 읽을 때 임시 Google 문서를 만들고 지우는 용도, 이 앱이 만든 파일만)';
   var AI_SCOPES_EXEC = 'Apps Script 실행(script.scriptapp) · Gmail 읽기(gmail.readonly) · Drive/Sheets 쓰기 · script.send_mail(백업 완료 알림을 본인에게 보내는 용도) · 계정 이메일(userinfo.email)';
   function aiExec() { var el = $('aiExec'); return !!(el && el.checked); }
-  var AI_SCRIPT_ID = '1GRe3TOJy2G-riYt3TzWcAjF3B_roXbt27cjuuEZhip-8sk4FzJaWFkwF';
+  var AI_SCRIPT_ID = ''; // renderAi에서 서버가 준 scriptId로 채움 (배포본마다 다름)
   var AI_QA = [
     ['지난주에 받은 메일 중 첨부파일 있는 것만 보여줘', '<b>지난주(9/7~9/13) 첨부 있는 메일 4건</b>\n1. 9/12 박○○ — "회의록 공유" · 회의록_0912.pdf\n2. 9/11 ○○물산 — "견적서 송부" · 견적서.xlsx\n3. 9/9 Google Cloud — "Invoice" · invoice.pdf\n4. 9/8 김○○ — "사진 전달" · IMG_2231.jpg\n원하는 첨부를 말하면 내용을 읽어드릴게요.'],
     ['○○물산에서 온 메일 중 PDF 첨부 내용 요약해줘', '<b>견적서.pdf (9/11) 요약</b>\n· 품목 3종, 총액 12,400,000원(VAT 별도)\n· 납기 발주 후 3주, 유효기간 9/30까지\n· 특이사항: 2차 발주 시 5% 할인 조건\n메일 본문에는 "검토 후 회신 요청"이 있었습니다.'],
@@ -1454,9 +1455,9 @@
     ['"계약" 단어가 들어간 메일 최근 것부터 5개만', '<b>"계약" 검색 결과 5건 (최신순)</b>\n1. 9/13 법무팀 — 계약 갱신 안내 📎\n2. 9/11 ○○물산 — 계약서 초안 송부 📎\n3. 9/2 (나) — Re: 계약 조건 문의\n4. 8/30 김○○ — 계약 조건 문의\n5. 8/21 총무 — 임대 계약 관련\n전체 12건 중 5건입니다.'],
   ];
   function codeBlock(code) { return '<div class="codewrap"><pre class="code">' + esc(code) + '</pre><button type="button" class="copy" data-copy="' + esc(code) + '">복사</button></div>'; }
-  function oauthB64() { var j = state.dash && state.dash.oauthClientJson; return j ? btoa(unescape(encodeURIComponent(j))) : ''; }
+  function oauthB64() { var j = state.oauthClientJson; return j ? btoa(unescape(encodeURIComponent(j))) : ''; }
   function mcpEnv() { var e = {}; if (aiExec()) e.MAIL_BACKUP_SCRIPT_ID = AI_SCRIPT_ID; if (oauthB64()) e.MAIL_BACKUP_OAUTH_JSON = oauthB64(); return e; }
-  function mcpEntry() { return { command: 'npx', args: ['-y', '-p', AI_PKG, 'mailbackup-mcp'], env: mcpEnv() }; }
+  function mcpEntry() { var e = mcpEntryFor(aiExec()); e.env = mcpEnv(); return e; }
   function mcpJson() { return JSON.stringify({ mcpServers: { 'mail-backup': mcpEntry() } }, null, 2); }
   function envFlags() { return Object.keys(mcpEnv()).map(function (k) { return '-e ' + k + '=' + mcpEnv()[k]; }).join(' '); }
   var AI_CLIENTS = {
@@ -1467,18 +1468,23 @@
     'cursor': function () { return codeBlock(mcpJson()) + '<p style="font-size:12px;color:var(--muted);margin:6px 0 0">Cursor: <code>~/.cursor/mcp.json</code> · VS Code: <code>.vscode/mcp.json</code> (최상위 키 <code>servers</code>, 항목에 <code>"type":"stdio"</code>)</p>'; },
   };
   var aiClient = 'claude-desktop';
-  function mcpEntryFor(exec) { var env = {}; if (exec) env.MAIL_BACKUP_SCRIPT_ID = AI_SCRIPT_ID; var o = { command: 'npx', args: ['-y', '-p', AI_PKG, 'mailbackup-mcp'] }; if (Object.keys(env).length) o.env = env; return o; }
+  var IS_WIN = /Windows/i.test(navigator.userAgent);
+  function mcpEntryFor(exec) { var env = {}; if (exec) env.MAIL_BACKUP_SCRIPT_ID = AI_SCRIPT_ID; var o = IS_WIN ? { command: 'cmd', args: ['/c', 'npx', '-y', '-p', AI_PKG, 'mailbackup-mcp'] } : { command: 'npx', args: ['-y', '-p', AI_PKG, 'mailbackup-mcp'] }; if (Object.keys(env).length) o.env = env; return o; }
   document.addEventListener('change', function (e) { if (e.target && e.target.id === 'aiExec') renderAi(); });
   function renderAi() {
     var d = state.dash;
     $('aiQa').innerHTML = AI_QA.map(function (q) { return '<div class="item"><div class="u">' + esc(q[0]) + '</div><div class="a">' + q[1] + '</div></div>'; }).join('');
+    if (d && d.hasOauthClient && state.oauthClientJson == null && !state.oauthLoading) { // 클라이언트 값은 이 탭에서만 받는다
+      state.oauthLoading = true;
+      call('getOauthClientJson').then(function (r) { state.oauthClientJson = (r && r.json) || ''; state.oauthLoading = false; renderAi(); }).catch(function () { state.oauthLoading = false; });
+    }
     if (!d) { // 대시보드 데이터(배포 커밋·OAuth 클라이언트)가 아직 없으면 자리표시만 — 데이터가 오면 renderDashboard가 다시 그린다
       $('aiInstallCmd').innerHTML = '<div class="pv-loading"><span class="spin dark"></span> 설정을 불러오는 중…</div>';
       $('aiClientBody').innerHTML = ''; $('aiOauthRow').innerHTML = ''; $('aiAdmin').hidden = true;
       return;
     }
-    AI_PKG = AI_PKG_BASE + (d.gitSha ? '#' + d.gitSha : '');
-    $('aiInstallCmd').innerHTML = codeBlock('npx -y -p ' + AI_PKG + ' mailbackup-setup' + (d.gitSha ? ' --ref ' + d.gitSha : '') + (aiExec() ? ' --script-id ' + AI_SCRIPT_ID : '') + (oauthB64() ? ' --oauth ' + oauthB64() : '') + ' --apps ' + ({ 'claude-desktop': 'claude-desktop', 'claude-code': 'claude-code', 'gemini': 'gemini', 'cursor': 'cursor' }[aiClient] || 'claude-desktop'));
+    AI_PKG = AI_PKG_BASE + (d.gitSha ? '#' + d.gitSha : ''); AI_SCRIPT_ID = d.scriptId || '';
+    $('aiInstallCmd').innerHTML = !d.gitSha ? '<p class="note">배포 커밋 정보가 없어 설치 명령을 만들 수 없습니다. 관리자가 <code>npm run deploy</code>로 배포하면 생깁니다.</p>' : codeBlock('npx -y -p ' + AI_PKG + ' mailbackup-setup' + (d.gitSha ? ' --ref ' + d.gitSha : '') + (aiExec() ? ' --script-id ' + AI_SCRIPT_ID : '') + (oauthB64() ? ' --oauth ' + oauthB64() : '') + ' --apps ' + ({ 'claude-desktop': 'claude-desktop', 'claude-code': 'claude-code', 'gemini': 'gemini', 'cursor': 'cursor' }[aiClient] || 'claude-desktop'));
     document.querySelectorAll('#aiClients button').forEach(function (b) { b.classList.toggle('active', b.dataset.c === aiClient); });
     $('aiClientBody').innerHTML = AI_CLIENTS[aiClient]();
     var chat = aiClient === 'chatgpt';
@@ -1503,7 +1509,8 @@
   });
   $('oauthSave').addEventListener('click', function () { var v = $('oauthJsonInput').value.trim(); if (!v) { toast('JSON을 붙여넣으세요', true); return; } call('saveOauthClientJson', v).then(function (d) { renderDashboard(d); $('oauthJsonInput').value = ''; renderAi(); toast('✔ 등록됨'); }).catch(function (e) { toast('실패: ' + (e.message || e), true); }); });
   $('oauthClear').addEventListener('click', function () { call('saveOauthClientJson', '').then(function (d) { renderDashboard(d); renderAi(); toast('삭제됨'); }).catch(function (e) { toast('실패: ' + (e.message || e), true); }); });
-  if (location.hash === '#ai') setTimeout(function () { showTab('ai'); }, 0);
+  var INITIAL_TAB = '<?= initialTab ?>';
+  if (location.hash === '#ai' || /^(ai|explorer|settings|history)$/.test(INITIAL_TAB)) setTimeout(function () { showTab(location.hash === '#ai' ? 'ai' : INITIAL_TAB); }, 0);
   window.addEventListener('hashchange', function () { if (location.hash === '#ai') showTab('ai'); });
 
   // ---------- init ----------

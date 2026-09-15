@@ -12,12 +12,16 @@ function rowsToRecords(rows) {
   const idx = {};
   header.forEach((h, i) => { if (h) idx[h] = i; });
   const useHeader = INDEX_HEADERS.every(h => idx[h] != null);
-  return rows.slice(1).filter(r => r && r.length && String(r[0] || '').trim()).map(r => {
+  return rows.slice(1).map((r, i) => Object.assign({ _row: i + 2 }, rowsToRecordOne_(r, useHeader, idx))).filter(r => r && String(r.id || '').trim());
+}
+function rowsToRecordOne_(r, useHeader, idx) {
+  if (!r || !r.length || !String(r[0] || '').trim()) return null;
+  return (function () {
     const rec = useHeader ? Object.fromEntries(INDEX_HEADERS.map(h => [h, r[idx[h]] == null ? '' : r[idx[h]]])) : rowToRecord(r);
     if (rec.sizeBytes !== '' && rec.sizeBytes != null) rec.sizeBytes = Number(rec.sizeBytes) || 0;
     ['date', 'backedUpAt'].forEach(k => { if (rec[k] instanceof Date) rec[k] = rec[k].toISOString(); else rec[k] = rec[k] == null ? '' : String(rec[k]); });
     return rec;
-  });
+  })();
 }
 
 function isSent(r) { return r.category === '보낸편지함' || /(^|,\s*)SENT(\s*,|$)/.test(String(r.labels || '')); }

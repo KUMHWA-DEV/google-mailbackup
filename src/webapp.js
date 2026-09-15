@@ -1,9 +1,10 @@
 /**
  * 웹앱 진입점과 클라이언트(google.script.run)에서 호출하는 함수들.
  */
-function doGet() {
+function doGet(e) {
   var t = HtmlService.createTemplateFromFile('index');
   t.searchLib = searchClientLib_();
+  t.initialTab = (e && e.parameter && /^(ai|explorer|settings|history)$/.test(e.parameter.tab)) ? e.parameter.tab : ''; // 애드온의 "연결 방법 보기" 링크 (#해시는 iframe 안으로 전달되지 않음)
   return t.evaluate()
     .setTitle('Mail Backup')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
@@ -43,7 +44,7 @@ function getDashboard() {
     queuedAt: c.queuedAt || null,
     triggerError: c.triggerError || null,
     history: loadRunHistory_(),
-    summary: summarizeRecords(loadIndexRecords_()),
+    summary: loadSummary_(), // 캐시 (시트 전체를 매 폴링마다 읽지 않음)
     settings: settings,
     triggerInstalled: scheduledTriggerInstalled_(),
     folderUrl: links.folderUrl || null,
@@ -52,22 +53,24 @@ function getDashboard() {
     webAppUrl: links.webAppUrl || null,
     user: Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail(),
     isOwner: isOwner_(),
-    oauthClientJson: PropertiesService.getScriptProperties().getProperty('OAUTH_CLIENT_JSON') || (typeof DEFAULT_OAUTH_CLIENT_JSON !== 'undefined' ? DEFAULT_OAUTH_CLIENT_JSON : null), // 관리자 등록값 > 배포에 동봉된 src/oauth_client.js(git 제외)
+    hasOauthClient: !!oauthClientJson_(), // 실제 값은 AI 연결 탭이 열릴 때 getOauthClientJson()으로만 내려준다
     scriptId: ScriptApp.getScriptId(),
     gitSha: typeof MB_GIT_SHA !== 'undefined' ? MB_GIT_SHA : '', // 배포된 코드의 커밋 (npx 버전 고정용)
   };
 }
 
-/** 스크립트 소유자 여부 (관리자 카드 표시용). */
+/** 관리자 여부: CONFIG.ADMIN_EMAILS 목록 기준 (Drive 소유자 조회에 의존하지 않음 → drive.file 스코프로 충분). */
 function isOwner_() {
   try {
-    var sp = PropertiesService.getScriptProperties();
-    var owner = sp.getProperty('OWNER_EMAIL');
-    if (!owner) { owner = DriveApp.getFileById(ScriptApp.getScriptId()).getOwner().getEmail(); sp.setProperty('OWNER_EMAIL', owner); }
-    var me = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail();
-    return !!me && me.toLowerCase() === String(owner).toLowerCase();
+    var me = (Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail() || '').toLowerCase();
+    return !!me && (CONFIG.ADMIN_EMAILS || []).map(function (x) { return String(x).toLowerCase(); }).indexOf(me) >= 0;
   } catch (e) { return false; }
 }
+function oauthClientJson_() {
+  return PropertiesService.getScriptProperties().getProperty('OAUTH_CLIENT_JSON') || (typeof DEFAULT_OAUTH_CLIENT_JSON !== 'undefined' ? DEFAULT_OAUTH_CLIENT_JSON : null);
+}
+/** MCP용 OAuth 데스크톱 클라이언트 (AI 연결 탭에서만 요청). */
+function getOauthClientJson() { return { json: oauthClientJson_() }; }
 
 /** 관리자(소유자)만: MCP용 OAuth 데스크톱 클라이언트 JSON을 저장/삭제. 직원은 AI 연결 탭에서 내려받는다. */
 function saveOauthClientJson(json) {
@@ -85,9 +88,18 @@ function saveOauthClientJson(json) {
 function getStatus() { return getDashboard(); }
 
 /** 탐색기용 전체 인덱스(본문 제외). 필터링은 클라이언트에서. */
-function getExplorerData() {
+var EXPLORER_CAP = 6000;   // 브라우저로 한 번에 보내는 최대 건수 (1건 ≈ 1KB)
+/**
+ * 탐색기 데이터. 인덱스가 EXPLORER_CAP 이하면 전부 보내고 브라우저가 필터링한다.
+ * 넘으면 최근 EXPLORER_CAP건만 보내고, 검색어(q)가 있으면 서버가 전체에서 검색해 상위 3000건을 보낸다.
+ */
+function getExplorerData(opt) {
+  opt = opt || {};
   var records = loadIndexRecords_();
-  return { records: filterRecords(records, {}), summary: summarizeRecords(records), history: loadRunHistory_() };
+  var total = records.length, capped = total > EXPLORER_CAP;
+  var out = records;
+  if (capped) out = opt.q ? filterRecords(records, { q: opt.q }).slice(0, 3000) : records.slice(-EXPLORER_CAP);
+  return { records: capped ? out : filterRecords(records, {}), total: total, capped: capped, summary: loadSummary_(), history: loadRunHistory_() };
 }
 
 /** 서버 측 검색 (페이지 단위). */
@@ -131,11 +143,9 @@ function previewBackup(opt) {
   try { cached = JSON.parse(getProp_('PREVIEW_CACHE_JSON', '') || 'null'); } catch (e) { cached = null; }
   if (cached && cached.key === key && Date.now() - new Date(cached.at).getTime() < PREVIEW_CACHE_MS) {
     cached.preview.cached = true;
-    savePreview_(cached.preview);
     return cached.preview;
   }
   var p = previewBackup_(opt.scope, opt.sinceDate);
-  savePreview_(p);
   try { props_().setProperty('PREVIEW_CACHE_JSON', JSON.stringify({ key: key, at: new Date().toISOString(), preview: p })); } catch (e) { /* 크기 초과 등은 무시 */ }
   return p;
 }
@@ -143,7 +153,13 @@ function previewBackup(opt) {
 /** 지금 백업: 웹 요청 시간 제한을 피하려고 5초 뒤 트리거로 백그라운드 실행. */
 function runBackupNow() {
   deleteContinuationTriggers_();
-  var pv = loadPreview_();
+  // 감지 결과는 "지금 백업"을 눌렀을 때만 실행 범위로 채택한다 (감지만 하고 취소한 모달이 자동 백업 범위를 바꾸지 않게)
+  var pv = null;
+  try { var c = JSON.parse(getProp_('PREVIEW_CACHE_JSON', '') || 'null'); if (c && c.preview && Date.now() - new Date(c.at).getTime() < PREVIEW_CACHE_MS) pv = c.preview; } catch (e) { pv = null; }
+  if (pv) savePreview_(pv); else props_().deleteProperty(PROP.PREVIEW_JSON);
+  // 범위가 바뀐 새 요청이면 이전 실행의 커서를 버린다 (예전 쿼리로 이어가지 않게)
+  var old = loadCursor_();
+  if (old && pv && (old.scope || 'incremental') !== (pv.scope || 'incremental')) props_().deleteProperty(PROP.CURSOR_JSON);
   var triggerError = '';
   try { scheduleContinuation_(5 * 1000); } catch (e) { triggerError = String(e && e.message || e); }
   setStatus_({ state: 'queued', message: triggerError ? '트리거 생성 실패 · 브라우저에서 직접 실행합니다' : '대기열 등록 · 곧 시작' + (pv && pv.newCount ? ' (예상 ' + pv.newCount + '건)' : ''),

@@ -68,7 +68,7 @@ function aiSection_(d) {
     .addWidget(CardService.newTextParagraph().setText('Claude · ChatGPT · Gemini 등 MCP 지원 AI에서 백업 메일을 검색하고 첨부를 읽게 할 수 있습니다.'))
     .addWidget(CardService.newTextParagraph().setText('<font color="#5f6368">예: "지난달 거래처가 보낸 계약서 첨부 요약해줘", "9월 정산 관련 메일 찾아줘"</font>'));
   var b = CardService.newButtonSet();
-  if (d.webAppUrl) b.addButton(link_('연결 방법 보기', d.webAppUrl + '#ai'));
+  if (d.webAppUrl) b.addButton(link_('연결 방법 보기', d.webAppUrl + (d.webAppUrl.indexOf('?') >= 0 ? '&' : '?') + 'tab=ai'));
   b.addButton(link_('설정 파일(GitHub)', 'https://github.com/KUMHWA-DEV/google-mailbackup#7-aimcp로-백업-메일-조회하기'));
   return sec.addWidget(b);
 }

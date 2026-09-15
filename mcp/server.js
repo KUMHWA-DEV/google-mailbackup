@@ -12,6 +12,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const http = require('http');
+const crypto = require('crypto');
 const { google } = require('googleapis');
 const { z } = require('zod');
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
@@ -60,14 +61,19 @@ async function getAuth(onUrl) {
 }
 function saveToken(t) { fs.mkdirSync(CONFIG_DIR, { recursive: true }); fs.writeFileSync(TOKEN_PATH, JSON.stringify(t, null, 2), { mode: 0o600 }); }
 function loginInteractive(oauth, onUrl) {
+  // PKCE(S256) + state: 로컬의 다른 프로세스가 콜백 포트에 임의의 code를 밀어 넣거나 가로챈 code를 쓰지 못하게 한다.
+  const verifier = crypto.randomBytes(32).toString('base64url');
+  const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+  const state = crypto.randomBytes(16).toString('hex');
   return new Promise((resolve, reject) => {
     const server = http.createServer(async (req, res) => {
       try {
         const u = new URL(req.url, 'http://127.0.0.1');
+        if (u.pathname === '/' && u.searchParams.get('state') !== state) { res.writeHead(400); res.end('state mismatch'); return; }
         if (u.pathname !== '/') { res.writeHead(404); res.end(); return; }
         const code = u.searchParams.get('code');
         if (!code) { res.writeHead(400); res.end('no code'); return; }
-        const { tokens } = await oauth.getToken(code);
+        const { tokens } = await oauth.getToken({ code, codeVerifier: verifier });
         oauth.setCredentials(tokens); saveToken(tokens);
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); res.end('<h2>Mail Backup MCP 로그인 완료. 이 창을 닫으세요.</h2>');
         server.close(); resolve(oauth);
@@ -79,7 +85,7 @@ function loginInteractive(oauth, onUrl) {
     server.on('error', (e) => { if (e.code === 'EADDRINUSE' && !server.listening) { log(`포트 ${FIXED_PORT} 사용 중 → 임의 포트로 대체`); server.listen(0, '127.0.0.1'); } else reject(e); });
     server.on('listening', () => {
       oauth.redirectUri = `http://127.0.0.1:${server.address().port}`;
-      const url = oauth.generateAuthUrl({ access_type: 'offline', prompt: 'consent', scope: ALL_SCOPES });
+      const url = oauth.generateAuthUrl({ access_type: 'offline', prompt: 'consent', scope: ALL_SCOPES, state, code_challenge: challenge, code_challenge_method: 'S256' });
       log('브라우저에서 로그인하세요:', url);
       if (onUrl) onUrl(url);
       log(`redirect_uri_mismatch(400)가 뜨면: GCP 콘솔의 OAuth 클라이언트가 "데스크톱 앱" 유형인지 확인하세요. "웹 애플리케이션" 유형이면 승인된 리디렉션 URI에 ${oauth.redirectUri} 를 추가하거나 데스크톱 앱으로 새로 만드세요.`);
@@ -94,7 +100,7 @@ function loginInteractive(oauth, onUrl) {
 let cache = { at: 0, records: null, sheetId: null };
 async function findIndexSheetId(drive) {
   if (process.env.MAIL_BACKUP_SHEET_ID) return process.env.MAIL_BACKUP_SHEET_ID;
-  const res = await drive.files.list({ q: `name = '${INDEX_SHEET_NAME}' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`, fields: 'files(id,name,modifiedTime)', orderBy: 'modifiedTime desc', pageSize: 5 });
+  const res = await drive.files.list({ q: `name = '${INDEX_SHEET_NAME}' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false and 'me' in owners`, fields: 'files(id,name,modifiedTime)', orderBy: 'modifiedTime desc', pageSize: 5 });
   const f = (res.data.files || [])[0];
   if (!f) throw new Error(`Drive에서 '${INDEX_SHEET_NAME}' 시트를 찾지 못했습니다. 웹앱에서 백업을 한 번 실행했는지 확인하세요. (MAIL_BACKUP_SHEET_ID 로 직접 지정 가능)`);
   return f.id;
@@ -103,7 +109,7 @@ async function loadRecords(ctx, force) {
   if (cache.at === Infinity) return cache.records;
   if (!force && cache.records && Date.now() - cache.at < CACHE_TTL_MS) return cache.records;
   const sheetId = cache.sheetId || await findIndexSheetId(ctx.drive);
-  const res = await ctx.sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range: 'A:Z', valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'FORMATTED_STRING' });
+  const res = await ctx.sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range: 'A:Q', valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'FORMATTED_STRING' });
   const records = rowsToRecords(res.data.values || []);
   cache = { at: Date.now(), records, sheetId };
   return records;
@@ -112,7 +118,22 @@ async function findRecord(ctx, id) {
   const recs = await loadRecords(ctx);
   return recs.find(r => String(r.id) === String(id)) || (await loadRecords(ctx, true)).find(r => String(r.id) === String(id)) || null;
 }
+/** MCP가 건드릴 수 있는 Drive 파일은 인덱스에 적힌 .eml 원문과 첨부뿐이다 (아무 fileId나 읽는 도구가 되지 않게). */
+async function assertKnownFile(ctx, fileId) {
+  const known = (recs) => recs.some(r => String(r.driveFileId) === String(fileId) || parseAttachmentFiles(r).some(a => String(a.fileId) === String(fileId)));
+  if (known(await loadRecords(ctx)) || known(await loadRecords(ctx, true))) return;
+  throw new Error('인덱스에 없는 파일입니다: ' + fileId + ' (get_mail의 첨부 목록이나 원문 fileId만 쓸 수 있습니다)');
+}
+let sweptTmp = false;
+async function sweepTmpCopies(ctx) {
+  if (sweptTmp) return; sweptTmp = true;
+  try {
+    const res = await ctx.drive.files.list({ q: "name contains '_mcp_tmp_' and 'me' in owners and trashed = false", fields: 'files(id)' , pageSize: 100 });
+    for (const f of res.data.files || []) { try { await ctx.drive.files.delete({ fileId: f.id }); } catch (e) { /* 무시 */ } }
+  } catch (e) { /* 무시 */ }
+}
 async function driveMeta(ctx, fileId) {
+  await assertKnownFile(ctx, fileId);
   const r = await ctx.drive.files.get({ fileId, fields: 'id,name,mimeType,size,webViewLink' });
   return r.data;
 }
@@ -122,6 +143,7 @@ async function downloadBuffer(ctx, fileId) {
 }
 /** PDF/DOCX/XLSX 등을 Google 문서로 임시 변환해 텍스트를 뽑고, 사본은 삭제한다. */
 async function convertToText(ctx, fileId, kind) {
+  await sweepTmpCopies(ctx); // 이전에 삭제 실패로 남은 임시 사본 정리
   const targetMime = kind === 'convert-sheet' ? 'application/vnd.google-apps.spreadsheet' : 'application/vnd.google-apps.document';
   const exportMime = kind === 'convert-sheet' ? 'text/csv' : 'text/plain';
   const copy = await ctx.drive.files.copy({ fileId, requestBody: { mimeType: targetMime, name: `_mcp_tmp_${Date.now()}` }, fields: 'id' });
@@ -183,7 +205,7 @@ async function main() {
     description: '메일 1건의 메타데이터, 본문 미리보기(저장 시 최대 20,000자), 첨부 목록(fileId 포함)을 돌려준다. 전체 원문은 get_mail_raw.',
     inputSchema: { id: z.string().describe('search_mail 결과의 id'), maxBodyChars: z.number().int().min(100).max(20000).default(8000) },
   }, async ({ id, maxBodyChars }) => {
-    try { const r = await findRecord(ctx, id); if (!r) return err('해당 id의 메일이 인덱스에 없습니다: ' + id); const body = truncateText(r.bodyPreview, maxBodyChars); return j({ ...compactRecord(r), body: body.text, bodyTruncated: body.truncated }); } catch (e) { return err(e.message); }
+    try { const r = await findRecord(ctx, id); if (!r) return err('해당 id의 메일이 인덱스에 없습니다: ' + id); if (r.bodyPreview == null && r._row) { try { const b = await ctx.sheets.spreadsheets.values.get({ spreadsheetId: cache.sheetId, range: 'R' + r._row }); r.bodyPreview = String(((b.data.values || [])[0] || [])[0] || ''); } catch (e) { r.bodyPreview = ''; } } const body = truncateText(r.bodyPreview, maxBodyChars); return j({ ...compactRecord(r), body: body.text, bodyTruncated: body.truncated }); } catch (e) { return err(e.message); }
   });
 
   server.registerTool('get_mail_raw', {
@@ -211,9 +233,9 @@ async function main() {
   server.registerTool('download_attachment', {
     title: '첨부 다운로드',
     description: `첨부파일(또는 .eml)을 로컬에 저장하고 경로를 돌려준다. 기본 폴더: ${DOWNLOAD_DIR}`,
-    inputSchema: { fileId: z.string(), dir: z.string().optional() },
-  }, async ({ fileId, dir }) => {
-    try { const meta = await driveMeta(ctx, fileId); const buf = await downloadBuffer(ctx, fileId); const d = dir || DOWNLOAD_DIR; fs.mkdirSync(d, { recursive: true }); const p = path.join(d, meta.name.replace(/[\\/:*?"<>|]/g, '_')); fs.writeFileSync(p, buf); return j({ path: p, name: meta.name, mimeType: meta.mimeType, size: buf.length }); } catch (e) { return err(e.message); }
+    inputSchema: { fileId: z.string() },
+  }, async ({ fileId }) => {
+    try { const meta = await driveMeta(ctx, fileId); const buf = await downloadBuffer(ctx, fileId); const d = DOWNLOAD_DIR; fs.mkdirSync(d, { recursive: true }); const safe = path.basename(String(meta.name || 'file')).replace(/[\\/:*?"<>|]/g, '_').replace(/^\.+/, '_') || 'file'; const p = path.join(d, safe); fs.writeFileSync(p, buf); return j({ path: p, name: meta.name, mimeType: meta.mimeType, size: buf.length }); } catch (e) { return err(e.message); }
   });
 
   server.registerTool('backup_stats', {
@@ -255,7 +277,7 @@ async function main() {
     async () => { try { return j(await runScript(ctx, 'getSettings')); } catch (e) { return err(e.message); } });
   server.registerTool('backup_settings_set', {
     title: '설정 변경', description: '지정한 항목만 바꾼다. 주기를 바꾸면 자동 백업이 켜져 있을 때 일정이 갱신된다.',
-    inputSchema: { intervalDays: z.number().int().min(1).optional(), initialStartDate: z.string().optional().describe('YYYY-MM-DD 또는 빈 문자열'), includeSent: z.boolean().optional(), saveAttachments: z.boolean().optional(), maxPerRun: z.number().int().min(0).optional(), filterQuery: z.string().optional(), folderId: z.string().optional(), folderLayout: z.enum(['flat', 'yearly', 'monthly']).optional(), splitGmailTabs: z.boolean().optional().describe('Gmail 탭(프로모션·소셜 등)을 별도 폴더로'), notifyEmail: z.string().optional(), notifyOnComplete: z.boolean().optional() },
+    inputSchema: { intervalDays: z.number().int().min(1).optional(), initialStartDate: z.string().optional().describe('YYYY-MM-DD 또는 빈 문자열'), includeSent: z.boolean().optional(), saveAttachments: z.boolean().optional(), maxPerRun: z.number().int().min(0).optional(), filterQuery: z.string().optional(), folderLayout: z.enum(['flat', 'yearly', 'monthly']).optional(), splitGmailTabs: z.boolean().optional().describe('Gmail 탭(프로모션·소셜 등)을 별도 폴더로'), notifyOnComplete: z.boolean().optional() },
   }, async (a) => { try { const cur = await runScript(ctx, 'getSettings'); const d = await runScript(ctx, 'saveSettings', [Object.assign({}, cur, a)]); return j(d.settings); } catch (e) { return err(e.message); } });
   server.registerTool('backup_auto', { title: '자동 백업 켜기/끄기', description: '설정한 주기마다 새벽 3시 자동 실행 트리거를 설치하거나 제거한다.', inputSchema: { enabled: z.boolean() } },
     async ({ enabled }) => { try { const d = await runScript(ctx, enabled ? 'installScheduledTrigger' : 'uninstallScheduledTrigger'); return j({ triggerInstalled: d.triggerInstalled, schedule: d.schedule }); } catch (e) { return err(e.message); } });

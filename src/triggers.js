@@ -8,7 +8,10 @@ function setupWeeklyTrigger() { return setupScheduledTrigger(); }
 function setupScheduledTrigger() {
   removeScheduledTrigger();
   var days = getSettings_().intervalDays;
-  var builder = ScriptApp.newTrigger(BACKUP_FN).timeBased().inTimezone(CONFIG.TIME_ZONE).atHour(CONFIG.TRIGGER_HOUR);
+  // 200명이 같은 시각에 몰리지 않게 계정별로 새벽 1~5시 사이에 분산 (이메일 해시)
+  var email = (Session.getEffectiveUser().getEmail() || ''), h = 0; for (var i = 0; i < email.length; i++) h = (h * 31 + email.charCodeAt(i)) >>> 0;
+  var hour = 1 + (h % 5);
+  var builder = ScriptApp.newTrigger(BACKUP_FN).timeBased().inTimezone(CONFIG.TIME_ZONE).atHour(hour);
   var t = days === 7
     ? builder.onWeekDay(ScriptApp.WeekDay.MONDAY).create()
     : builder.everyDays(days).create();
@@ -46,5 +49,6 @@ function deleteContinuationTriggers_() {
 var SAFETY_DELAY_MS = 15 * 60 * 1000;
 function scheduleContinuation_(delayMs, noSafety) {
   ScriptApp.newTrigger(BACKUP_FN).timeBased().after(delayMs || CONFIG.CONTINUE_DELAY_MS).create();
-  if (!noSafety) ScriptApp.newTrigger(BACKUP_FN).timeBased().after(Math.max(SAFETY_DELAY_MS, (delayMs || 0) + 5 * 60 * 1000)).create();
+  // 안전망은 트리거가 쌓여 있지 않을 때만 (사용자·스크립트당 20개 한도)
+  if (!noSafety && ScriptApp.getProjectTriggers().length < 15) ScriptApp.newTrigger(BACKUP_FN).timeBased().after(Math.max(SAFETY_DELAY_MS, (delayMs || 0) + 5 * 60 * 1000)).create();
 }
