@@ -31,15 +31,18 @@ function streamMbox(o) {
   var outPos = 0;                  // 압축 해제 출력의 절대 오프셋 (buf[0]에 해당)
   var buf = '';                    // 아직 경계를 못 찾은 출력 (바이너리 문자열)
   var stopped = false, finished = false;
-  var inflate = null;
+  var inflate = null, inflOpts = o.decode === 'deflate-raw' ? { raw: true } : {};
+  var skipTo = o.startOffset || 0;
+  // 이어서 실행: 스냅샷이 있으면 압축 입력 위치·출력 오프셋·미완성 버퍼·압축 해제기 상태를 그대로 복원 (처음부터 다시 풀지 않음)
+  var snap = o.resume && o.resume.inputPos != null ? o.resume : null;
+  if (snap) { pos = snap.inputPos; outPos = snap.outPos || 0; buf = snap.buf || ''; skipTo = 0; }
   if (o.decode === 'gzip' || o.decode === 'deflate-raw') {
-    inflate = new pako.Inflate(o.decode === 'deflate-raw' ? { raw: true } : {});
+    inflate = snap && snap.inflate && o.codec ? restoreInflate(snap.inflate, inflOpts, o.codec) : new pako.Inflate(inflOpts);
     inflate.onData = function (chunk) { feed(u8ToBin(chunk)); };
   }
-  var skipTo = o.startOffset || 0;
 
   function feed(bin) {
-    if (stopped) return;
+    if (stopped) { buf += bin; return; } // 중단 뒤에 압축 해제기가 마저 뱉는 출력은 버리지 말고 스냅샷 버퍼에 남긴다
     // 이어서 실행: 이미 처리한 출력은 버린다
     if (outPos + bin.length <= skipTo) { outPos += bin.length; return; }
     if (outPos < skipTo) { bin = bin.slice(skipTo - outPos); outPos = skipTo; }
@@ -73,7 +76,44 @@ function streamMbox(o) {
     } else feed(u8ToBin(bytes));
   }
   if (!stopped) { finished = true; drain(true); }
-  return { offset: outPos + (stopped ? 0 : buf.length), done: finished && !stopped, stopped: stopped };
+  var out = { offset: outPos + (stopped ? 0 : buf.length), done: finished && !stopped, stopped: stopped };
+  if (stopped && o.codec) out.snapshot = { inputPos: pos, outPos: outPos, buf: buf, inflate: inflate ? snapshotInflate(inflate, o.codec) : null };
+  return out;
+}
+
+// ---------- 압축 해제기 상태 저장/복원 (GB급 파일을 구간마다 처음부터 다시 풀지 않기 위해) ----------
+/** pako Inflate의 내부 상태(zlib inflate state)를 JSON 가능한 객체로. 형식화 배열은 codec.enc로 base64. */
+function snapshotInflate(inflate, codec) {
+  var TYPES = { Uint8Array: 'u8', Uint16Array: 'u16', Int32Array: 'i32', Uint32Array: 'u32', Int16Array: 'i16' };
+  function walk(v, depth) {
+    if (v == null || typeof v === 'number' || typeof v === 'boolean' || typeof v === 'string') return v;
+    if (typeof v === 'function') return undefined;
+    var tn = v.constructor && v.constructor.name;
+    if (TYPES[tn]) return { __t: TYPES[tn], b: codec.enc(new Uint8Array(v.buffer, v.byteOffset, v.byteLength)) };
+    if (Array.isArray(v)) return v.map(function (x) { return walk(x, depth + 1); });
+    if (depth > 6) return undefined;
+    var o = {}; Object.keys(v).forEach(function (k) { var w = walk(v[k], depth + 1); if (w !== undefined) o[k] = w; }); return o;
+  }
+  var st = inflate.strm;
+  return { state: walk(st.state, 0), strm: { total_in: st.total_in, total_out: st.total_out, adler: st.adler, data_type: st.data_type, msg: st.msg } };
+}
+/** snapshot → 새 Inflate 인스턴스에 상태를 되살린다 */
+function restoreInflate(snapshot, opts, codec) {
+  var CTOR = { u8: Uint8Array, u16: Uint16Array, i32: Int32Array, u32: Uint32Array, i16: Int16Array };
+  function revive(v, target) {
+    if (v && typeof v === 'object' && v.__t) { var u8 = codec.dec(v.b); return new CTOR[v.__t](u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength)); }
+    if (Array.isArray(v)) return v.map(function (x) { return revive(x); });
+    if (v && typeof v === 'object') { var o = target && typeof target === 'object' && !Array.isArray(target) ? target : {}; Object.keys(v).forEach(function (k) { o[k] = revive(v[k], o[k]); }); return o; }
+    return v;
+  }
+  var inflate = new pako.Inflate(opts || {});
+  revive(snapshot.state, inflate.strm.state);
+  var st = inflate.strm; st.total_in = snapshot.strm.total_in; st.total_out = snapshot.strm.total_out; st.adler = snapshot.strm.adler; st.data_type = snapshot.strm.data_type; st.msg = snapshot.strm.msg;
+  // 코드 테이블 별칭 복원: 동적 블록에서는 lencode/distcode가 lendyn/distdyn을 가리킨다
+  var s = inflate.strm.state;
+  if (s.lendyn && s.lencode && s.lencode.length === s.lendyn.length && s.lencode !== s.lendyn) { var same = true; for (var i = 0; i < 64 && i < s.lencode.length; i++) if (s.lencode[i] !== s.lendyn[i]) { same = false; break; } if (same) s.lencode = s.lendyn; }
+  if (s.distdyn && s.distcode && s.distcode.length === s.distdyn.length && s.distcode !== s.distdyn) { var same2 = true; for (var j = 0; j < 64 && j < s.distcode.length; j++) if (s.distcode[j] !== s.distdyn[j]) { same2 = false; break; } if (same2) s.distcode = s.distdyn; }
+  return inflate;
 }
 
 // ---------- zip ----------
@@ -111,5 +151,5 @@ function zipDataStart(readRange, entry) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { streamMbox: streamMbox, listZipEntries: listZipEntries, zipDataStart: zipDataStart, u8ToBin: u8ToBin };
+  module.exports = { streamMbox: streamMbox, listZipEntries: listZipEntries, zipDataStart: zipDataStart, u8ToBin: u8ToBin, snapshotInflate: snapshotInflate, restoreInflate: restoreInflate };
 }

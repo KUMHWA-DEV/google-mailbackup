@@ -17,7 +17,22 @@ const msg = (n) => 'From a@example.com Mon Jul  1 09:00:00 2024\nFrom: a@example
 const mboxText = Array.from({ length: 300 }, (_, i) => msg(i + 1)).join('');
 const reader = (buf) => (s, e) => new Uint8Array(buf.subarray(s, e + 1));
 
+const codec = { enc: (u8) => Buffer.from(u8).toString('base64'), dec: (b) => new Uint8Array(Buffer.from(b, 'base64')) };
 describe('streamMbox', () => {
+  it('resumes a gzip stream from a snapshot without re-inflating from the start', () => {
+    const big = Array.from({ length: 3000 }, (_, i) => msg(i + 1)).join('');
+    const gz = zlib.gzipSync(Buffer.from(big, 'latin1'));
+    let reads = 0; const rr = (s, e) => { reads += 1; return new Uint8Array(gz.subarray(s, e + 1)); };
+    const first = []; const r1 = streamMbox({ size: gz.length, readRange: rr, chunkBytes: 20000, decode: 'gzip', startOffset: 0, codec, onMessage: (m) => { first.push(m); if (first.length === 1500) return 'stop'; } });
+    expect(r1.stopped).toBe(true); expect(r1.snapshot.inputPos).toBeGreaterThan(0); expect(r1.snapshot.inflate).toBeTruthy();
+    const readsBefore = reads;
+    const snap = JSON.parse(JSON.stringify(r1.snapshot)); // 저장/복원 왕복
+    const second = []; const r2 = streamMbox({ size: gz.length, readRange: rr, chunkBytes: 20000, decode: 'gzip', resume: snap, codec, onMessage: (m) => { second.push(m); } });
+    expect(r2.done).toBe(true);
+    expect(second.length).toBe(1500);
+    expect(second[0]).toBe(msg(1501)); expect(second[1499]).toBe(msg(3000));
+    expect(reads - readsBefore).toBeLessThan(Math.ceil(gz.length / 20000)); // 앞부분을 다시 읽지 않았다
+  });
   it('splits a plain mbox read in small windows', () => {
     const buf = Buffer.from(mboxText, 'latin1');
     const seen = [];

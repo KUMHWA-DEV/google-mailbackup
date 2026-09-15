@@ -132,6 +132,25 @@ function readFileRange_(fileId, start, endInclusive) {
   for (var i = 0; i < bytes.length; i++) u8[i] = bytes[i] & 255;
   return u8;
 }
+/** 압축 해제 상태 스냅샷 저장소: <루트>/_import_state/<fileId>.json (앱이 만든 파일이라 drive.file로 쓰기 가능) */
+var IMPORT_STATE_FOLDER = '_import_state';
+var importCodec_ = {
+  enc: function (u8) { var arr = new Array(u8.length); for (var i = 0; i < u8.length; i++) arr[i] = u8[i] > 127 ? u8[i] - 256 : u8[i]; return Utilities.base64Encode(arr); },
+  dec: function (b64) { var bytes = Utilities.base64Decode(b64), u8 = new Uint8Array(bytes.length); for (var i = 0; i < bytes.length; i++) u8[i] = bytes[i] & 255; return u8; },
+};
+function importStateFolder_() { return ensureFolderPath_([IMPORT_STATE_FOLDER]); }
+function importStateFile_(fileId) { var it = importStateFolder_().getFilesByName(fileId + '.json'); return it.hasNext() ? it.next() : null; }
+function saveImportSnapshot_(fileId, snapshot) {
+  var json = JSON.stringify(snapshot);
+  var f = importStateFile_(fileId);
+  if (f) f.setContent(json); else importStateFolder_().createFile(fileId + '.json', json, 'application/json');
+}
+function loadImportSnapshot_(fileId) {
+  var f = importStateFile_(fileId); if (!f) return null;
+  try { return JSON.parse(f.getBlob().getDataAsString('UTF-8')); } catch (e) { return null; }
+}
+function deleteImportSnapshot_(fileId) { var f = importStateFile_(fileId); if (f) { try { f.setTrashed(true); } catch (e) { /* 무시 */ } } }
+
 /** zip 엔트리(.eml 등 mbox가 아닌 것) 전체를 바이너리 문자열로 */
 function readZipEntryAll_(fileId, entry, dataStart) {
   if (entry.size > IMPORT_MAX_EML_BYTES) throw new Error(entry.name + ': 파일이 너무 큽니다');
@@ -170,7 +189,7 @@ function startImport() {
   return getImportState();
 }
 function stopImport() { props_().setProperty(IMPORT_PROP.STOP, '1'); deleteImportTriggers_(); if (!importLeaseHeld_()) { props_().deleteProperty(IMPORT_PROP.STOP); setImportStatus_({ state: importCursor_() ? 'paused' : 'idle', message: '중지됨' }); } else setImportStatus_({ state: 'stopping', message: '중지 중 · 현재 파일까지 저장 후 멈춥니다' }); return getImportState(); }
-function cancelImport() { props_().deleteProperty(IMPORT_PROP.STOP); deleteImportTriggers_(); var c = importCursor_(); props_().deleteProperty(IMPORT_PROP.CURSOR); if (c && (c.processed || c.errors)) appendImportHistory_(Object.assign(c, { finishedAt: new Date().toISOString(), status: 'cancelled' })); setImportStatus_({ state: 'idle', message: '취소됨', cursor: {} }); return getImportState(); }
+function cancelImport() { props_().deleteProperty(IMPORT_PROP.STOP); deleteImportTriggers_(); var c = importCursor_(); props_().deleteProperty(IMPORT_PROP.CURSOR); if (c && c.cur && c.cur.id) { try { deleteImportSnapshot_(c.cur.id); } catch (e) { /* 무시 */ } } if (c && (c.processed || c.errors)) appendImportHistory_(Object.assign(c, { finishedAt: new Date().toISOString(), status: 'cancelled' })); setImportStatus_({ state: 'idle', message: '취소됨', cursor: {} }); return getImportState(); }
 
 function getImportState() {
   var st = importStatus_(), c = st.cursor || importCursor_() || {};
@@ -237,11 +256,14 @@ function runImport() {
       try {
         var readRange = function (st, en2) { return readFileRange_(fid, st, en2); };
         var stopRes = function () { return (Date.now() > deadline || stopWanted()) ? 'stop' : undefined; };
-        var stream = function (opt) { // mbox 스트림 공통 (일반/ gzip / zip 엔트리)
-          var r = streamMbox(Object.assign({ size: size, readRange: readRange, chunkBytes: IMPORT_CHUNK_BYTES, startOffset: cursor.cur.offset, maxMessageBytes: IMPORT_MAX_MESSAGE_BYTES,
+        var stream = function (opt) { // mbox 스트림 공통 (일반/ gzip / zip 엔트리). 스냅샷이 있으면 압축 해제기 상태째 이어간다 (GB급도 되감기 없음)
+          var snap = loadImportSnapshot_(fid);
+          if (snap && (snap.entry || 0) !== (cursor.cur.entry || 0)) snap = null;
+          var r = streamMbox(Object.assign({ size: size, readRange: readRange, chunkBytes: IMPORT_CHUNK_BYTES, startOffset: cursor.cur.offset, maxMessageBytes: IMPORT_MAX_MESSAGE_BYTES, codec: importCodec_, resume: snap,
             log: function (m) { cursor.errors += 1; cursor.lastError = file.getName() + ': ' + m; },
             onMessage: function (bin, off) { handleMessage(mboxUnwrap(bin), fid + '#' + cursor.cur.entry + '#' + off, fid); cursor.cur.offset = off + bin.length; if ((cursor.processed + cursor.skipped + cursor.errors) % 20 === 0) saveImportCursor_(cursor); return stopRes(); } }, opt));
-          if (r.stopped) { if (Date.now() > deadline) outOfTime = true; else stopped = true; }
+          if (r.stopped) { if (Date.now() > deadline) outOfTime = true; else stopped = true; if (r.snapshot) { r.snapshot.entry = cursor.cur.entry || 0; try { saveImportSnapshot_(fid, r.snapshot); } catch (e) { Logger.log('스냅샷 저장 실패: %s', e.message); } } }
+          else deleteImportSnapshot_(fid);
           return r;
         };
         cursor.cur.entry = cursor.cur.entry || 0;
@@ -271,7 +293,7 @@ function runImport() {
           }
           if (brokeOut) break;
         }
-        pending.push(importDoneRow_(fid, file.getName())); backedUp['src:' + fid] = true; cursor.files += 1; cursor.cur = null;
+        pending.push(importDoneRow_(fid, file.getName())); backedUp['src:' + fid] = true; cursor.files += 1; cursor.cur = null; deleteImportSnapshot_(fid);
       } catch (e) {
         cursor.errors += 1; cursor.lastError = file.getName() + ': ' + e.message;
         Logger.log('가져오기 파일 실패 %s: %s', file.getName(), e.stack || e.message);

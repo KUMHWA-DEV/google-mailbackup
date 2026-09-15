@@ -194,7 +194,7 @@ Chrome "바로가기 만들기 > 창으로 열기"로 설치하면 독립 앱처
 
 백업과 **독립된 작업**이다(자체 트리거 `runImport`·임대 잠금·상태, 인덱스 스프레드시트의 `Import` 시트). 백업과 동시에 돌아도 된다.
 
-1. 각자 드라이브의 `Mail Backup/_import` 폴더(탭에서 "폴더 만들기"/"폴더 열기")에 파일을 넣는다. `.eml`(30MB까지), `.mbox`, `.mbox.gz`, `.zip`(Takeout 그대로, 4GB 이하) — 크기 제한 없이 Drive API 범위 읽기 4MB씩 + pako 스트리밍 압축 해제(`src/vendor_pako.js`, `src/lib/mboxstream.js`). 압축 파일은 구간마다 처음부터 다시 풀되 처리한 오프셋까지는 건너뛴다(수백 MB급까지 실용적). 하위 폴더는 정리용일 뿐 분류에 쓰지 않는다.
+1. 각자 드라이브의 `Mail Backup/_import` 폴더(탭에서 "폴더 만들기"/"폴더 열기")에 파일을 넣는다. `.eml`(30MB까지), `.mbox`, `.mbox.gz`, `.zip`(Takeout 그대로, 4GB 이하) — 크기 제한 없이 Drive API 범위 읽기 4MB씩 + pako 스트리밍 압축 해제(`src/vendor_pako.js`, `src/lib/mboxstream.js`). 구간이 끝나면 압축 해제기 상태(zlib inflate state)와 미완성 버퍼를 `<루트>/_import_state/<fileId>.json`에 스냅샷으로 저장하고 다음 구간에서 복원하므로 GB급 파일도 되감기 없이 이어간다. 하위 폴더는 정리용일 뿐 분류에 쓰지 않는다.
 2. 가져오기 탭에서 ▶ 시작. 4분 30초 구간씩 이어서 실행(컴퓨터 꺼도 됨), 중지/이어서/취소, 진행률(현재 파일·%), 이력.
 3. 분류는 메일 속성으로: Takeout mbox의 `X-Gmail-Labels`가 있으면 Gmail 백업과 같은 규칙(`categorize`), 없으면 보낸사람이 나면 보낸편지함·아니면 받은편지함. 저장 위치도 일반 백업과 같은 `<카테고리>/` 폴더와 `_attachments/`. 메일함에서 구분 표시 없이 함께 보인다(id는 `eml:` 접두어).
 
