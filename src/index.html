@@ -431,6 +431,7 @@
       <button data-tab="explorer">📬 메일함</button>
       <button data-tab="settings">⚙️ 설정</button>
       <button data-tab="history">🕘 이력</button>
+      <button data-tab="import">📥 가져오기</button>
       <button data-tab="ai">🤖 AI 연결</button>
     </nav>
     <div class="hright">
@@ -560,7 +561,7 @@
       </div>
       <div class="divider"></div>
       <div class="grid3">
-        <div class="field"><label class="t">📁 Drive 폴더 <a id="folderLink" target="_blank" rel="noopener" href="#" hidden>열기 ↗</a></label><div style="font-size:13px;color:var(--ink2);padding-top:8px" id="folderPathText">내 드라이브 › Mail Backup (자동 생성)</div><input type="hidden" name="folderId"><div class="note" id="importHint" style="margin-top:8px;font-size:12px"></div></div>
+        <div class="field"><label class="t">📁 Drive 폴더 <a id="folderLink" target="_blank" rel="noopener" href="#" hidden>열기 ↗</a></label><div style="font-size:13px;color:var(--ink2);padding-top:8px" id="folderPathText">내 드라이브 › Mail Backup (자동 생성)</div><input type="hidden" name="folderId"></div>
         <div class="field"><label class="t">📆 하위 폴더</label><div class="seg" id="layoutRadios"><button type="button" data-v="flat">없음</button><button type="button" data-v="yearly">연도</button><button type="button" data-v="monthly">연·월</button></div></div>
       </div>
     </form>
@@ -633,6 +634,29 @@
   </section>
 
   <!-- ===== 이력 ===== -->
+  <!-- ===== 가져오기(마이그레이션) ===== -->
+  <section class="page" id="tab-import" hidden>
+    <div class="grid2" style="align-items:start">
+      <div class="card">
+        <div class="cardhead"><h3>📥 예전 .eml 백업 가져오기</h3><span class="pill blue">백업과 별도로 동작</span></div>
+        <div class="steps">
+          <div class="step"><div class="n">1</div><div class="b"><b>파일을 이 폴더에 넣기</b><div class="how">내 드라이브 › Mail Backup › <b>_import</b> — <a id="impFolderLink" href="#" target="_blank" rel="noopener">폴더 열기 ↗</a><br>.eml 파일을 그대로 넣거나, 폴더째 끌어다 놓으세요. <b>첫 단계 하위 폴더 이름이 라벨(폴더)</b>이 됩니다. 예: <code>_import/2023 거래처/a.eml</code> → 라벨 "2023 거래처". 루트에 둔 파일은 받은편지함(내가 보낸 것은 보낸편지함).</div></div></div>
+          <div class="step"><div class="n">2</div><div class="b"><b>가져오기 시작</b><div class="how">오른쪽 ▶ 가져오기 시작을 누르면 서버가 파일을 하나씩 해석해 <code>Mail Backup/가져옴/&lt;라벨&gt;/</code>에 원본을, 첨부는 <code>_attachments_import/</code>에 저장하고 메일함에 넣습니다. 컴퓨터를 꺼도 계속되고, 백업과 동시에 돌아도 됩니다.</div></div></div>
+          <div class="step"><div class="n">3</div><div class="b"><b>끝나면</b><div class="how">메일함 라벨 목록에 <b>가져옴</b>이 생깁니다. 처리한 원본 파일은 기록되어 다시 처리되지 않으니 <code>_import</code> 폴더는 비워도 되고, 파일을 더 넣고 다시 시작하면 새 것만 처리합니다.</div></div></div>
+        </div>
+        <p class="muted" style="margin:8px 0 0">지원: 표준 .eml(RFC 822) · multipart · base64/quoted-printable · UTF-8/EUC-KR 등 · 한 파일 30MB까지. 같은 메일(Message-ID)이 여러 파일에 있어도 한 번만 저장됩니다. Outlook .pst/.msg는 먼저 .eml로 변환해야 합니다.</p>
+      </div>
+      <div class="card">
+        <div class="cardhead"><h3 id="impState">가져오기</h3><div style="display:flex;gap:8px"><button type="button" class="primary" id="impStart">▶ 가져오기 시작</button><button type="button" class="warn" id="impStop" hidden>⏹ 중지</button><button type="button" class="primary" id="impResume" hidden>▶ 이어서</button><button type="button" id="impCancel" hidden>✕ 취소</button></div></div>
+        <div id="impSub" style="font-size:13px;color:var(--ink2);margin-bottom:10px"></div>
+        <div class="kpis" style="margin:0 0 12px"><div class="kpi"><span class="ic">📄</span><div class="txt"><div class="k">대기 중 파일</div><div class="v" id="impPending">-</div></div></div><div class="kpi"><span class="ic">✅</span><div class="txt"><div class="k">저장</div><div class="v" id="impDone">-</div></div></div><div class="kpi"><span class="ic">♻️</span><div class="txt"><div class="k">중복</div><div class="v" id="impDup">-</div></div></div><div class="kpi"><span class="ic">⚠️</span><div class="txt"><div class="k">오류</div><div class="v" id="impErr">-</div></div></div></div>
+        <div class="note" id="impLastErr" hidden></div>
+        <div class="cardhead" style="margin-top:14px"><h3>🕘 가져오기 이력</h3></div>
+        <div class="tablewrap"><table><thead><tr><th>시작</th><th>종료</th><th>저장</th><th>중복</th><th>오류</th><th>용량</th></tr></thead><tbody id="impHist"></tbody></table></div>
+      </div>
+    </div>
+  </section>
+
   <section class="page" id="tab-history" hidden>
     <div class="card">
       <div class="cardhead"><h3>🕘 실행 이력 <span class="pill blue" id="histCount">0</span></h3></div>
@@ -721,8 +745,9 @@
   // ---------- tabs ----------
   function showTab(name) {
     state.tab = name;
-    ['overview', 'explorer', 'settings', 'history', 'ai'].forEach(function (t) { $('tab-' + t).hidden = t !== name; });
+    ['overview', 'explorer', 'settings', 'history', 'ai', 'import'].forEach(function (t) { $('tab-' + t).hidden = t !== name; });
     if (name === 'ai') renderAi();
+    if (name === 'import') loadImport();
     document.querySelectorAll('#tabs button').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === name); });
     if (name === 'explorer' && !state.explorer) loadExplorer();
     if (name === 'settings' && state.dash) fillSettings(state.dash.settings);
@@ -939,6 +964,28 @@
     };
     step();
   }
+  // ---------- 가져오기(마이그레이션) ----------
+  var impTimer = null;
+  function loadImport() { return call('getImportState').then(renderImport).catch(function (e) { toast('가져오기 상태 조회 실패: ' + (e.message || e), true); }); }
+  function renderImport(s) {
+    var c = s.cursor || {}, running = /^(running|queued|stopping)$/.test(s.state), paused = s.state === 'paused', failed = s.state === 'error';
+    $('impFolderLink').href = s.folderUrl || '#';
+    $('impState').textContent = running ? (s.state === 'queued' ? '⏳ 대기열 · 곧 시작' : s.state === 'stopping' ? '⏹ 중지 중' : '⚙️ 가져오는 중') : paused ? '⏸ 중지됨' : failed ? '⚠️ 실패' : '가져오기';
+    $('impSub').textContent = (s.message || '') + (c.startedAt && running ? ' · 시작 ' + fmtDate(c.startedAt) + ' · 구간 ' + fmtNum(c.chunks) : '');
+    $('impPending').textContent = s.pending == null ? '-' : fmtNum(s.pending) + (s.pendingCapped ? '+' : '');
+    $('impDone').textContent = fmtNum(c.processed); $('impDup').textContent = fmtNum(c.skipped); $('impErr').textContent = fmtNum(c.errors);
+    $('impLastErr').hidden = !c.lastError; $('impLastErr').textContent = c.lastError ? '마지막 오류: ' + c.lastError : '';
+    $('impStart').hidden = running || paused || failed; $('impStart').disabled = !s.pending;
+    $('impStop').hidden = !running || s.state === 'stopping'; $('impResume').hidden = !(paused || failed); $('impCancel').hidden = !(paused || failed || s.state === 'stopping');
+    $('impHist').innerHTML = (s.history || []).map(function (h) { return '<tr' + (h.status === 'cancelled' ? ' class="held"' : '') + '><td>' + (h.status === 'cancelled' ? '✖ ' : h.errors ? '⚠️ ' : '✅ ') + fmtDate(h.startedAt) + '</td><td>' + fmtDate(h.finishedAt) + '</td><td><b style="color:var(--blue-ink)">' + fmtNum(h.processed) + '</b></td><td>' + fmtNum(h.skipped) + '</td><td>' + fmtNum(h.errors) + '</td><td>' + fmtBytes(h.bytes) + '</td></tr>'; }).join('') || '<tr><td colspan="6" class="empty">아직 가져오기 이력이 없습니다</td></tr>';
+    if (running && !impTimer) impTimer = setTimeout(function tick() { impTimer = null; if (state.tab !== 'import') return; loadImport().then(function () { if (!impTimer && /^(running|queued|stopping)$/.test((state.imp || {}).state || '')) impTimer = setTimeout(tick, 5000); }); }, 5000);
+    state.imp = s;
+  }
+  $('impStart').addEventListener('click', function () { $('impStart').disabled = true; call('startImport').then(renderImport).catch(function (e) { toast('시작 실패: ' + (e.message || e), true); $('impStart').disabled = false; }); });
+  $('impResume').addEventListener('click', function () { call('startImport').then(renderImport).catch(function (e) { toast('실패: ' + (e.message || e), true); }); });
+  $('impStop').addEventListener('click', function () { call('stopImport').then(renderImport).catch(function (e) { toast('실패: ' + (e.message || e), true); }); });
+  $('impCancel').addEventListener('click', function () { call('cancelImport').then(renderImport).catch(function (e) { toast('실패: ' + (e.message || e), true); }); });
+
   function loadDashboard() {
     return call('getDashboard').then(renderDashboard).catch(function (e) { $('stateText').textContent = '연결 실패'; banner(e.message || String(e)); });
   }
@@ -975,7 +1022,6 @@
       '<div class="pv-num"><div class="k">📧 새로 저장</div><div class="v">' + fmtNum(p.newCount) + '건' + (s.maxPerRun && p.newCount > s.maxPerRun ? ' <small>이번엔 ' + fmtNum(s.maxPerRun) + '건</small>' : '') + '</div></div>' +
       '<div class="pv-num"><div class="k">💾 용량</div><div class="v">' + est + fmtBytes(p.bytes) + '</div></div>' +
       '<div class="pv-num"><div class="k">📅 메일 기간' + (p.truncated && !p.mailFromExact ? ' <small title="최신 표본 기준. 실제 실행은 더 오래된 메일도 포함">(표본)</small>' : '') + '</div><div class="v" style="font-size:14px">' + (p.mailFrom ? fmtDay(p.mailFrom).slice(0, 12) + ' ~ ' + fmtDayShort(p.mailTo) : '–') + '</div></div>' +
-      (p.importPending ? '<div class="pv-num"><div class="k">📥 가져올 .eml</div><div class="v">' + fmtNum(p.importPending) + '건</div></div>' : '') +
       '<div class="pv-num"><div class="k">🔍 감지 / 이미 있음</div><div class="v">' + fmtNum(p.found) + ' <small>/ ' + fmtNum(p.skipped) + '</small></div></div>' +
       '</div>' +
       (p.newCount ? '<div class="pv-cols"><div><div class="pv-title">🏷 라벨별' + (p.estimated ? ' (추정)' : '') + '</div>' + distSmall(p.byCategory) + '</div>' +
@@ -1037,7 +1083,6 @@
     setRadio('layoutRadios', s.folderLayout);
     $('folderLink').hidden = !(state.dash && state.dash.folderUrl); if (state.dash && state.dash.folderUrl) $('folderLink').href = state.dash.folderUrl;
     if (state.dash && state.dash.folderPath) $('folderPathText').textContent = state.dash.folderPath;
-    $('importHint').innerHTML = state.dash && state.dash.importFolderUrl ? '📥 예전 .eml 백업이 있으면 <a href="' + esc(state.dash.importFolderUrl) + '" target="_blank" rel="noopener">Mail Backup › _import</a> 폴더에 넣어 두세요(하위 폴더는 라벨이 됩니다). 다음 백업 때 자동으로 해석해 저장합니다. 처리한 원본은 남겨 두니 나중에 폴더를 비워도 됩니다.' : '';
     $('notifyEmail').placeholder = '비우면 ' + ((state.dash && state.dash.user) || '내 계정');
   }
   function setRadio(id, v) { $(id).dataset.value = v; document.querySelectorAll('#' + id + ' button').forEach(function (b) { b.classList.toggle('active', b.dataset.v === v); }); }

@@ -110,7 +110,11 @@ async function loadRecords(ctx, force) {
   if (!force && cache.records && Date.now() - cache.at < CACHE_TTL_MS) return cache.records;
   const sheetId = cache.sheetId || await findIndexSheetId(ctx.drive);
   const res = await ctx.sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range: 'A:Q', valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'FORMATTED_STRING' });
-  const records = rowsToRecords(res.data.values || []);
+  let records = rowsToRecords(res.data.values || []).map(r => Object.assign(r, { _sheet: '' }));
+  try { // 가져오기(.eml 마이그레이션) 시트
+    const imp = await ctx.sheets.spreadsheets.values.get({ spreadsheetId: sheetId, range: 'Import!A:Q', valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'FORMATTED_STRING' });
+    records = records.concat(rowsToRecords(imp.data.values || []).map(r => Object.assign(r, { _sheet: 'Import!' })));
+  } catch (e) { /* 시트 없음 */ }
   cache = { at: Date.now(), records, sheetId };
   return records;
 }
@@ -205,7 +209,7 @@ async function main() {
     description: '메일 1건의 메타데이터, 본문 미리보기(저장 시 최대 20,000자), 첨부 목록(fileId 포함)을 돌려준다. 전체 원문은 get_mail_raw.',
     inputSchema: { id: z.string().describe('search_mail 결과의 id'), maxBodyChars: z.number().int().min(100).max(20000).default(8000) },
   }, async ({ id, maxBodyChars }) => {
-    try { const r = await findRecord(ctx, id); if (!r) return err('해당 id의 메일이 인덱스에 없습니다: ' + id); if (r.bodyPreview == null && r._row) { try { const b = await ctx.sheets.spreadsheets.values.get({ spreadsheetId: cache.sheetId, range: 'R' + r._row }); r.bodyPreview = String(((b.data.values || [])[0] || [])[0] || ''); } catch (e) { r.bodyPreview = ''; } } const body = truncateText(r.bodyPreview, maxBodyChars); return j({ ...compactRecord(r), body: body.text, bodyTruncated: body.truncated }); } catch (e) { return err(e.message); }
+    try { const r = await findRecord(ctx, id); if (!r) return err('해당 id의 메일이 인덱스에 없습니다: ' + id); if (r.bodyPreview == null && r._row) { try { const b = await ctx.sheets.spreadsheets.values.get({ spreadsheetId: cache.sheetId, range: (r._sheet || '') + 'R' + r._row }); r.bodyPreview = String(((b.data.values || [])[0] || [])[0] || ''); } catch (e) { r.bodyPreview = ''; } } const body = truncateText(r.bodyPreview, maxBodyChars); return j({ ...compactRecord(r), body: body.text, bodyTruncated: body.truncated }); } catch (e) { return err(e.message); }
   });
 
   server.registerTool('get_mail_raw', {

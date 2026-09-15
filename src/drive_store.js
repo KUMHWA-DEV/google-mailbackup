@@ -72,11 +72,11 @@ function saveEml_(folder, fileName, rawBytes) {
  * (메일마다 폴더를 만들면 수천 개 폴더가 생기고 폴더 조회가 느려지므로 월별 폴더 하나에 파일명 접두어로 구분)
  * @returns {{name:string, fileId:string, size:number, mime:string}[]} 저장된 파일 정보 (다운로드 링크용)
  */
-function saveAttachments_(messageId, attachments, date) {
+function saveAttachments_(messageId, attachments, date, folderName) {
   var files = [];
   if (!attachments || !attachments.length || !getSettings_().saveAttachments) return files;
   var month = Utilities.formatDate(date instanceof Date && !isNaN(date.getTime()) ? date : new Date(), CONFIG.TIME_ZONE, 'yyyy-MM');
-  var folder = ensureFolderPath_([CONFIG.ATTACHMENT_FOLDER_NAME, month]);
+  var folder = ensureFolderPath_([folderName || CONFIG.ATTACHMENT_FOLDER_NAME, month]);
   attachments.forEach(function (att, i) {
     var name = att.getName() || ('attachment-' + (i + 1));
     try {
@@ -105,24 +105,49 @@ function indexSheet_() {
     props_().setProperty(PROP.INDEX_SHEET_ID, ss.getId());
   }
   var sheet = ss.getSheets()[0];
+  initIndexSheet_(sheet);
+  return sheet;
+}
+function initIndexSheet_(sheet) {
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(INDEX_HEADERS);
     sheet.setFrozenRows(1);
     sheet.getRange(1, 1, 1, INDEX_HEADERS.length).setFontWeight('bold');
   }
+}
+/** 가져오기(.eml 마이그레이션) 전용 시트. 백업과 다른 실행이 동시에 써도 겹치지 않게 시트를 분리한다. */
+var IMPORT_SHEET_NAME = 'Import';
+function importSheet_() {
+  var main = indexSheet_();
+  var ss = main.getParent();
+  var sheet = ss.getSheetByName(IMPORT_SHEET_NAME) || ss.insertSheet(IMPORT_SHEET_NAME);
+  initIndexSheet_(sheet);
   return sheet;
+}
+/** 읽기용: 메인 + Import 시트 (Import 시트는 있을 때만) */
+function indexSheets_() {
+  var main = indexSheet_();
+  var imp = main.getParent().getSheetByName(IMPORT_SHEET_NAME);
+  return imp ? [main, imp] : [main];
+}
+/** id 접두어로 시트를 고른다 ('eml:' → Import) */
+function sheetForId_(id) {
+  if (String(id).indexOf('eml:') === 0) { var imp = indexSheet_().getParent().getSheetByName(IMPORT_SHEET_NAME); return imp || indexSheet_(); }
+  return indexSheet_();
 }
 
 /** 이미 백업된 메시지 id 집합. */
-function loadBackedUpIds_(sheet) {
+function loadBackedUpIds_() {
   var set = {};
-  var last = sheet.getLastRow();
-  if (last < 2) return set;
-  var vals = sheet.getRange(2, 1, last - 1, 2).getValues(); // A: id, B: threadId 또는 가져온 원본 'src:<fileId>'
-  for (var i = 0; i < vals.length; i++) {
-    if (vals[i][0]) set[String(vals[i][0])] = true;
-    if (vals[i][1] && String(vals[i][1]).indexOf('src:') === 0) set[String(vals[i][1])] = true;
-  }
+  indexSheets_().forEach(function (sheet) {
+    var last = sheet.getLastRow();
+    if (last < 2) return;
+    var vals = sheet.getRange(2, 1, last - 1, 2).getValues(); // A: id, B: threadId 또는 가져온 원본 'src:<fileId>'
+    for (var i = 0; i < vals.length; i++) {
+      if (vals[i][0]) set[String(vals[i][0])] = true;
+      if (vals[i][1] && String(vals[i][1]).indexOf('src:') === 0) set[String(vals[i][1])] = true;
+    }
+  });
   return set;
 }
 
@@ -134,10 +159,12 @@ function appendIndexRows_(sheet, rows) {
 
 /** 인덱스 전체를 레코드 배열로 읽는다 (웹앱 검색용). 본문 미리보기 열은 제외. */
 function loadIndexRecords_() {
-  var sheet = indexSheet_();
-  var last = sheet.getLastRow();
-  if (last < 2) return [];
-  var values = sheet.getRange(2, 1, last - 1, INDEX_LIST_COLUMNS).getValues();
+  var values = [];
+  indexSheets_().forEach(function (sheet) {
+    var last = sheet.getLastRow();
+    if (last < 2) return;
+    values = values.concat(sheet.getRange(2, 1, last - 1, INDEX_LIST_COLUMNS).getValues());
+  });
   values = values.filter(function (row) { return String(row[0] || '').indexOf('emldup:') !== 0; }); // 가져오기 중복 표시 행은 메일이 아님
   return values.map(function (row) {
     var rec = rowToRecord(row);
@@ -149,7 +176,7 @@ function loadIndexRecords_() {
 
 /** 메시지 id로 인덱스 레코드 1건(본문 제외)을 읽는다. 없으면 null. */
 function loadRecordById_(id) {
-  var sheet = indexSheet_();
+  var sheet = sheetForId_(id);
   var last = sheet.getLastRow();
   if (last < 2) return null;
   var hit = sheet.getRange(2, 1, last - 1, 1).createTextFinder(String(id)).matchEntireCell(true).findNext();
@@ -162,7 +189,7 @@ function loadRecordById_(id) {
 
 /** 메시지 id로 해당 행의 본문 미리보기만 읽는다. */
 function loadBodyPreview_(id) {
-  var sheet = indexSheet_();
+  var sheet = sheetForId_(id);
   var last = sheet.getLastRow();
   if (last < 2) return '';
   var hit = sheet.getRange(2, 1, last - 1, 1).createTextFinder(String(id)).matchEntireCell(true).findNext();
