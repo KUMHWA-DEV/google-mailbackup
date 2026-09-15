@@ -159,10 +159,12 @@ async function main() {
     if (fs.existsSync(TOKEN_PATH)) {
       ctx = build(await getAuth());
     } else {
-      const st = { real: null, pending: null, url: null };
+      const st = { real: null, pending: null, url: null, error: null };
       const need = () => {
         if (st.real) return st.real;
-        if (!st.pending) st.pending = getAuth(u => { st.url = u; }).then(a => { st.real = build(a); log('로그인 완료'); return st.real; }).catch(e => { st.pending = null; log('로그인 실패:', e.message); throw e; });
+        if (st.error) { const msg = st.error; st.error = null; throw new Error('로그인을 시작하지 못했습니다: ' + msg + '\n웹앱 AI 연결 탭의 한 줄 설치 명령을 다시 실행하면 OAuth 파일이 만들어집니다.'); }
+        // 실패해도 프로세스가 죽지 않게: 오류는 st.error에 담아 다음 호출 때 메시지로 돌려준다 (rethrow 하면 unhandled rejection으로 서버가 종료됨)
+        if (!st.pending) st.pending = getAuth(u => { st.url = u; }).then(a => { st.real = build(a); log('로그인 완료'); return st.real; }).catch(e => { st.pending = null; st.error = e.message; log('로그인 실패:', e.message); return null; });
         throw new Error('로그인이 필요합니다. 브라우저에 열린 Google 로그인 창에서 회사 계정으로 로그인한 뒤 다시 질문하세요.' + (st.url ? ' 창이 안 열렸으면 이 주소를 여세요: ' + st.url : ' (로그인 창을 여는 중입니다. 잠시 후 다시 시도하세요)'));
       };
       ctx = { get drive() { return need().drive; }, get sheets() { return need().sheets; }, get script() { return need().script; } };
