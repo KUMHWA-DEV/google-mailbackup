@@ -198,7 +198,7 @@ Chrome "바로가기 만들기 > 창으로 열기"로 설치하면 독립 앱처
 2. 가져오기 탭에서 ▶ 시작. 4분 30초 구간씩 이어서 실행(컴퓨터 꺼도 됨), 중지/이어서/취소, 진행률(현재 파일·%), 이력.
 3. 분류는 메일 속성으로: Takeout mbox의 `X-Gmail-Labels`가 있으면 Gmail 백업과 같은 규칙(`categorize`), 없으면 보낸사람이 나면 보낸편지함·아니면 받은편지함. 저장 위치도 일반 백업과 같은 `<카테고리>/` 폴더와 `_attachments/`. 메일함에서 구분 표시 없이 함께 보인다(id는 `eml:` 접두어).
 
-파서(`src/lib/mime.js`): multipart, base64/quoted-printable, EUC-KR 등 문자셋, RFC 2047/2231 헤더, mbox 경계·`>From` 해제. Message-ID로 중복을 거른다. 처리한 파일은 `Import` 시트에 `src:<fileId>`(표시 행)로 기록돼 다시 처리되지 않으며, 앱은 원본 파일을 읽기만 하고 옮기거나 지우지 않는다.
+파서(`src/lib/mime.js`): multipart, base64/quoted-printable, EUC-KR 등 문자셋, RFC 2047/2231 헤더, mbox 경계·`>From` 해제. Message-ID로 중복을 거른다. 처리한 파일은 `Import` 시트에 `src:<fileId>`(표시 행)로 기록돼 다시 처리되지 않으며, 앱은 원본 파일을 읽기만 하고 옮기거나 지우지 않는다. 처리 중 오류가 난 파일은 `srcfail:<fileId>`로만 기록돼 대기 목록에 남고, "가져오기 시작"을 다시 누르면 재시도한다(같은 실행 안에서는 한 번만 시도).
 
 ## 4. 설정 (웹앱 설정 탭 = 사용자 속성, 사용자마다 별도)
 

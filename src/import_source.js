@@ -117,9 +117,23 @@ function importMessage_(bin, fallbackId, backedUp, settings, srcFileId) {
   });
   return { row: row, id: id, skipped: false, bytes: bin.length };
 }
-/** 파일 하나를 끝까지 처리했다는 표시 행 (목록에는 안 보임, 다음 실행에서 건너뜀) */
-function importDoneRow_(fileId, note) {
-  return buildIndexRow({ id: 'emldup:' + fileId, threadId: 'src:' + fileId, date: new Date(), category: '가져옴-처리됨', labelNames: [], headers: { subject: note || '' }, sizeEstimate: 0, backedUpAt: new Date() });
+/** 파일 하나를 끝까지 처리했다는 표시 행 (목록에는 안 보임, 다음 실행에서 건너뜀). failed=true 면 'srcfail:' 기록만 남기고 다음 "시작" 때 다시 시도한다 */
+function importDoneRow_(fileId, note, failed) {
+  return buildIndexRow({ id: 'emldup:' + fileId, threadId: (failed ? 'srcfail:' : 'src:') + fileId, date: new Date(), category: failed ? '가져옴-실패' : '가져옴-처리됨', labelNames: [], headers: { subject: note || '' }, sizeEstimate: 0, backedUpAt: new Date() });
+}
+/** 예전 버전이 실패한 파일에도 'src:' 완료 표시를 남겨 다시 시도할 수 없던 문제 복구: 실패 표시 행을 'srcfail:'로 바꾼다 */
+function repairFailedImportMarkers_() {
+  try {
+    var sheet = importSheet_(), last = sheet.getLastRow();
+    if (last < 2) return 0;
+    var subjCol = INDEX_HEADERS.indexOf('subject') + 1;
+    var vals = sheet.getRange(2, 1, last - 1, subjCol).getValues(), n = 0;
+    for (var i = 0; i < vals.length; i++) {
+      var t = String(vals[i][1] || ''), sub = String(vals[i][subjCol - 1] || '');
+      if (t.indexOf('src:') === 0 && sub.indexOf('실패:') === 0) { sheet.getRange(i + 2, 2).setValue('srcfail:' + t.slice(4)); n += 1; }
+    }
+    return n;
+  } catch (e) { Logger.log('실패 표시 복구 실패: %s', e.message); return 0; }
 }
 
 /** Drive 파일의 바이트 구간을 Uint8Array로 읽는다 (큰 파일을 창 단위로) */
@@ -181,7 +195,8 @@ function startImport() {
   props_().deleteProperty(IMPORT_PROP.STOP);
   deleteImportTriggers_();
   importFolder_(true);
-  var c = importCursor_() || newImportCursor_();
+  var existing = importCursor_(), c = existing || newImportCursor_();
+  if (!existing) { repairFailedImportMarkers_(); c.failed = {}; } // 새 실행: 지난 실행에서 실패한 파일을 다시 시도 (failed = 이번 실행에서 실패한 파일, 구간이 바뀌어도 같은 실행 안에서는 재시도 안 함)
   saveImportCursor_(c);
   var err = '';
   try { scheduleImport_(5 * 1000); } catch (e) { err = String(e && e.message || e); }
@@ -242,7 +257,7 @@ function runImport() {
       if ((cursor.processed + cursor.errors + cursor.skipped) % 10 === 0) tickStatus('가져오는 중 ' + cursor.processed + '건' + (cursor.cur ? ' · ' + cursor.cur.name : ''));
     };
     // 진행 중이던 파일부터, 그다음 새 파일들
-    var entries = listImportFiles_(backedUp, 200);
+    var entries = listImportFiles_(backedUp, 200).filter(function (e) { return !(cursor.failed && cursor.failed[e.file.getId()]); }); // 이번 실행에서 이미 실패한 파일은 제외
     if (cursor.cur) { // 진행 중이던 파일을 맨 앞에 (목록에 있으면 그 자리에서 빼고)
       entries = entries.filter(function (e) { return e.file.getId() !== cursor.cur.id; });
       try { var cf = DriveApp.getFileById(cursor.cur.id); entries.unshift({ file: cf, kind: cursor.cur.kind }); } catch (e) { cursor.cur = null; }
@@ -297,7 +312,7 @@ function runImport() {
       } catch (e) {
         cursor.errors += 1; cursor.lastError = file.getName() + ': ' + e.message;
         Logger.log('가져오기 파일 실패 %s: %s', file.getName(), e.stack || e.message);
-        pending.push(importDoneRow_(fid, '실패: ' + e.message)); backedUp['src:' + fid] = true; cursor.cur = null; // 같은 파일로 반복 실패하지 않게
+        pending.push(importDoneRow_(fid, '실패: ' + e.message, true)); cursor.failed = cursor.failed || {}; cursor.failed[fid] = 1; cursor.cur = null; // 이번 실행에서는 다시 시도하지 않음 (다음 "시작" 때 재시도, 스냅샷은 남겨 이어감)
       }
       flush();
     }
@@ -309,7 +324,8 @@ function runImport() {
     props_().deleteProperty(IMPORT_PROP.CURSOR);
     cursor.finishedAt = new Date().toISOString();
     appendImportHistory_(cursor);
-    setImportStatus_({ state: 'idle', message: '완료: ' + cursor.processed + '건 저장, ' + cursor.skipped + '건 중복, 오류 ' + cursor.errors + '건 (파일 ' + cursor.files + '개)', cursor: cursor, finishedAt: cursor.finishedAt });
+    var nFailed = Object.keys(cursor.failed || {}).length;
+    setImportStatus_({ state: 'idle', message: '완료: ' + cursor.processed + '건 저장, ' + cursor.skipped + '건 중복, 오류 ' + cursor.errors + '건 (파일 ' + cursor.files + '개)' + (nFailed ? ' · 실패한 파일 ' + nFailed + '개는 "가져오기 시작"을 다시 누르면 재시도합니다' : ''), cursor: cursor, finishedAt: cursor.finishedAt });
     refreshSummary_();
   } catch (e) {
     try { flush(); } catch (e2) { /* 무시 */ }
