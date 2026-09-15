@@ -473,6 +473,7 @@
       <div id="cycleBox"><div class="bar"><i id="progressBar" style="width:0%"></i></div>
       <div class="barlbl"><span id="progressL"></span><span id="progressR"></span></div></div>
       <div class="runbox" id="runBox" hidden></div>
+      <div class="runbox" id="impDashBox" hidden></div>
     </div>
 
     <div class="dash2">
@@ -649,6 +650,7 @@
       <div class="card">
         <div class="cardhead"><h3 id="impState">가져오기</h3><div style="display:flex;gap:8px"><button type="button" class="primary" id="impStart">▶ 가져오기 시작</button><button type="button" class="warn" id="impStop" hidden>⏹ 중지</button><button type="button" class="primary" id="impResume" hidden>▶ 이어서</button><button type="button" id="impCancel" hidden>✕ 취소</button></div></div>
         <div id="impSub" style="font-size:13px;color:var(--ink2);margin-bottom:10px"></div>
+        <div class="runbox" id="impBox" hidden style="margin:0 0 12px"></div>
         <div class="kpis" style="margin:0 0 12px"><div class="kpi"><span class="ic">📄</span><div class="txt"><div class="k">대기 중 파일</div><div class="v" id="impPending">-</div></div></div><div class="kpi"><span class="ic">✅</span><div class="txt"><div class="k">저장</div><div class="v" id="impDone">-</div></div></div><div class="kpi"><span class="ic">♻️</span><div class="txt"><div class="k">중복</div><div class="v" id="impDup">-</div></div></div><div class="kpi"><span class="ic">⚠️</span><div class="txt"><div class="k">오류</div><div class="v" id="impErr">-</div></div></div></div>
         <div class="note" id="impLastErr" hidden></div>
         <div class="cardhead" style="margin-top:14px"><h3>🕘 가져오기 이력</h3></div>
@@ -756,6 +758,7 @@
     ['overview', 'explorer', 'settings', 'history', 'ai', 'import'].forEach(function (t) { $('tab-' + t).hidden = t !== name; });
     if (name === 'ai') renderAi();
     if (name === 'import') loadImport(true);
+    if (name === 'overview' && state.dash && Date.now() - (state.dashAt || 0) > 5000) loadDashboard(); // 다른 탭에서 시작한 가져오기/백업 현황을 바로 반영
     document.querySelectorAll('#tabs button').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === name); });
     if (name === 'explorer' && !state.explorer) loadExplorer();
     if (name === 'settings' && state.dash) fillSettings(state.dash.settings);
@@ -836,9 +839,13 @@
     var catList = foldCategories(sum.categories || []);
     distBars($('distCat'), catList, 'category'); $('distCatN').textContent = catList.length + '개';
     renderHistory(d.history || []);
+    var ir = d.importRun || {}, impLive = /^(running|queued|stopping|paused|error)$/.test(ir.state || '');
+    $('impDashBox').hidden = !impLive; if (impLive) $('impDashBox').innerHTML = impBoxHtml(ir, true);
+    state.dashAt = Date.now();
     if (state.tab === 'ai' || $('aiInstallCmd').innerHTML.indexOf('불러오는 중') >= 0) renderAi();
     banner(failed ? '백업 실패: ' + (d.lastError || d.message) + (d.errorStack ? '\n' + d.errorStack.split('\n').slice(0, 3).join(' · ') : '') + ' — "지금 백업"으로 다시 시도하면 저장된 위치부터 이어갑니다' : (d.lastError && !running ? d.lastError : ''));
-    if (running && !state.pollTimer) state.pollTimer = setTimeout(function tickPoll() { state.pollTimer = null; loadDashboard().then(function () { if (state.pollTimer === null && state.dash && /^(running|queued|stopping)$/.test(state.dash.state)) state.pollTimer = setTimeout(tickPoll, 4000); }); }, 4000); // 이전 응답이 온 뒤에만 다음 폴링 (겹치지 않게)
+    var impPoll = /^(running|queued|stopping)$/.test(ir.state || ''); // 가져오기가 도는 동안에도 대시보드 현황을 갱신
+    if ((running || impPoll) && !state.pollTimer) state.pollTimer = setTimeout(function tickPoll() { state.pollTimer = null; if (state.tab !== 'overview') return; loadDashboard().then(function () { var dd = state.dash || {}; if (state.pollTimer === null && (/^(running|queued|stopping)$/.test(dd.state) || /^(running|queued|stopping)$/.test((dd.importRun || {}).state || ''))) state.pollTimer = setTimeout(tickPoll, 4000); }); }, 4000); // 이전 응답이 온 뒤에만 다음 폴링 (겹치지 않게)
     if (!running && state.pollTimer) { clearTimeout(state.pollTimer); state.pollTimer = null; }
     if (running && !state.tickTimer) state.tickTimer = setInterval(tickRun, 1000);
     if (!running && state.tickTimer) { clearInterval(state.tickTimer); state.tickTimer = null; }
@@ -889,6 +896,20 @@
     var base = Number(r.processed) || 0, rate = p && p.rate ? p.rate : 0, dt = (Date.now() - (state.lastPollAt || Date.now())) / 1000;
     var est = Math.floor(base + rate * dt); if (r.expectedTotal) est = Math.min(est, r.expectedTotal); return Math.max(base, est);
   }
+  /** 가져오기 진행 상자 (가져오기 탭·대시보드 공용). s = {state, message, cursor, progress} */
+  function impBoxHtml(s, compact) {
+    var c = s.cursor || {}, p = s.progress || {}, st = s.state, queued = st === 'queued', pct = p.percent;
+    var head = queued ? '⏳ 대기열 · 곧 시작' : st === 'stopping' ? '⏹ 중지 중 · 현재 파일까지 저장' : st === 'paused' ? '⏸ 중지됨' : st === 'error' ? '⚠️ 실패' : '📥 가져오는 중';
+    var top = head + (queued ? '' : ' · 저장 ' + fmtNum(c.processed) + '건' + (c.skipped ? ' · 중복 ' + fmtNum(c.skipped) : '') + (pct != null ? ' · ' + pct + '%' : '') + (p.filesTotal ? ' · 파일 ' + fmtNum(p.filesDone) + '/' + fmtNum(p.filesTotal) : ''));
+    var right = queued ? '' : '구간 ' + fmtNum(c.chunks) + ' · 경과 ' + secs(Math.round(c.activeSeconds || 0)) + (p.etaSeconds != null ? ' · 남은 약 ' + etaText(p.etaSeconds) : '') + (c.errors ? ' · <span title="' + esc(c.lastError || '') + '">⚠️ 오류 ' + fmtNum(c.errors) + '</span>' : '');
+    var cur = p.curFile ? '📄 ' + esc(p.curFile) + (p.curPercent != null ? ' · ' + p.curPercent + '%' : '') + (p.curSize ? ' (' + fmtBytes(p.curPos) + ' / ' + fmtBytes(p.curSize) + ')' : '') : '';
+    var waiting = /1분 뒤 이어서|재시도/.test(s.message || '') ? '⏸ ' + esc(s.message) : '';
+    return '<div class="top"><span>' + top + '</span><span>' + right + '</span></div>' +
+      '<div class="bar"><i style="width:' + (pct != null ? pct : (queued ? 0 : 30)) + '%"' + (pct == null && !queued ? ' class="due"' : '') + '></i></div>' +
+      (compact ? '' : (cur ? '<div class="meta">' + cur + '</div>' : '')) +
+      (st === 'error' && c.lastError ? '<div class="meta" style="color:var(--red-ink)">마지막 오류: ' + esc(String(c.lastError).slice(0, 160)) + '</div>' : '') +
+      '<div class="meta">' + (compact ? '📥 예전 백업 가져오기 · <a href="#" data-goto="import">가져오기 탭에서 보기 ↗</a>' : '🖥 백그라운드에서 실행 · 창을 닫아도 계속됩니다 · 백업과 동시에 돌아도 됩니다') + (waiting ? ' · ' + waiting : '') + '</div>';
+  }
   function runBoxHtml(d, live) {
     var r = d.currentRun || {}, p = r.progress || {}, queued = d.state === 'queued';
     if (live && !queued && r.startedAt) {
@@ -909,6 +930,7 @@
   }
   document.addEventListener('click', function (e) {
     var b = e.target.closest('.dist .r'); if (b) { var p = {}; p[b.dataset.k] = b.dataset.v; openExplorer(p); }
+    var g = e.target.closest('a[data-goto]'); if (g) { e.preventDefault(); showTab(g.dataset.goto); }
   });
 
   /** 대상: 진행 중이면 감지 단계의 예상치, 끝난 실행이면 실제로 다룬 수(저장+기존+오류). 보관 메일 수와 맞아떨어진다. */
@@ -938,7 +960,7 @@
   function importRunningRow(ir, full) {
     var c = ir.cursor || {}, label = ir.state === 'queued' ? '⏳ 대기열' : ir.state === 'paused' ? '⏸ 중지됨' : ir.state === 'error' ? '⚠️ 실패' : ir.state === 'stopping' ? '⏹ 중지 중' : '⚙️ 진행 중';
     return '<tr class="runrow' + (ir.state === 'paused' || ir.state === 'error' ? ' held' : '') + '"><td>' + label + (c.startedAt ? ' ' + fmtDate(c.startedAt) : '') + ' <span class="pill blue" style="margin-left:4px">📥 가져오기</span></td>' + (full ? '<td>–</td>' : '') +
-      '<td>' + secs(c.activeSeconds || 0) + '</td><td>' + fmtNum((c.processed || 0) + (c.skipped || 0) + (c.errors || 0)) + '</td><td><b style="color:var(--blue-ink)">' + fmtNum(c.processed || 0) + '</b></td>' +
+      '<td>' + secs(Math.round(c.activeSeconds || 0)) + '</td><td>' + fmtNum((c.processed || 0) + (c.skipped || 0) + (c.errors || 0)) + '</td><td><b style="color:var(--blue-ink)">' + fmtNum(c.processed || 0) + '</b></td>' +
       '<td' + (c.errors ? ' style="color:var(--red);font-weight:700"' : '') + '>' + fmtNum(c.errors || 0) + '</td><td>' + fmtBytes(c.bytes || 0) + '</td><td style="color:var(--muted)">-</td>' +
       '<td><span style="color:var(--muted);font-size:12px">' + esc(c.cur ? (c.cur.name || '') : (ir.message || '')) + '</span></td><td>–</td><td></td></tr>';
   }
@@ -1002,6 +1024,8 @@
     $('impFolderCtl').innerHTML = s.folderExists && s.folderUrl ? '<a href="' + esc(s.folderUrl) + '" target="_blank" rel="noopener">폴더 열기 ↗</a>' : '<span class="note" style="padding:2px 8px">아직 폴더가 없습니다</span> <button type="button" class="sm" id="impMkdir">📁 폴더 만들기</button>';
     $('impState').textContent = running ? (s.state === 'queued' ? '⏳ 대기열 · 곧 시작' : s.state === 'stopping' ? '⏹ 중지 중' : '⚙️ 가져오는 중') : paused ? '⏸ 중지됨' : failed ? '⚠️ 실패' : '가져오기';
     $('impSub').textContent = (s.message || '') + (c.startedAt && running ? ' · 시작 ' + fmtDate(c.startedAt) + ' · 구간 ' + fmtNum(c.chunks) : '') + (running && c.curFile ? ' · 현재 파일 ' + c.curFile + (c.curSize ? ' (' + Math.round(c.curOffset / c.curSize * 100) + '%)' : '') : '');
+    var live = running || paused || failed;
+    $('impBox').hidden = !live; if (live) $('impBox').innerHTML = impBoxHtml(s, false);
     $('impPending').textContent = s.pending == null ? '-' : fmtNum(s.pending) + (s.pendingCapped ? '+' : '');
     $('impDone').textContent = fmtNum(c.processed); $('impDup').textContent = fmtNum(c.skipped); $('impErr').textContent = fmtNum(c.errors);
     $('impLastErr').hidden = !c.lastError; $('impLastErr').textContent = c.lastError ? '마지막 오류: ' + c.lastError : '';

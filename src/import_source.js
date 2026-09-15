@@ -189,6 +189,15 @@ function scheduleImport_(delayMs) {
   if (ScriptApp.getProjectTriggers().length < 15) ScriptApp.newTrigger(IMPORT_FN).timeBased().after(Math.max(15 * 60 * 1000, (delayMs || 0) + 5 * 60 * 1000)).create();
 }
 function importLeaseHeld_() { return Number(getProp_(IMPORT_PROP.LEASE, '0')) > Date.now(); }
+/** 커서만으로 계산하는 진행률: 이번 실행에서 끝낸 파일 바이트 + 현재 파일의 읽은 입력 위치 / 구간 시작 때 잰 전체 바이트 (200개 넘는 파일은 다음 구간에서 합산되므로 99%로 막음) */
+function importProgress_(c) {
+  c = c || {};
+  var done = (c.fileBytes || 0) + (c.cur ? (c.cur.inPos || 0) : 0), total = c.totalBytes || 0;
+  var pct = total ? Math.min(c.totalCapped ? 99 : 100, Math.floor(done / total * 100)) : null;
+  var active = c.activeSeconds || 0, eta = pct && pct < 100 && active > 5 ? Math.round(active * (100 - pct) / pct) : null;
+  return { percent: pct, doneBytes: done, totalBytes: total, filesDone: c.files || 0, filesTotal: (c.files || 0) + (c.pendingFiles || 0), etaSeconds: eta,
+    curFile: c.cur ? c.cur.name : null, curPos: c.cur ? (c.cur.inPos || 0) : 0, curSize: c.cur ? (c.cur.size || 0) : 0, curPercent: c.cur && c.cur.size ? Math.min(100, Math.floor((c.cur.inPos || 0) / c.cur.size * 100)) : null };
+}
 function newImportCursor_() { return { startedAt: new Date().toISOString(), processed: 0, skipped: 0, errors: 0, chunks: 0, bytes: 0, files: 0, lastError: null, cur: null }; }
 
 function startImport() {
@@ -222,6 +231,7 @@ function getImportState() {
   return {
     state: st.state || 'idle', message: st.message || '', updatedAt: st.updatedAt || null,
     cursor: { startedAt: c.startedAt || null, processed: c.processed || 0, skipped: c.skipped || 0, errors: c.errors || 0, chunks: c.chunks || 0, bytes: c.bytes || 0, files: c.files || 0, lastError: c.lastError || null, activeSeconds: c.activeSeconds || 0, curFile: c.cur ? c.cur.name : null, curOffset: c.cur ? c.cur.offset : 0, curSize: c.cur ? c.cur.size : 0 },
+    progress: importProgress_(c),
     pending: pendingCount, pendingCapped: pendingCount != null && pendingCount >= 2000,
     folderExists: folderExists, folderUrl: folderExists ? importFolderUrl_() : '', folderPath: rootFolderPath_() + ' › ' + IMPORT_FOLDER_NAME,
     history: importHistory_(),
@@ -267,14 +277,18 @@ function runImport() {
       entries = entries.filter(function (e) { return e.file.getId() !== cursor.cur.id; });
       try { var cf = DriveApp.getFileById(cursor.cur.id); entries.unshift({ file: cf, kind: cursor.cur.kind }); } catch (e) { cursor.cur = null; }
     }
+    // 진행률 기준: 이번 실행에서 끝낸 파일 바이트 + 아직 남은 파일(현재 파일 포함) 바이트
+    var pendingBytes = 0; for (var pi = 0; pi < entries.length; pi++) { try { pendingBytes += Number(entries[pi].file.getSize()) || 0; } catch (e) { /* 무시 */ } }
+    cursor.fileBytes = cursor.fileBytes || 0; cursor.totalBytes = cursor.fileBytes + pendingBytes; cursor.pendingFiles = entries.length; cursor.totalCapped = entries.length >= 200;
+    tickStatus('가져오는 중 (' + cursor.chunks + '번째 구간) · 파일 ' + entries.length + '개');
     for (var k = 0; k < entries.length; k++) {
       if (Date.now() > deadline) { outOfTime = true; break; }
       if (stopWanted()) { stopped = true; break; }
       var en = entries[k], file = en.file, fid = file.getId(), size = Number(file.getSize()) || 0;
       var resume = cursor.cur && cursor.cur.id === fid ? cursor.cur : null;
-      cursor.cur = { id: fid, name: file.getName(), kind: en.kind, size: size, offset: resume ? resume.offset : 0, entry: resume ? (resume.entry || 0) : 0 };
+      cursor.cur = { id: fid, name: file.getName(), kind: en.kind, size: size, offset: resume ? resume.offset : 0, entry: resume ? (resume.entry || 0) : 0, inPos: resume ? (resume.inPos || 0) : 0 };
       try {
-        var readRange = function (st, en2) { return readFileRange_(fid, st, en2); };
+        var readRange = function (st, en2) { cursor.cur.inPos = en2 + 1; return readFileRange_(fid, st, en2); }; // inPos = 파일 안에서 읽은 위치 (압축 파일도 파일 기준 %)
         var stopRes = function () { return (Date.now() > deadline || stopWanted()) ? 'stop' : undefined; };
         var stream = function (opt) { // mbox 스트림 공통 (일반/ gzip / zip 엔트리). 스냅샷이 있으면 압축 해제기 상태째 이어간다 (GB급도 되감기 없음)
           var snap = loadImportSnapshot_(fid);
@@ -289,7 +303,7 @@ function runImport() {
         cursor.cur.entry = cursor.cur.entry || 0;
         if (en.kind === 'eml') {
           if (size > IMPORT_MAX_EML_BYTES) throw new Error('파일이 너무 큽니다 (' + Math.round(size / 1048576) + 'MB)');
-          handleMessage(bytesToBin_(file.getBlob().getBytes()), fid, fid);
+          cursor.cur.inPos = size; handleMessage(bytesToBin_(file.getBlob().getBytes()), fid, fid);
         } else if (en.kind === 'mbox') {
           var r1 = stream({ decode: 'none' }); if (!r1.done) break;
         } else if (en.kind === 'gz') {
@@ -313,11 +327,11 @@ function runImport() {
           }
           if (brokeOut) break;
         }
-        pending.push(importDoneRow_(fid, file.getName())); backedUp['src:' + fid] = true; cursor.files += 1; cursor.cur = null; deleteImportSnapshot_(fid);
+        pending.push(importDoneRow_(fid, file.getName())); backedUp['src:' + fid] = true; cursor.files += 1; cursor.fileBytes = (cursor.fileBytes || 0) + size; cursor.pendingFiles = Math.max(0, (cursor.pendingFiles || 1) - 1); cursor.cur = null; deleteImportSnapshot_(fid);
       } catch (e) {
         cursor.errors += 1; cursor.lastError = file.getName() + ': ' + e.message;
         Logger.log('가져오기 파일 실패 %s: %s', file.getName(), e.stack || e.message);
-        pending.push(importDoneRow_(fid, '실패: ' + e.message, true)); cursor.failed = cursor.failed || {}; cursor.failed[fid] = 1; cursor.cur = null; // 이번 실행에서는 다시 시도하지 않음 (다음 "시작" 때 재시도, 스냅샷은 남겨 이어감)
+        pending.push(importDoneRow_(fid, '실패: ' + e.message, true)); cursor.failed = cursor.failed || {}; cursor.failed[fid] = 1; cursor.fileBytes = (cursor.fileBytes || 0) + size; cursor.pendingFiles = Math.max(0, (cursor.pendingFiles || 1) - 1); cursor.cur = null; // 이번 실행에서는 다시 시도하지 않음 (다음 "시작" 때 재시도, 스냅샷은 남겨 이어감)
       }
       flush();
     }

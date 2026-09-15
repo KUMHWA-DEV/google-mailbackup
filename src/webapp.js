@@ -45,7 +45,7 @@ function getDashboard() {
     triggerError: c.triggerError || null,
     history: loadRunHistory_(),
     importHistory: (function () { try { return importHistory_(); } catch (e) { return []; } })(),   // 가져오기 이력 (대시보드·이력 탭에 함께 표시)
-    importRun: (function () { try { var st = importStatus_(); return { state: st.state || 'idle', message: st.message || '', cursor: st.cursor || importCursor_() || {} }; } catch (e) { return { state: 'idle' }; } })(),
+    importRun: (function () { try { var st = importStatus_(); var cur = st.cursor || importCursor_() || {}; return { state: st.state || 'idle', message: st.message || '', cursor: cur, progress: importProgress_(cur) }; } catch (e) { return { state: 'idle' }; } })(),
     summary: loadSummary_(), // 캐시 (시트 전체를 매 폴링마다 읽지 않음)
     settings: settings,
     triggerInstalled: scheduledTriggerInstalled_(),
