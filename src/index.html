@@ -353,6 +353,12 @@
   .gm-hd .l table td:first-child { color: #5f6368; text-align: right; white-space: nowrap; }
   .gm-hd .r { font-size: 12px; color: #5f6368; white-space: nowrap; display: flex; align-items: center; gap: 2px; }
   .gm-bd { font-size: 14px; line-height: 1.6; color: #202124; white-space: pre-wrap; word-break: break-word; padding: 4px 0 8px 54px; }
+  .gm-bd blockquote { margin: 0 0 0 .8ex; border-left: 1px solid #ccc; padding-left: 1ex; color: #3c4043; }
+  .gm-bd .gm-qtoggle { display: inline-block; margin: 10px 0 2px; padding: 0 10px; height: 18px; line-height: 18px; border-radius: 9px; background: #e8eaed; color: #444746; font-size: 12px; letter-spacing: 2px; cursor: pointer; border: 0; }
+  .gm-bd .gm-qtoggle:hover { background: #dadce0; }
+  .gm-bd .gm-quoted[hidden] { display: none; }
+  .gm-bd a { color: #1a73e8; }
+  .gm-th.open > .hd { cursor: pointer; }
   .gm-atts { margin: 12px 0 0 54px; border-top: 1px solid #e0e3e7; padding-top: 14px; }
   .gm-atts .t { font-size: 13px; color: #444746; display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
   .gm-atts .t a { color: #0b57d0; }
@@ -456,7 +462,7 @@
 
     <div class="card">
       <div class="cardhead"><h3>🕘 최근 실행</h3><button type="button" class="sm" data-goto="history">전체 ›</button></div>
-      <div class="tablewrap"><table><thead><tr><th>시작</th><th>소요</th><th>대상</th><th>저장</th><th>건너뜀</th><th>오류</th><th>용량</th><th>메일 기간</th><th>분포</th><th>알림</th><th></th></tr></thead><tbody id="histMini"></tbody></table></div>
+      <div class="tablewrap"><table><thead><tr><th>시작</th><th>소요</th><th>대상</th><th>저장</th><th>오류</th><th>용량</th><th>메일 기간</th><th>분포</th><th>알림</th><th></th></tr></thead><tbody id="histMini"></tbody></table></div>
     </div>
   </section>
 
@@ -578,7 +584,7 @@
   <section class="page" id="tab-history" hidden>
     <div class="card">
       <div class="cardhead"><h3>🕘 실행 이력 <span class="pill blue" id="histCount">0</span></h3></div>
-      <div class="tablewrap"><table><thead><tr><th>시작</th><th>종료</th><th>소요</th><th>대상</th><th>저장</th><th>건너뜀</th><th>오류</th><th>용량</th><th>메일 기간</th><th>분포</th><th>알림</th><th></th></tr></thead><tbody id="histRows"></tbody></table></div>
+      <div class="tablewrap"><table><thead><tr><th>시작</th><th>종료</th><th>소요</th><th>대상</th><th>저장</th><th>오류</th><th>용량</th><th>메일 기간</th><th>분포</th><th>알림</th><th></th></tr></thead><tbody id="histRows"></tbody></table></div>
     </div>
   </section>
 </div>
@@ -738,7 +744,7 @@
     if (!r.startedAt && last) r = last; // 실행 중이 아니면 최근 이력(취소된 실행 포함)
     if (r.startedAt) {
       $('stRun').textContent = fmtNum(r.processed) + '건 저장' + (r.errors ? ' · ⚠️ ' + fmtNum(r.errors) : '') + (r.status === 'cancelled' ? ' ✖' : '');
-      $('stRunD').textContent = '대상 ' + fmtNum(r.expectedTotal || r.found) + (r.skipped ? ' · 건너뜀 ' + fmtNum(r.skipped) : '') + ' · ' + fmtBytes(r.bytes) + (r.mailFrom ? ' · ' + fmtDayShort(r.mailFrom) + '~' + fmtDayShort(r.mailTo) : '');
+      $('stRunD').textContent = '대상 ' + fmtNum(r.expectedTotal || r.found) + ' · ' + fmtBytes(r.bytes) + (r.mailFrom ? ' · ' + fmtDayShort(r.mailFrom) + '~' + fmtDayShort(r.mailTo) : '');
     } else { $('stRun').textContent = '-'; $('stRunD').textContent = ''; }
     var catList = foldCategories(sum.categories || []);
     distBars($('distCat'), catList, 'category'); $('distCatN').textContent = catList.length + '개';
@@ -811,7 +817,7 @@
       '<div class="bar"><i style="width:' + (pct != null ? pct : (queued ? 0 : 30)) + '%"' + (pct == null && !queued ? ' class="due"' : '') + '></i></div>' +
       (r.byCategory && r.byCategory.length ? '<div class="cats">' + r.byCategory.map(function (c) { return '<span class="pill blue">' + esc(c.name) + ' ' + fmtNum(c.count) + ' <small style="font-weight:400">' + fmtBytes(c.bytes) + '</small></span>'; }).join('') + '</div>' : '') +
       (r.errors && d.lastError ? '<div class="meta" style="color:var(--red-ink)">마지막 오류: ' + esc(String(d.lastError).slice(0, 160)) + '</div>' : '') +
-      '<div class="meta">' + (state.inlineRunning ? '🖥 이 창에서 직접 실행 중 · 창을 닫으면 멈추고 다음에 이어서 진행' : '🖥 백그라운드에서 실행 · 창을 닫아도 계속됩니다') + (resume ? ' · ' + resume : '') + (r.manual ? ' · 🖱 수동' : ' · ⏱ 자동') + '</div>';
+      '<div class="meta">' + '🖥 백그라운드에서 실행 · 창을 닫아도 계속됩니다' + (resume ? ' · ' + resume : '') + (r.manual ? ' · 🖱 수동' : ' · ⏱ 자동') + '</div>';
   }
   document.addEventListener('click', function (e) {
     var b = e.target.closest('.dist .r'); if (b) { var p = {}; p[b.dataset.k] = b.dataset.v; openExplorer(p); }
@@ -823,7 +829,7 @@
     var how = h.manual ? '<span title="수동 실행">🖱</span>' : '<span title="자동 실행">⏱</span>';
     return '<tr' + (h.status === 'cancelled' ? ' class="held"' : '') + '><td>' + ok + ' ' + fmtDate(h.startedAt) + ' ' + how + '</td>' + (full ? '<td>' + fmtDate(h.finishedAt) + '</td>' : '') +
       '<td>' + dur(h.startedAt, h.finishedAt) + '</td>' +
-      '<td>' + fmtNum(h.expectedTotal || h.found) + '</td><td><b style="color:var(--blue-ink)">' + fmtNum(h.processed) + '</b></td><td>' + fmtNum(h.skipped) + '</td>' +
+      '<td>' + fmtNum(h.expectedTotal || h.found) + '</td><td><b style="color:var(--blue-ink)">' + fmtNum(h.processed) + '</b></td>' +
       '<td' + (h.errors ? ' style="color:var(--red);font-weight:700"' : '') + '>' + fmtNum(h.errors) + '</td><td>' + fmtBytes(h.bytes) + '</td>' +
       '<td style="color:var(--muted)">' + range + (h.limitHit ? ' <span class="pill gray" title="회당 최대 건수 도달">⏭</span>' : '') + '</td>' +
       '<td>' + catChips(h.byCategory, 3) + '</td>' +
@@ -836,7 +842,7 @@
     var label = queued ? '⏳ 대기열' : d.state === 'paused' ? '⏸ 중지됨' : d.state === 'error' ? '⚠️ 실패' : d.state === 'stopping' ? '⏹ 중지 중' : '⚙️ 진행 중';
     return '<tr class="runrow' + (d.state === 'paused' || d.state === 'error' ? ' held' : '') + '"><td>' + label + (r.startedAt ? ' ' + fmtDate(r.startedAt) : '') + (r.manual ? ' <span title="수동 실행">🖱</span>' : '') + '</td>' + (full ? '<td>–</td>' : '') +
       '<td>' + (queued ? '–' : '<span class="el">' + secs(p.elapsedSeconds) + '</span>') + '</td>' +
-      '<td>' + fmtNum(exp || r.found) + '</td><td><span class="minibar"><i style="width:' + pct + '%"></i></span><b style="color:var(--blue-ink)">' + fmtNum(r.processed) + '</b></td><td>' + fmtNum(r.skipped) + '</td>' +
+      '<td>' + fmtNum(exp || r.found) + '</td><td><span class="minibar"><i style="width:' + pct + '%"></i></span><b style="color:var(--blue-ink)">' + fmtNum(r.processed) + '</b></td>' +
       '<td' + (r.errors ? ' style="color:var(--red);font-weight:700"' : '') + '>' + fmtNum(r.errors) + '</td><td>' + fmtBytes(r.bytes) + '</td>' +
       '<td style="color:var(--muted)">' + (r.mailFrom ? fmtDayShort(r.mailFrom) + ' ~ ' + fmtDayShort(r.mailTo) : '–') + '</td>' +
       '<td>' + catChips(r.byCategory, 3) + '</td><td>–</td><td style="text-align:right">' + (p.etaSeconds != null ? '<span style="font-size:11px;color:var(--muted)">약 ' + etaText(liveEta(p)) + '</span>' : '') + '</td></tr>';
@@ -1326,7 +1332,7 @@
     $('rdPrev').onclick = function () { if (idx > 0) openMessage(hits[idx - 1]); };
     $('rdNext').onclick = function () { if (idx < hits.length - 1) openMessage(hits[idx + 1]); };
     $('rdFrom').onclick = function () { setQuery('from:' + qv(emailOf(r.from) || nameOnly(r.from))); };
-    call('getMessageBody', r.id).then(function (res) { if (state.ex.selected !== r.id) return; $('readerBody').textContent = (res && res.body) ? res.body : (r.snippet || '(본문 미리보기 없음 — Drive의 원본을 열어 확인하세요)'); })
+    call('getMessageBody', r.id).then(function (res) { if (state.ex.selected !== r.id) return; var b = (res && res.body) ? res.body : (r.snippet || '(본문 미리보기 없음 — Drive의 원본을 열어 확인하세요)'); bodyCache[r.id] = b; $('readerBody').innerHTML = renderBody(b); })
       .catch(function () { $('readerBody').textContent = r.snippet || ''; });
   }
   function msgBlock(m, open, hit) {
@@ -1342,10 +1348,44 @@
         (atts.length ? '<div class="gm-atts" style="margin-left:0"><div class="t">📎 ' + atts.length + '개</div><div class="gm-cards">' + atts.map(attCard).join('') + '</div>' + (atts.some(function (a) { return !a.fileId; }) ? '<div class="gm-note">' + (emlDl ? '첨부는 <a href="' + esc(emlDl) + '" target="_blank" rel="noopener">원본(.eml) ⬇</a> 안에 있습니다' : '원본(.eml)에서 열 수 있습니다') + '</div>' : '') + '</div>' : '') + '</div>' : '') +
       '</div>';
   }
+  /**
+   * 본문을 Gmail처럼: 답장에 딸려온 인용문(">" 줄, "…님이 작성:", "On … wrote:", "-----Original Message-----")은
+   * ⋯ 버튼 뒤에 숨기고, 펼치면 ">" 기호 대신 왼쪽 세로선(중첩 단계별)으로 표시한다. URL은 링크로.
+   */
+  function renderBody(text) {
+    var lines = String(text || '').replace(/\r\n?/g, '\n').split('\n');
+    var cut = -1;
+    for (var i = 0; i < lines.length; i++) {
+      var L = lines[i];
+      if (/^\s*>/.test(L)) { cut = i; if (i > 0 && /(wrote:|작성:|작성했습니다:|썼습니다:|님이 쓴 글:)\s*$/.test(lines[i - 1].trim())) cut = i - 1; if (cut > 0 && !lines[cut - 1].trim()) cut -= 1; break; }
+      if (/^\s*-{2,}\s*(Original Message|원본 메시지|원본 메일)\s*-{2,}/i.test(L) || (/^_{8,}\s*$/.test(L) && i + 1 < lines.length && /^(From|보낸 사람|보낸사람|발신):/i.test(lines[i + 1]))) { cut = i; break; }
+      if (/(wrote:|님이 작성:|님이 작성했습니다:)\s*$/.test(L.trim()) && i + 1 < lines.length && /^\s*>/.test(lines[i + 1])) { cut = i; break; }
+    }
+    var main = cut < 0 ? lines : lines.slice(0, cut), quoted = cut < 0 ? [] : lines.slice(cut);
+    while (main.length && !main[main.length - 1].trim()) main.pop();
+    var html = linkify(esc(main.join('\n')));
+    if (quoted.length) html += '\n<button type="button" class="gm-qtoggle" title="인용된 내용 표시">···</button><div class="gm-quoted" hidden>' + quoteHtml(quoted) + '</div>';
+    return html;
+  }
+  function quoteHtml(lines) {
+    var out = '', level = 0;
+    lines.forEach(function (L) {
+      var m = L.match(/^\s*((?:>\s?)+)/), lv = m ? m[1].replace(/\s/g, '').length : 0, body = m ? L.slice(m[0].length) : L;
+      while (level < lv) { out += '<blockquote>'; level++; }
+      while (level > lv) { out += '</blockquote>'; level--; }
+      out += linkify(esc(body)) + '\n';
+    });
+    while (level > 0) { out += '</blockquote>'; level--; }
+    return out;
+  }
+  function linkify(escaped) { return escaped.replace(/(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)])/g, '<a href="$1" target="_blank" rel="noopener">$1</a>'); }
+  document.addEventListener('click', function (e) { var b = e.target.closest('.gm-qtoggle'); if (!b) return; var q = b.nextElementSibling; if (q) { q.hidden = !q.hidden; b.title = q.hidden ? '인용된 내용 표시' : '인용된 내용 숨기기'; } });
+  var bodyCache = {};
   function loadBody(m) {
     var el = $('mb_' + m.id); if (!el || el.dataset.loaded) return; el.dataset.loaded = '1';
-    call('getMessageBody', m.id).then(function (res) { el.textContent = (res && res.body) ? res.body : (m.snippet || '(본문 미리보기 없음 — Drive의 원본을 열어 확인하세요)'); })
-      .catch(function () { el.textContent = m.snippet || ''; });
+    if (bodyCache[m.id] != null) { el.innerHTML = renderBody(bodyCache[m.id]); return; }
+    call('getMessageBody', m.id).then(function (res) { var b = (res && res.body) ? res.body : (m.snippet || '(본문 미리보기 없음 — Drive의 원본을 열어 확인하세요)'); bodyCache[m.id] = b; var el2 = $('mb_' + m.id); if (el2) el2.innerHTML = renderBody(b); })
+      .catch(function () { var el2 = $('mb_' + m.id); if (el2) el2.textContent = m.snippet || ''; });
   }
   function openThread(t) {
     state.ex.selected = t.id;
@@ -1359,17 +1399,19 @@
       '<span class="pill blue">🧵 대화 ' + t.msgs.length + '건</span>' + (parsedQ && t.matched < t.msgs.length ? '<span class="pill amber" style="margin-left:4px">검색 일치 ' + t.matched + '</span>' : '') +
       '<span class="sp"></span>' +
       '<button type="button" class="gm-ib" id="rdPrev" title="이전 (k)"' + (idx <= 0 ? ' disabled' : '') + '>‹</button><span style="font-size:12px;color:#5f6368">' + (idx + 1) + ' / ' + items.length + '</span><button type="button" class="gm-ib" id="rdNext" title="다음 (j)"' + (idx >= items.length - 1 ? ' disabled' : '') + '>›</button>' +
-      '<span style="width:8px"></span><button type="button" class="gm-ib" id="rdExpand" title="모두 펼치기">⤵</button></div>' +
+      '<span style="width:8px"></span><button type="button" class="gm-ib" id="rdExpand" title="모두 펼치기">⤵</button><button type="button" class="gm-ib" id="rdCollapse" title="모두 접기">⤴</button></div>' +
       '<div class="gm-msg"><h2>' + esc(String(t.subject || '(제목 없음)').replace(/^(re|fwd?|fw)\s*:\s*/i, '')) + Object.keys(labels).map(function (c) { return '<span class="lb" style="' + labelStyle(c) + '">' + esc(c) + '</span>'; }).join('') + '</h2>' +
       '<div id="thMsgs">' + t.msgs.map(function (m) { return msgBlock(m, !!openIds[m.id], parsedQ && t.hitIds[m.id] && t.matched < t.msgs.length); }).join('') + '</div></div>';
     $('readerBack').onclick = function () { $('split').classList.remove('reading'); };
     $('rdPrev').onclick = function () { if (idx > 0) openItem(items[idx - 1]); };
     $('rdNext').onclick = function () { if (idx < items.length - 1) openItem(items[idx + 1]); };
     $('rdExpand').onclick = function () { $('thMsgs').innerHTML = t.msgs.map(function (m) { return msgBlock(m, true, false); }).join(''); t.msgs.forEach(loadBody); };
+    $('rdCollapse').onclick = function () { $('thMsgs').innerHTML = t.msgs.map(function (m) { return msgBlock(m, false, false); }).join(''); };
     $('thMsgs').onclick = function (e) {
-      var blk = e.target.closest('.gm-th'); if (!blk || blk.classList.contains('open')) return;
-      if (e.target.closest('a')) return;
+      var blk = e.target.closest('.gm-th'); if (!blk) return;
+      if (e.target.closest('a, button, details, .gm-qtoggle')) return;
       var m = t.msgs.filter(function (x) { return String(x.id) === blk.dataset.mid; })[0]; if (!m) return;
+      if (blk.classList.contains('open')) { if (!e.target.closest('.hd')) return; blk.outerHTML = msgBlock(m, false, false); return; } // 헤더를 누르면 접기
       blk.outerHTML = msgBlock(m, true, false); loadBody(m);
     };
     t.msgs.forEach(function (m) { if (openIds[m.id]) loadBody(m); });
