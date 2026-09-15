@@ -724,7 +724,7 @@
     $('btnRun').className = running ? '' : (sch.isDue ? 'warn' : 'primary');
     $('btnRun').innerHTML = running ? '<span class="spin"></span> 진행 중' : '▶ 지금 백업';
     $('kLast').textContent = d.lastSyncAt ? fmtDate(d.lastSyncAt) + (r.processed ? ' · +' + fmtNum(r.processed) : '') : '없음';
-    $('kNext').textContent = d.triggerInstalled ? (sch.isDue ? '곧 실행' : fmtDayLong(sch.nextRunEpoch) + ' 03:00') : '자동 꺼짐';
+    $('kNext').textContent = d.triggerInstalled ? fmtDayLong(sch.nextTriggerEpoch || sch.nextRunEpoch) + ' 03:00' + (sch.intervalDays === 7 ? ' (월)' : '') : '자동 꺼짐';
     $('kCycle').textContent = sch.intervalDays + '일' + (s.initialStartDate ? ' · ' + s.initialStartDate + '부터' : '') + (s.maxPerRun ? ' · 최대 ' + fmtNum(s.maxPerRun) : '');
     $('kNotify').textContent = s.notifyOnComplete ? (s.notifyEmail || d.user || '-') : '꺼짐';
     $('progressBar').style.width = sch.progressPercent + '%';

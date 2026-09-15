@@ -114,7 +114,7 @@ function buildAddonHomeCard_() {
     : failed ? '⚠️ 백업 실패' : (sch.isDue ? '🟠 백업할 때가 됐어요' : '🟢 최신 상태');
   var stateSub = running ? ((r.startedAt ? '시작 ' + fmtD_(r.startedAt) + ' · 경과 ' + Math.round((p.elapsedSeconds || 0) / 60) + '분 · ' + fmtB_(r.bytes || 0) + ' · ' : '') + (d.message || ''))
     : paused ? '"이어서"를 누르면 이 위치부터 계속합니다'
-    : failed ? (d.lastError || d.message) : ('마지막 ' + fmtD_(d.lastSyncAt) + ' · 다음 ' + (d.triggerInstalled ? fmtD_(new Date(sch.nextRunEpoch * 1000).toISOString()) : '자동 꺼짐'));
+    : failed ? (d.lastError || d.message) : ('마지막 ' + fmtD_(d.lastSyncAt) + ' · 다음 ' + (d.triggerInstalled ? fmtD_(new Date((sch.nextTriggerEpoch || sch.nextRunEpoch) * 1000).toISOString()) : '자동 꺼짐'));
   var st = CardService.newCardSection()
     .addWidget(kv_(running ? 'CLOCK' : paused ? 'CLOCK' : failed ? 'STAR' : 'CONFIRMATION_NUMBER_ICON', '상태', stateText, stateSub));
   if (running && pct != null) st.addWidget(CardService.newTextParagraph().setText('<b>' + '█'.repeat(Math.round(pct / 5)) + '░'.repeat(20 - Math.round(pct / 5)) + '</b> ' + pct + '%' + (p.etaSeconds != null ? ' · 남은 약 ' + Math.max(1, Math.round(p.etaSeconds / 60)) + '분' : '')));
