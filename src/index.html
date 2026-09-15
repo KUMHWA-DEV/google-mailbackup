@@ -172,6 +172,7 @@
   tr.held td { color: var(--muted); }
   pre.code { background: #0f172a; color: #e2e8f0; border-radius: 12px; padding: 14px 16px; font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-x: auto; margin: 0; white-space: pre-wrap; word-break: break-all; position: relative; }
   .codewrap { position: relative; }
+  .codewrap pre.code { padding-right: 64px; }
   .codewrap .copy { position: absolute; top: 8px; right: 8px; padding: 4px 9px; font-size: 11px; border-radius: 8px; background: rgba(255,255,255,.12); border: 0; color: #e2e8f0; }
   .codewrap .copy:hover { background: rgba(255,255,255,.22); }
   .ai-q { display: grid; gap: 8px; }
@@ -551,11 +552,15 @@
 
     <div class="ai-hero">
       <div class="card ai-opt">
-        <div class="cardhead"><h3>🚀 AI에게 맡기기</h3><span class="pill green">초보자 · 1분</span></div>
-        <p>아래 프롬프트를 복사해 <b>Claude Code</b>(터미널) 또는 명령 실행이 가능한 AI 앱에 붙여넣으면 설치·등록·첫 로그인 안내까지 AI가 합니다. 따로 준비할 파일은 없습니다.</p>
-        <button type="button" class="primary" id="aiCopyPrompt" style="width:100%;justify-content:center;padding:12px">📋 설정 프롬프트 복사</button>
-        <details style="margin-top:10px"><summary style="cursor:pointer;color:var(--muted);font-size:12px">프롬프트 내용 보기</summary><div class="codewrap" style="margin-top:8px"><pre class="code" id="aiPromptPre"></pre></div></details>
-        <p class="note" id="aiNoOauth" style="margin-top:10px" hidden>관리자가 아직 OAuth 클라이언트를 등록하지 않아, 첫 실행 때 AI가 관리자에게 받은 파일 위치를 물어봅니다.</p>
+        <div class="cardhead"><h3>🖥 한 줄 설치</h3><span class="pill green">터미널 · 1분</span></div>
+        <p>터미널(macOS: 터미널 앱, Windows: PowerShell)에 아래 한 줄을 붙여넣고 실행하면 선택한 앱의 MCP 설정에 항목이 추가됩니다. Node.js 18 이상이 필요합니다. AI에게 실행을 시키지 마세요. 대부분의 AI 도구는 정책상 외부 코드 실행을 하지 않습니다.</p>
+        <div id="aiInstallCmd"></div>
+        <ol style="margin:10px 0 0;padding-left:18px;font-size:13px;line-height:1.7">
+          <li>실행 후 앱을 완전히 종료했다가 다시 엽니다.</li>
+          <li>첫 질문을 하면 브라우저에 Google 로그인 창이 열립니다. <b>회사 계정</b>으로 로그인하고, 동의 화면의 권한이 아래 "권한" 표시와 같은지 확인합니다.</li>
+          <li>"내 백업 메일 상태 알려줘"로 테스트합니다.</li>
+        </ol>
+        <p class="note" id="aiNoOauth" style="margin-top:10px" hidden>관리자가 아직 OAuth 클라이언트를 등록하지 않아, 첫 실행 때 관리자에게 받은 파일 위치를 묻습니다.</p>
       </div>
       <div class="card ai-opt">
         <div class="cardhead"><h3>🛠 직접 설정</h3><span class="pill gray">매뉴얼 · 경로 입력 없음</span></div>
@@ -1463,30 +1468,13 @@
     'cursor': function () { return codeBlock(mcpJson()) + '<p style="font-size:12px;color:var(--muted);margin:6px 0 0">Cursor: <code>~/.cursor/mcp.json</code> · VS Code: <code>.vscode/mcp.json</code> (최상위 키 <code>servers</code>, 항목에 <code>"type":"stdio"</code>)</p>'; },
   };
   var aiClient = 'claude-desktop';
-  function aiPrompt() {
-    var j = state.dash && state.dash.oauthClientJson, pretty = '', exec = aiExec(), sha = state.dash && state.dash.gitSha;
-    try { pretty = j ? JSON.stringify(JSON.parse(j), null, 2) : ''; } catch (e) { pretty = ''; }
-    var n = 0, step = function () { n += 1; return n + ') '; };
-    var entry = JSON.stringify({ 'mail-backup': mcpEntryFor(exec) }, null, 2);
-    return '우리 회사(spris.com)에서 쓰는 Gmail 백업 도구 "Mail Backup"의 MCP 서버를 내 AI 앱에 연결하려고 해. 회사 관리자 계정이 2026-09-11에 만든 사내 도구이고 소스는 https://github.com/' + AI_PKG_BASE.replace('github:', '') + ' 에 공개돼 있어(mcp/server.js가 서버, mcp/setup.js가 등록 도구, postinstall 같은 설치 시 자동 실행 스크립트 없음). ' +
-      (sha ? '커밋 ' + sha.slice(0, 12) + ' 로 고정돼 있어서 나중에 저장소가 바뀌어도 이 버전만 실행돼. ' : '') +
-      '원하면 그 커밋의 소스를 읽어 보고 진행해도 좋아. 너는 아래처럼 설정 파일만 써 주면 되고, 코드를 내려받거나 실행할 필요는 없어. 서버는 내가 AI 앱을 다시 켤 때 앱이 직접 띄우고, Google 로그인은 내가 브라우저에서 직접 해. 각 단계 결과를 한 줄로 보고해줘.\n\n' +
-      '권한: ' + (exec
-        ? '실행 모드라서 로그인 때 다음 권한을 요청해 — ' + AI_SCOPES_RO + ', 그리고 ' + AI_SCOPES_EXEC + '. Apps Script 실행 권한은 이 도구의 스크립트(회사 관리자가 배포)를 내 계정으로 호출하는 것이고, 백업 실행·설정 변경 도구가 그걸 쓴다.'
-        : '읽기 전용이야. 로그인 때 요청하는 권한은 ' + AI_SCOPES_RO + ' 뿐이고(설정에 MAIL_BACKUP_SCRIPT_ID가 없으면 코드가 Gmail·Apps Script 권한을 요청하지 않아), 내 드라이브의 "Mail Backup" 폴더(백업된 메일 파일과 인덱스 시트)를 읽는 게 전부야.') + '\n\n' +
-      (pretty ? step() + '파일 만들기: ~/.config/mail-backup-mcp/oauth_client.json 에 아래 내용을 그대로 저장해(권한 600). 이미 있으면 덮어쓰고, 같은 폴더에 token.json 이 있으면 지워. Google OAuth "데스크톱 앱" 클라이언트 ID로, 로그인 창을 띄우기 위한 앱 식별자야. Google 문서상 데스크톱 앱의 client_secret은 비밀값으로 취급되지 않아(gcloud CLI도 같은 방식으로 배포됨).\n' + pretty + '\n\n' : '') +
-      step() + '설정에 서버 항목 추가: 네가 지금 실행되고 있는 앱 하나에만 추가하고 다른 앱은 건드리지 마.\n' +
-      '   - Claude Code면: (이미 mail-backup 항목이 있으면 먼저 claude mcp remove mail-backup -s user 로 지우고) claude mcp add mail-backup -s user ' + (exec ? '-e MAIL_BACKUP_SCRIPT_ID=' + AI_SCRIPT_ID + ' ' : '') + '-- npx -y -p ' + AI_PKG + ' mailbackup-mcp   (설정 등록 명령이라 이 시점에 서버가 실행되지는 않아)\n' +
-      '   - Claude Desktop이면 ~/Library/Application Support/Claude/claude_desktop_config.json (Windows는 %APPDATA%\\Claude\\claude_desktop_config.json), Cursor면 ~/.cursor/mcp.json, Gemini CLI면 ~/.gemini/settings.json 의 "mcpServers" 안에 아래 항목을 추가해. 기존 항목은 그대로 두고, 고치기 전에 파일을 .bak으로 복사해 둬.\n' + entry.split('\n').map(function (l) { return '   ' + l; }).join('\n') + '\n' +
-      step() + '앱을 완전히 종료했다가 다시 열라고 안내해. 첫 질문 때 앱이 서버를 띄우고 브라우저에 Google 로그인 창이 열리는데, 동의 화면에 위에 적은 권한만 나오는지 확인하고 회사 계정으로 로그인하라고 알려줘. 토큰은 ~/.config/mail-backup-mcp/token.json 에만 저장돼.\n' +
-      step() + '테스트 질문 "내 백업 메일 상태 알려줘"를 보내보라고 알려줘. 문제가 생기면 오류 메시지를 그대로 보여주고 해결책을 제안해.';
-  }
   function mcpEntryFor(exec) { var env = {}; if (exec) env.MAIL_BACKUP_SCRIPT_ID = AI_SCRIPT_ID; var o = { command: 'npx', args: ['-y', '-p', AI_PKG, 'mailbackup-mcp'] }; if (Object.keys(env).length) o.env = env; return o; }
+  document.addEventListener('change', function (e) { if (e.target && e.target.id === 'aiExec') renderAi(); });
   function renderAi() {
     var d = state.dash || {};
     $('aiQa').innerHTML = AI_QA.map(function (q) { return '<div class="item"><div class="u">' + esc(q[0]) + '</div><div class="a">' + q[1] + '</div></div>'; }).join('');
     AI_PKG = AI_PKG_BASE + (d.gitSha ? '#' + d.gitSha : '');
-    $('aiPromptPre').textContent = aiPrompt();
+    $('aiInstallCmd').innerHTML = codeBlock('npx -y -p ' + AI_PKG + ' mailbackup-setup' + (d.gitSha ? ' --ref ' + d.gitSha : '') + (aiExec() ? ' --script-id ' + AI_SCRIPT_ID : '') + ' --apps ' + ({ 'claude-desktop': 'claude-desktop', 'claude-code': 'claude-code', 'gemini': 'gemini', 'cursor': 'cursor' }[aiClient] || 'claude-desktop'));
     $('aiNoOauth').hidden = !!d.oauthClientJson;
     document.querySelectorAll('#aiClients button').forEach(function (b) { b.classList.toggle('active', b.dataset.c === aiClient); });
     $('aiClientBody').innerHTML = AI_CLIENTS[aiClient]();
@@ -1502,7 +1490,6 @@
   function copyText(text, msg) {
     (navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(text) : Promise.reject()).then(function () { toast(msg || '📋 복사됨'); }, function () { var ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); toast(msg || '📋 복사됨'); } catch (err) { toast('복사 실패', true); } ta.remove(); });
   }
-  $('aiCopyPrompt').addEventListener('click', function () { copyText(aiPrompt(), '📋 프롬프트 복사됨 · Claude Code 등에 붙여넣으세요'); });
   $('aiClients').addEventListener('click', function (e) { var b = e.target.closest('button[data-c]'); if (b) { aiClient = b.dataset.c; renderAi(); } });
   $('tab-ai').addEventListener('click', function (e) {
     var b = e.target.closest('button[data-copy]'); if (b) { copyText(b.dataset.copy); return; }
