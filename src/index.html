@@ -753,6 +753,7 @@
     var catList = foldCategories(sum.categories || []);
     distBars($('distCat'), catList, 'category'); $('distCatN').textContent = catList.length + '개';
     renderHistory(d.history || []);
+    if (state.tab === 'ai' || $('aiInstallCmd').innerHTML.indexOf('불러오는 중') >= 0) renderAi();
     banner(failed ? '백업 실패: ' + (d.lastError || d.message) + (d.errorStack ? '\n' + d.errorStack.split('\n').slice(0, 3).join(' · ') : '') + ' — "지금 백업"으로 다시 시도하면 저장된 위치부터 이어갑니다' : (d.lastError && !running ? d.lastError : ''));
     if (running && !state.pollTimer) state.pollTimer = setInterval(loadDashboard, 4000);
     if (!running && state.pollTimer) { clearInterval(state.pollTimer); state.pollTimer = null; }
@@ -1469,8 +1470,13 @@
   function mcpEntryFor(exec) { var env = {}; if (exec) env.MAIL_BACKUP_SCRIPT_ID = AI_SCRIPT_ID; var o = { command: 'npx', args: ['-y', '-p', AI_PKG, 'mailbackup-mcp'] }; if (Object.keys(env).length) o.env = env; return o; }
   document.addEventListener('change', function (e) { if (e.target && e.target.id === 'aiExec') renderAi(); });
   function renderAi() {
-    var d = state.dash || {};
+    var d = state.dash;
     $('aiQa').innerHTML = AI_QA.map(function (q) { return '<div class="item"><div class="u">' + esc(q[0]) + '</div><div class="a">' + q[1] + '</div></div>'; }).join('');
+    if (!d) { // 대시보드 데이터(배포 커밋·OAuth 클라이언트)가 아직 없으면 자리표시만 — 데이터가 오면 renderDashboard가 다시 그린다
+      $('aiInstallCmd').innerHTML = '<div class="pv-loading"><span class="spin dark"></span> 설정을 불러오는 중…</div>';
+      $('aiClientBody').innerHTML = ''; $('aiOauthRow').innerHTML = ''; $('aiAdmin').hidden = true;
+      return;
+    }
     AI_PKG = AI_PKG_BASE + (d.gitSha ? '#' + d.gitSha : '');
     $('aiInstallCmd').innerHTML = codeBlock('npx -y -p ' + AI_PKG + ' mailbackup-setup' + (d.gitSha ? ' --ref ' + d.gitSha : '') + (aiExec() ? ' --script-id ' + AI_SCRIPT_ID : '') + (oauthB64() ? ' --oauth ' + oauthB64() : '') + ' --apps ' + ({ 'claude-desktop': 'claude-desktop', 'claude-code': 'claude-code', 'gemini': 'gemini', 'cursor': 'cursor' }[aiClient] || 'claude-desktop'));
     document.querySelectorAll('#aiClients button').forEach(function (b) { b.classList.toggle('active', b.dataset.c === aiClient); });
