@@ -41,7 +41,7 @@ function syncLabels_(deadline, settings) {
   // 2. 인덱스에 있는 메일만
   var sheet = indexSheet_(), last = sheet.getLastRow();
   var rowOf = {}; if (last >= 2) { var idCol = sheet.getRange(2, 1, last - 1, 1).getValues(); for (var i = 0; i < idCol.length; i++) if (idCol[i][0]) rowOf[String(idCol[i][0])] = i + 2; }
-  var labelMap = fetchLabelMap_();
+  var labelMap = dropIgnoredLabels(fetchLabelMap_(), settings);
   var C = { category: INDEX_HEADERS.indexOf('category') + 1, labels: INDEX_HEADERS.indexOf('labels') + 1, date: INDEX_HEADERS.indexOf('date') + 1, fileId: INDEX_HEADERS.indexOf('driveFileId') + 1 };
   var remaining = [];
   for (var k = 0; k < ids.length; k++) {

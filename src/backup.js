@@ -254,7 +254,7 @@ function runBackupLocked_() {
   Logger.log('백업 %s: query="%s" pageToken=%s', isNewRun ? '시작' : '재개', cursor.query, cursor.pageToken || '-');
 
   var labelMap, sheet, backedUp;
-  try { labelMap = fetchLabelMap_(); sheet = indexSheet_(); backedUp = loadBackedUpIds_(sheet); }
+  try { labelMap = dropIgnoredLabels(fetchLabelMap_(), settings); sheet = indexSheet_(); backedUp = loadBackedUpIds_(sheet); }
   catch (e0) { e0.cursor = cursor; throw e0; }
   var pending = [];
   var outOfTime = false;

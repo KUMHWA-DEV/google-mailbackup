@@ -18,6 +18,7 @@ describe('normalizeSettings', () => {
     expect(s.includeSent).toBe(false);
     expect(s.notifyOnComplete).toBe(true);
     expect(s.syncLabels).toBe(true); // 기본 켜짐
+    expect(normalizeSettings({ ignoreLabels: ' 수신확인 보냄 ,, Notes ' }).ignoreLabels).toBe('수신확인 보냄, Notes');
     expect(s.saveAttachments).toBe(false);
   });
   it('validates date and enums, trims strings', () => {

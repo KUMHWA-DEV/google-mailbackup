@@ -14,6 +14,7 @@ var SETTINGS_DEFAULTS = {
   notifyEmail: '',          // 완료 알림 수신처 (비우면 실행 계정)
   notifyOnComplete: true,   // 완료 시 알림 메일 발송
   syncLabels: true,         // 이미 백업된 메일의 라벨 변경을 Gmail 변경 이력으로 따라감 (폴더 이동 포함)
+  ignoreLabels: '',         // 폴더로 만들지 않을 라벨 이름 (쉼표 구분) — 메일 클라이언트가 만든 숨은 라벨 등
 };
 
 var SETTINGS_PROP_KEYS = {
@@ -29,6 +30,7 @@ var SETTINGS_PROP_KEYS = {
   notifyEmail: 'NOTIFY_EMAIL',
   notifyOnComplete: 'NOTIFY_ON_COMPLETE',
   syncLabels: 'SYNC_LABELS',
+  ignoreLabels: 'IGNORE_LABELS',
 };
 
 function toBool_(v, d) {
@@ -63,7 +65,18 @@ function normalizeSettings(input) {
     notifyEmail: str_(i.notifyEmail),
     notifyOnComplete: toBool_(i.notifyOnComplete, SETTINGS_DEFAULTS.notifyOnComplete),
     syncLabels: toBool_(i.syncLabels, SETTINGS_DEFAULTS.syncLabels),
+    ignoreLabels: str_(i.ignoreLabels).split(',').map(function (x) { return x.trim(); }).filter(Boolean).join(', '),
   };
+}
+/** 설정의 무시 라벨 목록 → 소문자 키 집합 */
+function ignoredLabelSet(settings) {
+  var s = {}; String(settings && settings.ignoreLabels || '').split(',').forEach(function (x) { x = x.trim().toLowerCase().replace(/\s+/g, ' '); if (x) s[x] = true; }); return s;
+}
+/** labelId → 이름 맵에서 무시 라벨을 뺀다 (백업·라벨 동기화용) */
+function dropIgnoredLabels(labelMap, settings) {
+  var ig = ignoredLabelSet(settings), out = {}; if (!Object.keys(ig).length) return labelMap || {};
+  Object.keys(labelMap || {}).forEach(function (id) { if (!ig[String(labelMap[id]).toLowerCase().replace(/\s+/g, ' ')]) out[id] = labelMap[id]; });
+  return out;
 }
 
 /** 스크립트 속성(문자열 맵) -> 설정 객체 */
@@ -85,5 +98,5 @@ function settingsToProps(settings) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { SETTINGS_DEFAULTS: SETTINGS_DEFAULTS, SETTINGS_PROP_KEYS: SETTINGS_PROP_KEYS, normalizeSettings: normalizeSettings, settingsFromProps: settingsFromProps, settingsToProps: settingsToProps };
+  module.exports = { SETTINGS_DEFAULTS: SETTINGS_DEFAULTS, SETTINGS_PROP_KEYS: SETTINGS_PROP_KEYS, normalizeSettings: normalizeSettings, settingsFromProps: settingsFromProps, settingsToProps: settingsToProps , ignoredLabelSet: ignoredLabelSet, dropIgnoredLabels: dropIgnoredLabels };
 }

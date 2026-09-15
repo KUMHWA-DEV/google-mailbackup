@@ -137,8 +137,12 @@ function getRawLabels(id) {
   var h = mimeParseHeaders_(cut > 0 ? head.slice(0, cut) : head);
   var raw = String(h['x-gmail-labels'] || '');
   var decoded = raw.split(',').map(function (x) { return mimeDecodeWords_(x.trim(), decodeCharsetGas_); }).filter(Boolean).join(',');
-  var g = gmailLabelsToIds(decoded);
-  return { raw: raw, decoded: decoded, ids: g.labelIds, thrid: String(h['x-gm-thrid'] || ''), category: categorize(g.labelIds, g.labelMap, { splitGmailTabs: getSettings_().splitGmailTabs }) };
+  var g = gmailLabelsToIds(decoded), settings = getSettings_();
+  var gm = {}; try { (Gmail.Users.Labels.list('me').labels || []).forEach(function (l) { if (l.type === 'user') gm[String(l.name).toLowerCase()] = { hidden: l.labelListVisibility === 'labelHide' }; }); } catch (e) { gm = null; }
+  var ig = ignoredLabelSet(settings), check = [];
+  g.labelIds.forEach(function (id) { if (id.indexOf('user:') !== 0) return; var n = g.labelMap[id], k = String(n).toLowerCase(); check.push({ name: n, inGmail: gm ? !!gm[k] : null, hidden: gm && gm[k] ? gm[k].hidden : false, ignored: !!ig[k.replace(/\s+/g, ' ')] }); });
+  var cls = classifyLabels_(decoded, mimeDecodeWords_(h['from'] || '', decodeCharsetGas_), settings);
+  return { raw: raw, decoded: decoded, ids: g.labelIds, labels: check, thrid: String(h['x-gm-thrid'] || ''), category: cls.category };
 }
 function getMessageBody(id) {
   return { id: id, body: loadBodyPreview_(id) };
