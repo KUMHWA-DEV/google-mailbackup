@@ -18,7 +18,12 @@ var IMPORT_MAX_EML_BYTES = 30 * 1024 * 1024;
 var IMPORT_CHUNK_BYTES = 4 * 1024 * 1024;       // 파일을 한 번에 읽는 창
 var IMPORT_MAX_MESSAGE_BYTES = 40 * 1024 * 1024; // 한 통 상한
 var IMPORT_FN = 'runImport';
-var IMPORT_PROP = { STATUS: 'IMPORT_STATUS_JSON', CURSOR: 'IMPORT_CURSOR_JSON', HISTORY: 'IMPORT_HISTORY_JSON', STOP: 'IMPORT_STOP', LEASE: 'IMPORT_LEASE_UNTIL' };
+var IMPORT_PROP = { STATUS: 'IMPORT_STATUS_JSON', CURSOR: 'IMPORT_CURSOR_JSON', HISTORY: 'IMPORT_HISTORY_JSON', STOP: 'IMPORT_STOP', LEASE: 'IMPORT_LEASE_UNTIL', FAILED: 'IMPORT_FAILED_MSGS_JSON' };
+/** 저장에 실패한 메일이 있는 원본 파일 { fileId: { name, count, lastError } } — "오류 수정" 때 그 파일을 다시 훑어 실패분만 저장한다 (이미 저장된 메일은 Message-ID 로 건너뜀) */
+function importFailedMap_() { try { return JSON.parse(getProp_(IMPORT_PROP.FAILED, '{}')) || {}; } catch (e) { return {}; } }
+function saveImportFailedMap_(m) { try { props_().setProperty(IMPORT_PROP.FAILED, JSON.stringify(m)); } catch (e) { /* 무시 */ } }
+function noteFailedMessage_(fileId, name, err) { var m = importFailedMap_(); var e = m[fileId] || { name: name, count: 0 }; e.count += 1; e.lastError = String(err).slice(0, 200); e.name = name || e.name; m[fileId] = e; if (Object.keys(m).length > 200) return; saveImportFailedMap_(m); }
+function failedMessageCount_() { var m = importFailedMap_(), n = 0; Object.keys(m).forEach(function (k) { n += m[k].count || 0; }); return n; }
 var IMPORT_LEASE_MS = 7 * 60 * 1000;
 
 // ---------- 폴더 ----------
@@ -75,7 +80,9 @@ function decodeCharsetGas_(bin, charset) {
   for (var i = 0; i < bin.length; i++) bytes.push(bin.charCodeAt(i) & 255);
   var cs = String(charset || 'UTF-8').toUpperCase();
   if (cs === 'KS_C_5601-1987' || cs === 'KS_C_5601-1989' || cs === 'CP949' || cs === 'KSC5601') cs = 'EUC-KR';
-  try { return Utilities.newBlob(bytes).getDataAsString(cs); } catch (e) { return Utilities.newBlob(bytes).getDataAsString('UTF-8'); }
+  try { return Utilities.newBlob(bytes).getDataAsString(cs); } catch (e) { /* 모르는 문자셋 */ }
+  try { return Utilities.newBlob(bytes).getDataAsString('UTF-8'); } catch (e2) { /* 깨진 바이트 */ }
+  return Utilities.newBlob(bytes).getDataAsString('ISO-8859-1'); // 절대 실패하지 않음 (일부 글자가 깨지더라도 메일은 저장)
 }
 function binToBytes_(bin) { var bytes = []; for (var i = 0; i < bin.length; i++) bytes.push(bin.charCodeAt(i) & 255); return bytes; }
 function bytesToBin_(bytes) { return Utilities.newBlob(bytes).getDataAsString('ISO-8859-1'); }
@@ -108,7 +115,8 @@ function importMessage_(bin, fallbackId, backedUp, settings, srcFileId) {
   var fileName = buildFileName({ date: date, subject: m.headers.subject, id: id.replace(/^eml:/, '') }, CONFIG.TIME_ZONE);
   var bytes = binToBytes_(bin);
   var saved = saveEml_(folder, fileName, bytes);
-  var blobs = m.attachments.map(function (a) { return Utilities.newBlob(a.dataB64 ? Utilities.base64Decode(a.dataB64) : binToBytes_(a.data || ''), a.mime || 'application/octet-stream', a.name); });
+  var blobs = [];
+  m.attachments.forEach(function (a) { try { blobs.push(Utilities.newBlob(a.dataB64 ? Utilities.base64Decode(a.dataB64) : binToBytes_(a.data || ''), a.mime || 'application/octet-stream', a.name)); } catch (e) { Logger.log('첨부 해제 실패 (건너뜀) %s: %s', a.name, e.message); } }); // 첨부 하나가 깨져도 메일 본문은 저장
   var attachmentFiles = saveAttachments_(id.replace(/^eml:/, ''), blobs, date);
   var attachmentNames = attachmentFiles.length ? attachmentFiles.map(function (f) { return f.name; }) : m.attachments.map(function (a) { return a.name; });
   var row = buildIndexRow({
@@ -197,6 +205,15 @@ function repairSheetFormulas_(sheet) {
   var rng = sheet.getRange(2, 1, last - 1, cols), forms = rng.getFormulas(), vals = null, n = 0;
   for (var i = 0; i < forms.length; i++) for (var c = 0; c < cols; c++) if (forms[i][c]) { if (!vals) vals = rng.getValues(); vals[i][c] = forms[i][c]; n += 1; }
   if (vals) rng.setValues(vals.map(sheetSafeRowGas_));
+  return n;
+}
+/** 'src:<id>' 완료 표시를 'srcretry:<id>' 로 바꿔 그 파일이 다시 대기 목록에 오르게 한다. @returns 바꾼 파일 수 */
+function unmarkImportFiles_(sheet, fileIds) {
+  var last = sheet.getLastRow(); if (last < 2 || !fileIds.length) return 0;
+  var want = {}; fileIds.forEach(function (id) { want['src:' + id] = true; });
+  var rng = sheet.getRange(2, 2, last - 1, 1), vals = rng.getValues(), n = 0, seen = {};
+  for (var i = 0; i < vals.length; i++) { var t = String(vals[i][0] || ''); if (want[t]) { vals[i][0] = 'srcretry:' + t.slice(4); if (!seen[t]) { seen[t] = true; n += 1; } } }
+  if (n) rng.setValues(vals);
   return n;
 }
 function fmtRepair_(c) { return (c.repairRow ? (c.repairRow - 1) + '행' : '') + (c.repairFixed ? ' · ' + c.repairFixed + '건 수정' : ''); }
@@ -301,10 +318,12 @@ function startImport() {
 function startImportRepair() {
   var st = importStatus_();
   if (/^(running|queued|stopping)$/.test(st.state || '') || importLeaseHeld_()) throw new Error('가져오기가 실행 중입니다. 끝나거나 중지한 뒤 눌러 주세요');
-  if (!importRepairNeeded_()) return getImportState();
+  var failed = importFailedMap_();
+  if (!importRepairNeeded_() && !Object.keys(failed).length) return getImportState();
   props_().deleteProperty(IMPORT_PROP.STOP);
   deleteImportTriggers_();
   var c = importCursor_() || newImportCursor_(); c.repairOnly = true; c.repairPrevState = st.state === 'paused' || st.state === 'error' ? 'paused' : 'idle';
+  c.retryFiles = Object.keys(failed); // 실패한 메일이 있던 원본 파일: 복구 뒤 다시 훑는다
   saveImportCursor_(c);
   var err = '';
   try { scheduleImport_(5 * 1000); } catch (e) { err = String(e && e.message || e); }
@@ -320,7 +339,8 @@ function getImportState() {
     var pending = ScriptApp.getProjectTriggers().some(function (t) { return t.getHandlerFunction() === IMPORT_FN; });
     if (!pending && importCursor_()) { try { scheduleImport_(5 * 1000); } catch (e) { /* 무시 */ } setImportStatus_({ state: 'queued', message: '실행이 끊겨 다시 예약함' }); st = importStatus_(); }
   }
-  var repairNeeded = false; try { repairNeeded = importRepairNeeded_(); } catch (e) { /* 무시 */ } // 실행 중에도 감지 (버튼은 실행 중이면 비활성), 실행은 사용자가 버튼으로
+  var failedMsgs = failedMessageCount_();
+  var repairNeeded = failedMsgs > 0; try { repairNeeded = repairNeeded || importRepairNeeded_(); } catch (e) { /* 무시 */ } // 실행 중에도 감지 (버튼은 실행 중이면 비활성), 실행은 사용자가 버튼으로
   var pendingCount = null, folderExists = false;
   try {
     folderExists = !!importFolder_(false);
@@ -331,7 +351,7 @@ function getImportState() {
   return {
     state: st.state || 'idle', message: st.message || '', updatedAt: st.updatedAt || null,
     cursor: { startedAt: c.startedAt || null, processed: c.processed || 0, skipped: c.skipped || 0, errors: c.errors || 0, chunks: c.chunks || 0, bytes: c.bytes || 0, files: c.files || 0, lastError: c.lastError || null, activeSeconds: c.activeSeconds || 0, curFile: c.cur ? c.cur.name : null, curOffset: c.cur ? c.cur.offset : 0, curSize: c.cur ? c.cur.size : 0 },
-    progress: importProgress_(c), repairNeeded: repairNeeded,
+    progress: importProgress_(c), repairNeeded: repairNeeded, failedMsgs: failedMsgs,
     pending: pendingCount, pendingCapped: pendingCount != null && pendingCount >= 2000,
     folderExists: folderExists, folderUrl: folderExists ? importFolderUrl_() : '', folderPath: rootFolderPath_() + ' › ' + IMPORT_FOLDER_NAME,
     history: importHistory_(),
@@ -368,12 +388,20 @@ function runImport() {
       if (!rep.done) { saveImportCursor_(cursor); scheduleImport_(); setImportStatus_({ state: 'running', message: '복구 중 ' + fmtRepair_(cursor) + ' · 1분 뒤 이어서', cursor: cursor }); return; }
       refreshSummary_();
     }
-    if (cursor.repairOnly) { // 오류 수정만 하는 실행: 파일 가져오기는 하지 않고 여기서 끝낸다
-      var prev = cursor.repairPrevState, fixedN = cursor.repairedTotal || 0; delete cursor.repairOnly; delete cursor.repairPrevState; delete cursor.repairedTotal;
-      var doneMsg = '오류 수정 완료: ' + fixedN + '건의 라벨·폴더·대화 묶음을 고쳤습니다';
-      if (prev === 'paused') { saveImportCursor_(cursor); setImportStatus_({ state: 'paused', message: doneMsg + ' · 중지된 가져오기는 "이어서"로 계속', cursor: cursor }); }
-      else { props_().deleteProperty(IMPORT_PROP.CURSOR); setImportStatus_({ state: 'idle', message: doneMsg, cursor: cursor }); }
-      return;
+    if (cursor.repairOnly) { // 오류 수정 실행: 행 복구가 끝난 자리
+      var prev = cursor.repairPrevState, fixedN = cursor.repairedTotal || 0, retry = cursor.retryFiles || [];
+      delete cursor.repairOnly; delete cursor.repairPrevState; delete cursor.repairedTotal; delete cursor.retryFiles;
+      var doneMsg = (fixedN ? '오류 수정 완료: ' + fixedN + '건의 라벨·폴더·대화 묶음을 고쳤습니다' : '오류 수정 완료');
+      if (retry.length) { // 실패한 메일이 있던 파일은 완료 표시를 풀어 다시 훑는다 (이미 저장된 메일은 건너뛰므로 실패분만 추가됨)
+        var unmarked = unmarkImportFiles_(sheet, retry);
+        saveImportFailedMap_({});
+        cursor.retrying = unmarked;
+        tickStatus(doneMsg + ' · 실패했던 메일 재시도 중 (파일 ' + unmarked + '개)');
+      } else {
+        if (prev === 'paused') { saveImportCursor_(cursor); setImportStatus_({ state: 'paused', message: doneMsg + ' · 중지된 가져오기는 "이어서"로 계속', cursor: cursor }); }
+        else { props_().deleteProperty(IMPORT_PROP.CURSOR); setImportStatus_({ state: 'idle', message: doneMsg, cursor: cursor }); }
+        return;
+      }
     }
     var backedUp = loadBackedUpIds_();
     var handleMessage = function (bin, fallbackId, srcId) {
@@ -381,7 +409,7 @@ function runImport() {
         var r = importMessage_(bin, fallbackId, backedUp, settings, srcId);
         if (r.skipped) { cursor.skipped += 1; return; }
         pending.push(r.row); backedUp[r.id] = true; cursor.processed += 1; cursor.bytes += r.bytes || 0;
-      } catch (e) { cursor.errors += 1; cursor.lastError = fallbackId + ': ' + e.message; Logger.log('가져오기 실패 %s: %s', fallbackId, e.stack || e.message); }
+      } catch (e) { cursor.errors += 1; cursor.lastError = (cursor.cur ? cursor.cur.name : fallbackId) + ': ' + e.message; noteFailedMessage_(srcId, cursor.cur ? cursor.cur.name : '', e.message); Logger.log('가져오기 실패 %s: %s', fallbackId, e.stack || e.message); }
       if (pending.length >= CONFIG.INDEX_FLUSH_EVERY) flush();
       if ((cursor.processed + cursor.errors + cursor.skipped) % 10 === 0) tickStatus('가져오는 중 ' + cursor.processed + '건' + (cursor.cur ? ' · ' + cursor.cur.name : ''));
     };

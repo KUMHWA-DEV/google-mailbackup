@@ -53,11 +53,18 @@ function mimeDecodeQP_(s, forHeader) {
   var t = forHeader ? s.replace(/_/g, ' ') : s.replace(/=\r?\n/g, '');
   return t.replace(/=([0-9A-Fa-f]{2})/g, function (_, h) { return String.fromCharCode(parseInt(h, 16)); });
 }
+/** base64 정리: 허용 문자만 남기고, 잘린 패딩(길이가 4의 배수가 아님)을 맞춘다 — 그대로 두면 Apps Script 의 base64Decode 가 "문자열을 디코딩할 수 없습니다" 로 실패한다 */
+function mimeCleanB64_(s) {
+  var clean = String(s || '').replace(/[^A-Za-z0-9+/=]/g, '').replace(/=+$/, '');
+  var rem = clean.length % 4;
+  if (rem === 1) clean = clean.slice(0, -1); else if (rem) clean += rem === 2 ? '==' : '=';
+  return clean;
+}
 function mimeDecodeB64_(s) {
-  var clean = String(s).replace(/[^A-Za-z0-9+/=]/g, '');
+  var clean = mimeCleanB64_(s);
   if (typeof atob === 'function') { try { return atob(clean); } catch (e) { return ''; } }
   if (typeof Buffer !== 'undefined') return Buffer.from(clean, 'base64').toString('latin1');
-  if (typeof Utilities !== 'undefined') { var bytes = Utilities.base64Decode(clean); var out = ''; for (var i = 0; i < bytes.length; i++) out += String.fromCharCode(bytes[i] & 255); return out; }
+  if (typeof Utilities !== 'undefined') { try { var bytes = Utilities.base64Decode(clean); var out = ''; for (var i = 0; i < bytes.length; i++) out += String.fromCharCode(bytes[i] & 255); return out; } catch (e2) { return ''; } }
   return '';
 }
 /** 전송 인코딩 해제 → 바이너리 문자열 */
@@ -121,7 +128,7 @@ function mimeWalk_(bin, acc, decodeCharset, depth) {
   if (isAttachment) {
     // base64 첨부는 디코딩하지 않고 base64 텍스트로 넘긴다 (Apps Script에서 Utilities.base64Decode가 훨씬 가볍다). 그 외는 바이너리 문자열.
     var isB64 = String(enc).toLowerCase().trim() === 'base64';
-    acc.attachments.push({ name: filename || ('attachment-' + (acc.attachments.length + 1)), mime: ct.type || 'application/octet-stream', data: isB64 ? null : mimeDecodeTransfer_(sp.body, enc), dataB64: isB64 ? String(sp.body).replace(/[^A-Za-z0-9+/=]/g, '') : null, inline: cd.type === 'inline' || (!!cid && !filename) });
+    acc.attachments.push({ name: filename || ('attachment-' + (acc.attachments.length + 1)), mime: ct.type || 'application/octet-stream', data: isB64 ? null : mimeDecodeTransfer_(sp.body, enc), dataB64: isB64 ? mimeCleanB64_(sp.body) : null, inline: cd.type === 'inline' || (!!cid && !filename) });
     return;
   }
   var data = mimeDecodeTransfer_(sp.body, enc);
@@ -240,5 +247,5 @@ function gmailLabelsToIds(value) {
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { parseEml: parseEml, mboxScan: mboxScan, mboxUnwrap: mboxUnwrap, gmailLabelsToIds: gmailLabelsToIds, decToHex: decToHex, mimeThreadHint_: mimeThreadHint_, mimeParseHeaders_: mimeParseHeaders_, mimeDecodeWords_: mimeDecodeWords_, mimeParseParams_: mimeParseParams_, mimeStripHtml_: mimeStripHtml_ };
+  module.exports = { parseEml: parseEml, mboxScan: mboxScan, mboxUnwrap: mboxUnwrap, gmailLabelsToIds: gmailLabelsToIds, mimeCleanB64_: mimeCleanB64_, decToHex: decToHex, mimeThreadHint_: mimeThreadHint_, mimeParseHeaders_: mimeParseHeaders_, mimeDecodeWords_: mimeDecodeWords_, mimeParseParams_: mimeParseParams_, mimeStripHtml_: mimeStripHtml_ };
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseEml, mimeDecodeWords_, mboxScan, mboxUnwrap, gmailLabelsToIds, decToHex } from '../src/lib/mime.js';
+import { parseEml, mimeDecodeWords_, mboxScan, mboxUnwrap, gmailLabelsToIds, decToHex, mimeCleanB64_ } from '../src/lib/mime.js';
 
 // Node용 문자셋 디코더: 바이너리 문자열 → Buffer(latin1) → TextDecoder
 const decode = (bin, cs) => {
@@ -85,6 +85,9 @@ describe('parseEml', () => {
     const g = gmailLabelsToIds(parseEml(eml, decode).gmailLabels);
     expect(g.labelIds).toEqual(['INBOX', 'IMPORTANT', 'user:전략실']);
     expect(gmailLabelsToIds('INBOX, IMPORTANT, CATEGORY_UPDATES, 전략실').labelIds).toEqual(['INBOX', 'IMPORTANT', 'CATEGORY_UPDATES', 'user:전략실']);
+  });
+  it('repairs base64 padding and strips junk so a truncated attachment does not fail the whole mail', () => {
+    expect(mimeCleanB64_('YWJj')).toBe('YWJj'); expect(mimeCleanB64_('YWI')).toBe('YWI='); expect(mimeCleanB64_('YQ')).toBe('YQ=='); expect(mimeCleanB64_('YQ==\r\n')).toBe('YQ=='); expect(mimeCleanB64_('YWJjZ')).toBe('YWJj');
   });
   it('derives a thread hint: X-GM-THRID as Gmail hex thread id, else the References root, else own Message-ID', () => {
     const base = ['From: a@example.com', 'Subject: s', 'Message-ID: <own@x>'];
