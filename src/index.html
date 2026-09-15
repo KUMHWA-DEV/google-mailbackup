@@ -678,6 +678,7 @@
   function fmtDate(iso) { if (!iso) return ''; var d = new Date(iso); return isNaN(d) ? esc(iso) : d.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }); }
   function fmtDay(iso) { if (!iso) return ''; var d = new Date(iso); return isNaN(d) ? esc(iso) : d.toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }); }
   function fmtDayShort(iso) { if (!iso) return ''; var d = new Date(iso); return isNaN(d) ? esc(iso) : d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }); }
+  function fmtDayYear(iso) { if (!iso) return ''; var d = new Date(iso); return isNaN(d) ? esc(iso) : d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'numeric', day: 'numeric' }).replace(/\s/g, '').replace(/\.$/, ''); }
   function fmtDayLong(epoch) { return new Date(epoch * 1000).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' }); }
   function isoDay(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
   function nameOnly(addr) { var s = String(addr || ''); var m = s.match(/^\s*"?([^"<]*)"?\s*<.*>/); return (m && m[1].trim()) || s; }
@@ -790,7 +791,7 @@
     $('stTotalD').textContent = '📥 ' + fmtNum(sum.receivedCount) + ' · 📤 ' + fmtNum(sum.sentCount) + ' · 📎 ' + fmtNum(sum.withAttachments);
     $('stBytes').textContent = fmtBytes(sum.totalBytes);
     $('stBytesD').textContent = sum.total ? '메일당 ' + fmtBytes(sum.totalBytes / sum.total) : '';
-    $('stRange').textContent = sum.oldestDate ? fmtDayShort(sum.oldestDate) + ' ~ ' + fmtDayShort(sum.newestDate) : '-';
+    $('stRange').textContent = sum.oldestDate ? fmtDayYear(sum.oldestDate) + ' ~ ' + fmtDayYear(sum.newestDate) : '-';
     $('stRangeD').textContent = sum.oldestDate ? Math.round((new Date(sum.newestDate) - new Date(sum.oldestDate)) / 86400000 + 1) + '일치 · 마지막 저장 ' + fmtDate(sum.lastBackedUpAt) : '';
     var last = (d.history || [])[0];
     if (!r.startedAt && last) r = last; // 실행 중이 아니면 최근 이력(취소된 실행 포함)
