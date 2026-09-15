@@ -150,7 +150,30 @@
   .divider { border-top: 1px solid var(--line2); margin: 16px 0; }
 
   /* AI tab */
-  .qa { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+  .qa { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+  .ai-ask-grid { display: grid; grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); gap: 24px; align-items: start; }
+  .ai-ask-head { position: sticky; top: 70px; }
+  .ai-big { font-size: 30px; font-weight: 800; line-height: 1.22; letter-spacing: -0.02em; color: var(--ink); margin: 6px 0 12px; }
+  .ai-ask-head p { margin: 0 0 12px; color: var(--ink2); font-size: 13.5px; line-height: 1.6; }
+  .ai-pick { display: flex; gap: 22px; flex-wrap: wrap; margin-bottom: 8px; }
+  .ai-pick .k { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .steps { display: grid; gap: 0; }
+  .step { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line2); }
+  .step .n { width: 26px; height: 26px; border-radius: 50%; background: var(--blue); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 13px; flex: none; margin-top: 1px; }
+  .step .b { min-width: 0; flex: 1; font-size: 13.5px; line-height: 1.65; }
+  .step .b b { font-size: 14px; }
+  .step .how { margin: 4px 0 0; color: var(--ink2); }
+  .step .how code, .ai-fold code { background: var(--soft); border: 1px solid var(--line2); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .ai-fold { padding: 12px 18px; }
+  .ai-fold summary { cursor: pointer; font-weight: 700; font-size: 14px; list-style: none; }
+  .ai-fold summary::before { content: '▸ '; color: var(--muted); }
+  .ai-fold[open] summary::before { content: '▾ '; }
+  .ai-fold ul, .ai-fold dl { margin: 10px 0 0; font-size: 13px; line-height: 1.65; color: var(--ink2); }
+  .ai-fold ul { padding-left: 18px; }
+  .ai-fold dt { font-weight: 700; color: var(--ink); margin-top: 10px; }
+  .ai-fold dd { margin: 2px 0 0; }
+  @media (max-width: 900px) { .ai-ask-grid { grid-template-columns: 1fr; } .ai-ask-head { position: static; } }
   .qa .item { background: var(--soft); border: 1px solid var(--line2); border-radius: 14px; padding: 12px; display: grid; gap: 8px; }
   .qa .u { background: var(--blue); color: #fff; border-radius: 14px 14px 4px 14px; padding: 9px 12px; font-size: 14px; font-weight: 600; justify-self: end; max-width: 92%; }
   .qa .a { background: #fff; border: 1px solid var(--line); border-radius: 14px 14px 14px 4px; padding: 9px 12px; font-size: 12.5px; color: var(--ink2); white-space: pre-line; line-height: 1.55; }
@@ -546,35 +569,60 @@
   <!-- ===== AI 연결 ===== -->
   <section class="page" id="tab-ai" hidden>
     <div class="card">
-      <div class="cardhead"><h3>💬 AI에 이렇게 물어보세요</h3><span class="pill blue">내 백업 메일 기준으로 답합니다</span></div>
-      <div class="qa" id="aiQa"></div>
+      <div class="ai-ask-grid">
+        <div class="ai-ask-head">
+          <div class="ai-big">백업된 메일을<br>AI에게 말로<br>물어볼 수 있어요</div>
+          <p>Claude · Gemini · ChatGPT · Cursor 같은 AI 앱을 연결하면, 내 드라이브에 백업된 메일과 첨부파일을 AI가 직접 읽고 답합니다. 오른쪽 예시처럼 평소 말투로 물어보면 됩니다.</p>
+          <span class="pill blue">내 백업 메일 기준으로 답합니다</span>
+        </div>
+        <div class="qa" id="aiQa"></div>
+      </div>
     </div>
 
-    <div class="ai-hero">
-      <div class="card ai-opt">
-        <div class="cardhead"><h3>🖥 AI 앱에 연결</h3><span class="pill green">터미널 한 줄 · 1분</span></div>
-        <div class="ai-clients" id="aiClients">
+    <div class="card ai-opt">
+      <div class="cardhead"><h3>🔌 AI 앱에 연결하기</h3><span class="pill green">3단계 · 5분</span></div>
+      <div class="ai-pick">
+        <div><div class="k">내 컴퓨터</div><div class="ai-clients" id="aiOs"><button type="button" data-os="mac"> Mac</button><button type="button" data-os="win">⊞ Windows</button></div></div>
+        <div><div class="k">쓰는 AI 앱</div><div class="ai-clients" id="aiClients">
           <button type="button" data-c="claude-desktop" class="active">Claude Desktop</button>
           <button type="button" data-c="claude-code">Claude Code</button>
           <button type="button" data-c="gemini">Gemini CLI</button>
           <button type="button" data-c="cursor">Cursor</button>
           <button type="button" data-c="chatgpt">ChatGPT</button>
-        </div>
-        <label class="sw" style="margin:0 0 12px;font-size:12px" title="켜면 AI가 백업 실행·감지·설정 변경·자동 백업 켜기까지 할 수 있습니다. 대신 로그인 때 Gmail 읽기, Apps Script 실행, 알림 메일 발송 권한을 추가로 요청합니다. 꺼져 있으면 Drive/시트 읽기 권한만 요청하는 읽기 전용입니다."><input type="checkbox" id="aiExec"><i></i>⚡ 실행 모드 (백업 실행·설정 변경까지 · 권한 추가 요청) — 기본은 읽기 전용</label>
-        <div id="aiInstallWrap">
-          <p>터미널(macOS: 터미널 앱, Windows: PowerShell)에 아래 한 줄을 붙여넣고 실행하면 선택한 앱의 MCP 설정에 항목이 추가됩니다. 첫 실행은 패키지를 내려받느라 1~2분 걸립니다. AI에게 실행을 시키지 마세요. 대부분의 AI 도구는 정책상 외부 코드 실행을 하지 않습니다.</p>
-          <p class="note" style="margin:0 0 10px">준비물은 <b>Node.js 18 이상</b> 하나입니다. 터미널에서 <code>node -v</code>가 안 되면 <a href="https://nodejs.org/ko" target="_blank" rel="noopener">nodejs.org</a>에서 LTS 설치 프로그램으로 설치한 뒤 터미널을 다시 여세요.</p>
-          <div id="aiInstallCmd"></div>
-          <ol style="margin:10px 0 0;padding-left:18px;font-size:13px;line-height:1.7">
-            <li>실행 후 앱을 완전히 종료했다가 다시 엽니다.</li>
-            <li>첫 질문을 하면 브라우저에 Google 로그인 창이 열립니다. <b>회사 계정</b>으로 로그인하고, 동의 화면의 권한이 아래 "권한" 표시와 같은지 확인합니다.</li>
-            <li>"내 백업 메일 상태 알려줘"로 테스트합니다.</li>
-          </ol>
-        </div>
-        <div id="aiOauthRow" style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"></div>
-        <details id="aiManual" style="margin-top:12px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">고급 · 설정 파일을 직접 편집하려면 (ChatGPT·VS Code는 이 방법)</summary><div id="aiClientBody" style="margin-top:8px"></div></details>
+        </div></div>
       </div>
+      <label class="sw" style="margin:4px 0 8px;font-size:12px" title="켜면 AI가 백업 실행·감지·설정 변경·자동 백업 켜기까지 할 수 있습니다. 대신 로그인 때 Gmail 읽기, Apps Script 실행, 알림 메일 발송 권한을 추가로 요청합니다. 꺼져 있으면 Drive/시트 읽기 권한만 요청하는 읽기 전용입니다."><input type="checkbox" id="aiExec"><i></i>⚡ 실행 모드 (AI가 백업 실행·설정 변경까지) — 기본은 읽기 전용</label>
+      <div id="aiInstallWrap" class="steps">
+        <div class="step"><div class="n">1</div><div class="b"><b>Node.js 준비</b> <span class="muted">(한 번만 · 이미 있으면 건너뜀)</span><div id="aiStepNode"></div></div></div>
+        <div class="step"><div class="n">2</div><div class="b"><b>터미널을 열고 아래 명령을 붙여넣기</b><div id="aiStepTerm"></div><div id="aiInstallCmd" style="margin-top:8px"></div></div></div>
+        <div class="step"><div class="n">3</div><div class="b"><b>AI 앱을 다시 켜고 첫 질문</b><div id="aiStepAsk"></div></div></div>
+      </div>
+      <div id="aiOauthRow" style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap"></div>
+      <details id="aiManual" style="margin-top:12px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">고급 · 설정 파일을 직접 편집하려면 (ChatGPT·VS Code는 이 방법)</summary><div id="aiClientBody" style="margin-top:8px"></div></details>
     </div>
+
+    <details class="card ai-fold"><summary>⚠️ 주의사항</summary>
+      <ul>
+        <li>로그인은 반드시 <b>회사 계정</b>으로 하세요. 개인 Gmail로 로그인하면 백업 폴더가 없어 "시트를 찾지 못했습니다"가 뜹니다.</li>
+        <li>기본(읽기 전용)은 Drive와 스프레드시트 <b>읽기</b> 권한만 요청합니다. Gmail이나 메일 발송 권한은 요청하지 않습니다. 실행 모드를 켜면 Gmail 읽기·Apps Script 실행·알림 발송 권한이 추가되고 그 토큰이 내 PC(<code>~/.config/mail-backup-mcp</code>)에 남으니 필요한 사람만 켜세요.</li>
+        <li>설치 명령은 <b>본인이</b> 터미널에서 실행하세요. AI 앱에 "이 명령 실행해 줘"라고 시키면 대부분의 AI가 외부 코드 실행을 거부합니다.</li>
+        <li>AI는 내 계정으로 백업된 파일만 읽습니다. 다른 직원의 메일은 볼 수 없습니다.</li>
+        <li>첫 실행은 패키지를 내려받느라 1~2분 걸립니다. 회사 네트워크가 GitHub이나 npm 접속을 막으면 설치가 실패합니다(IT에 문의).</li>
+      </ul>
+    </details>
+    <details class="card ai-fold"><summary>❓ 자주 묻는 질문 · 오류가 났을 때</summary>
+      <dl>
+        <dt>"node: command not found" / "'node'은(는) 내부 또는 외부 명령이 아닙니다"</dt><dd>Node.js가 없거나 터미널이 설치 전에 열려 있던 겁니다. 1단계대로 설치한 뒤 터미널(PowerShell)을 <b>닫았다가 새로 열어</b> 다시 실행하세요.</dd>
+        <dt>"git: command not found" / "spawn git ENOENT"</dt><dd>설치 명령은 GitHub에서 코드를 받으므로 Git이 필요합니다. Mac은 안내 창이 뜨면 "설치"를 누르거나 터미널에 <code>xcode-select --install</code>, Windows는 PowerShell에 <code>winget install Git.Git</code> 후 터미널을 새로 여세요.</dd>
+        <dt>명령을 실행했는데 AI 앱에서 도구가 안 보여요</dt><dd>앱을 <b>완전히 종료</b>했다가 다시 열어야 합니다(창만 닫는 것은 종료가 아닙니다). Claude Desktop은 메뉴 막대/작업 표시줄 아이콘에서 종료하세요.</dd>
+        <dt>첫 질문을 했는데 로그인 창이 안 열려요</dt><dd>같은 질문을 한 번 더 해 보세요. 그래도 안 뜨면 AI의 답에 포함된 로그인 주소를 브라우저에 직접 붙여넣으면 됩니다.</dd>
+        <dt>"액세스 차단됨 · redirect_uri_mismatch"</dt><dd>관리자 쪽 OAuth 클라이언트 설정 문제입니다. 관리자에게 알려주세요(데스크톱 앱 유형이어야 합니다).</dd>
+        <dt>"Drive에서 'Mail Backup Index' 시트를 찾지 못했습니다"</dt><dd>이 계정으로 백업이 한 번도 안 됐거나, 개인 계정으로 로그인한 경우입니다. 이 웹앱에서 백업을 먼저 실행하고, 로그인은 회사 계정으로 하세요.</dd>
+        <dt>실행 모드에서 "권한이 없습니다" / 403</dt><dd>읽기 전용으로 먼저 로그인한 뒤 실행 모드로 바꾼 경우입니다. <code>~/.config/mail-backup-mcp/token.json</code>을 지우고 다시 질문해 새 권한으로 로그인하세요. 계속 실패하면 관리자에게(스크립트의 GCP 프로젝트 연결).</dd>
+        <dt>AI가 "출처를 신뢰할 수 없다"며 진행을 거부해요</dt><dd>AI에게 설치를 시킬 때 나오는 반응입니다. 명령은 본인이 직접 실행하고, AI에게는 질문만 하세요.</dd>
+        <dt>처음부터 다시 하고 싶어요</dt><dd>Mac 터미널: <code>rm -rf ~/.config/mail-backup-mcp</code> · Windows PowerShell: <code>Remove-Item -Recurse -Force ~/.config/mail-backup-mcp</code> 를 실행하고, 설치 명령을 다시 실행하면 앱 설정 항목이 새로 덮어써집니다.</dd>
+      </dl>
+    </details>
 
     <div class="card adminbox" id="aiAdmin" hidden>
       <div class="cardhead"><h3>🔑 관리자 · MCP용 OAuth 클라이언트</h3><span class="pill amber">소유자에게만 보임</span></div>
@@ -1469,7 +1517,31 @@
   };
   var aiClient = 'claude-desktop';
   var IS_WIN = /Windows/i.test(navigator.userAgent);
-  function mcpEntryFor(exec) { var env = {}; if (exec) env.MAIL_BACKUP_SCRIPT_ID = AI_SCRIPT_ID; var o = IS_WIN ? { command: 'cmd', args: ['/c', 'npx', '-y', '-p', AI_PKG, 'mailbackup-mcp'] } : { command: 'npx', args: ['-y', '-p', AI_PKG, 'mailbackup-mcp'] }; if (Object.keys(env).length) o.env = env; return o; }
+  var aiOs = IS_WIN ? 'win' : 'mac';
+  var AI_APP_NAMES = { 'claude-desktop': 'Claude Desktop', 'claude-code': 'Claude Code', gemini: 'Gemini CLI', cursor: 'Cursor', chatgpt: 'ChatGPT' };
+  function stepNodeHtml() {
+    return aiOs === 'win'
+      ? '<div class="how">① <a href="https://nodejs.org/ko" target="_blank" rel="noopener">nodejs.org/ko</a>에서 <b>LTS</b> 버전을 받아 설치(기본값으로 "다음"만). ② Git도 필요합니다: 시작 → "PowerShell" 실행 후 <code>winget install Git.Git</code>.<br>③ PowerShell을 <b>새로 열어</b> <code>node -v</code>를 입력했을 때 <code>v18</code> 이상이 나오면 준비 끝.</div>'
+      : '<div class="how">① <a href="https://nodejs.org/ko" target="_blank" rel="noopener">nodejs.org/ko</a>에서 <b>LTS</b> 버전(.pkg)을 받아 더블클릭 → "계속"으로 설치.<br>② 터미널을 <b>새로 열어</b> <code>node -v</code>를 입력했을 때 <code>v18</code> 이상이 나오면 준비 끝. (처음 실행 때 "명령어 라인 도구 설치" 창이 뜨면 "설치"를 누르세요. Git이 함께 설치됩니다.)</div>';
+  }
+  function stepTermHtml() {
+    return aiOs === 'win'
+      ? '<div class="how">시작 버튼 → <b>PowerShell</b> 입력 → Enter. 아래 <b>복사</b>를 누른 뒤 PowerShell 창에서 <b>마우스 오른쪽 클릭</b>(붙여넣기) → Enter. "설정 갱신: … claude_desktop_config.json" 같은 줄이 보이면 성공입니다 (1~2분).</div>'
+      : '<div class="how"><kbd>⌘</kbd>+<kbd>Space</kbd> → <b>터미널</b> 입력 → Enter. 아래 <b>복사</b>를 누른 뒤 터미널 창에서 <kbd>⌘</kbd>+<kbd>V</kbd> → Enter. "설정 갱신: … claude_desktop_config.json" 같은 줄이 보이면 성공입니다 (1~2분).</div>';
+  }
+  function stepAskHtml() {
+    var q = '내 백업 메일 상태 알려줘';
+    var restart = {
+      'claude-desktop': aiOs === 'win' ? 'Claude 앱을 <b>완전히 종료</b>(작업 표시줄 아이콘 → 종료)했다가 다시 열고, 새 대화에서' : 'Claude 앱을 <b>완전히 종료</b>(메뉴 막대 Claude → Quit, 또는 <kbd>⌘</kbd>+<kbd>Q</kbd>)했다가 다시 열고, 새 대화에서',
+      'claude-code': '터미널에서 <code>claude</code>를 다시 실행하고',
+      gemini: '터미널에서 <code>gemini</code>를 다시 실행하고',
+      cursor: 'Cursor를 완전히 종료했다가 다시 열고, 채팅(Agent 모드)에서',
+      chatgpt: 'ChatGPT 설정 → 커넥터에 등록한 뒤 새 대화에서',
+    }[aiClient] || '앱을 다시 켜고';
+    return '<div class="how">' + restart + ' 이렇게 물어보세요: <b>"' + q + '"</b><br>처음 한 번은 브라우저에 Google 로그인 창이 열립니다. <b>회사 계정</b>을 고르고, 동의 화면의 권한이 아래 🔒 표시와 같은지 확인한 뒤 허용하세요. 로그인 후 같은 질문을 다시 하면 답이 옵니다. 그다음부터는 위 예시처럼 자유롭게 물어보면 됩니다.</div>';
+  }
+  document.addEventListener('click', function (e) { var b = e.target.closest('#aiOs button[data-os]'); if (b) { aiOs = b.dataset.os; renderAi(); } });
+  function mcpEntryFor(exec) { var env = {}; if (exec) env.MAIL_BACKUP_SCRIPT_ID = AI_SCRIPT_ID; var o = aiOs === 'win' ? { command: 'cmd', args: ['/c', 'npx', '-y', '-p', AI_PKG, 'mailbackup-mcp'] } : { command: 'npx', args: ['-y', '-p', AI_PKG, 'mailbackup-mcp'] }; if (Object.keys(env).length) o.env = env; return o; }
   document.addEventListener('change', function (e) { if (e.target && e.target.id === 'aiExec') renderAi(); });
   function renderAi() {
     var d = state.dash;
@@ -1487,6 +1559,8 @@
     var oauthReady = !!state.oauthClientJson, oauthPending = !!(d.hasOauthClient && !oauthReady);
     $('aiInstallCmd').innerHTML = oauthPending ? '<div class="pv-loading"><span class="spin dark"></span> 인증 정보를 불러오는 중…</div>' : !d.gitSha ? '<p class="note">배포 커밋 정보가 없어 설치 명령을 만들 수 없습니다. 관리자가 <code>npm run deploy</code>로 배포하면 생깁니다.</p>' : codeBlock('npx -y -p ' + AI_PKG + ' mailbackup-setup' + (d.gitSha ? ' --ref ' + d.gitSha : '') + (aiExec() ? ' --script-id ' + AI_SCRIPT_ID : '') + (oauthB64() ? ' --oauth ' + oauthB64() : '') + ' --apps ' + ({ 'claude-desktop': 'claude-desktop', 'claude-code': 'claude-code', 'gemini': 'gemini', 'cursor': 'cursor' }[aiClient] || 'claude-desktop'));
     document.querySelectorAll('#aiClients button').forEach(function (b) { b.classList.toggle('active', b.dataset.c === aiClient); });
+    document.querySelectorAll('#aiOs button').forEach(function (b) { b.classList.toggle('active', b.dataset.os === aiOs); });
+    $('aiStepNode').innerHTML = stepNodeHtml(); $('aiStepTerm').innerHTML = stepTermHtml(); $('aiStepAsk').innerHTML = stepAskHtml();
     $('aiClientBody').innerHTML = AI_CLIENTS[aiClient]();
     var chat = aiClient === 'chatgpt';
     $('aiInstallWrap').hidden = chat; $('aiManual').open = chat || $('aiManual').open;
