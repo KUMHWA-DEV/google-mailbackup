@@ -80,9 +80,18 @@ function mimeDecodeWords_(value, decodeCharset) {
   var s = String(value || '');
   // 인접한 encoded-word 사이 공백은 제거 (RFC 2047 §6.2)
   s = s.replace(/(\?=)\s+(=\?)/g, '$1$2');
-  return s.replace(/=\?([^?]+)\?([bBqQ])\?([^?]*)\?=/g, function (_, cs, enc, text) {
-    var bin = enc.toLowerCase() === 'b' ? mimeDecodeB64_(text) : mimeDecodeQP_(text, true);
-    try { return decodeCharset(bin, cs.replace(/\*.*$/, '')); } catch (e) { return text; }
+  // 같은 문자셋의 encoded-word 가 연달아 있으면 바이트를 이어 붙인 뒤 한 번에 디코딩 (한 글자가 두 단어에 걸쳐 잘린 경우 대비)
+  return s.replace(/(?:=\?[^?]+\?[bBqQ]\?[^?]*\?=)+/g, function (run) {
+    var out = '', bin = '', curCs = null;
+    var flush = function () { if (curCs == null) return; try { out += decodeCharset(bin, curCs); } catch (e) { out += bin; } bin = ''; curCs = null; };
+    run.replace(/=\?([^?]+)\?([bBqQ])\?([^?]*)\?=/g, function (_, cs, enc, text) {
+      var c = cs.replace(/\*.*$/, '').toLowerCase();
+      if (curCs != null && c !== curCs) flush();
+      curCs = c; bin += enc.toLowerCase() === 'b' ? mimeDecodeB64_(text) : mimeDecodeQP_(text, true);
+      return '';
+    });
+    flush();
+    return out;
   });
 }
 

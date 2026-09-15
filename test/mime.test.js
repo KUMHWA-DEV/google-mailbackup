@@ -106,6 +106,10 @@ describe('parseEml', () => {
   });
   it('decodes adjacent encoded words without inserting spaces', () => {
     expect(mimeDecodeWords_('=?UTF-8?B?7ZWc6riA?= =?UTF-8?B?IOygnOuqqQ==?=', decode)).toBe('한글 제목');
+    // 한 글자('함' = 3바이트)가 두 encoded-word 에 걸쳐 잘린 경우도 이어 붙여 복원
+    const bytes = Buffer.from('받은편지함,전략실', 'utf8'); const cut = 13; // '받은편지' 12바이트 + '함'의 첫 바이트
+    const w = (b) => '=?UTF-8?B?' + b.toString('base64') + '?=';
+    expect(mimeDecodeWords_(w(bytes.subarray(0, cut)) + ' ' + w(bytes.subarray(cut)), decode)).toBe('받은편지함,전략실');
   });
 });
 

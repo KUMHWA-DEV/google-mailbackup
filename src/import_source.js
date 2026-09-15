@@ -136,7 +136,7 @@ function importThreadId_(hint) {
 }
 
 // ---------- 예전 버전이 남긴 행 복구: 인코딩된 라벨명이 수식(#ERROR!)으로 들어간 셀, 원본 파일 ID로 묶인 threadId ----------
-var IMPORT_REPAIR_RULES = 3; // 감지 규칙을 넓힐 때마다 올린다 → "고칠 것 없음" 캐시가 무효화돼 다시 훑는다
+var IMPORT_REPAIR_RULES = 4; // 감지 규칙을 넓힐 때마다 올린다 → "고칠 것 없음" 캐시가 무효화돼 다시 훑는다
 var IMPORT_REPAIR_PROP = 'IMPORT_REPAIR_DONE_R' + IMPORT_REPAIR_RULES;
 /** 복구할 행이 있는지 (한 번 끝나면 속성으로 기억해 다시 훑지 않음) */
 function importRepairNeeded_() {
@@ -144,8 +144,8 @@ function importRepairNeeded_() {
   try {
     var sheet = importSheet_(), last = sheet.getLastRow();
     if (last < 2) { props_().setProperty(IMPORT_REPAIR_PROP, '1'); return false; }
-    var vals = sheet.getRange(2, 1, last - 1, 4).getValues();
-    for (var i = 0; i < vals.length; i++) if (String(vals[i][0]).indexOf('eml:') === 0 && (String(vals[i][1]).indexOf('src:') === 0 || repairBadCategory_(String(vals[i][3])))) return true;
+    var lc = INDEX_HEADERS.indexOf('labels'), vals = sheet.getRange(2, 1, last - 1, lc + 1).getValues();
+    for (var i = 0; i < vals.length; i++) if (String(vals[i][0]).indexOf('eml:') === 0 && (String(vals[i][1]).indexOf('src:') === 0 || repairBadCategory_(String(vals[i][3])) || (String(vals[i][3]) === '보관됨' && !String(vals[i][lc] || '').trim()))) return true; // 라벨 없이 보관됨이 된 행도 원본 헤더로 재확인
     var f = sheet.getRange(2, INDEX_HEADERS.indexOf('category') + 1, last - 1, 1).getFormulas();
     for (var j = 0; j < f.length; j++) if (f[j][0]) return true;
     props_().setProperty(IMPORT_REPAIR_PROP, '1');
@@ -155,7 +155,7 @@ function importRepairNeeded_() {
 /** 잘못된 카테고리 값: 수식 오류 표시, 안 풀린 인코딩, 라벨 목록 전체가 통째로 들어간 것(쉼표 포함) */
 function repairBadCategory_(v) {
   v = String(v || '').trim();
-  if (v === '#ERROR!' || v.indexOf('=?') === 0 || v.indexOf(',') >= 0) return true;
+  if (v === '#ERROR!' || v.indexOf('=?') === 0 || v.indexOf(',') >= 0 || /\uFFFD/.test(v)) return true; // 수식·미해독·목록 통째·깨진 글자
   if (!v || SYSTEM_CATEGORY_NAMES[v]) return false; // 정상 시스템 폴더명
   var ids = gmailLabelsToIds(v).labelIds; // 시스템 라벨 표기("중요편지함", "개인정보 카테고리", "열림" 등)가 폴더가 된 것
   for (var i = 0; i < ids.length; i++) if (ids[i].indexOf('user:') === 0) return false;
@@ -180,18 +180,21 @@ function repairImportRows_(cursor, deadline, settings) {
       var id = String(vals[i][C.id] || ''); if (id.indexOf('eml:') !== 0) continue;
       var touched = false;
       for (var c = 0; c < cols; c++) if (forms[i][c] && c !== C.category && c !== C.labels) { vals[i][c] = mimeDecodeWords_(forms[i][c], decodeCharsetGas_); touched = true; } // 수식이 된 다른 셀(제목 등)은 원문 텍스트로
-      if (forms[i][C.category] || forms[i][C.labels] || repairBadCategory_(String(vals[i][C.category]))) {
-        // 라벨 목록 원문: 라벨 셀(수식이면 수식 원문) → 없으면 카테고리 셀. Takeout은 목록 전체를 인코딩 단어 하나로 싸기도 하므로 먼저 풀고 나서 쉼표로 나눠 다시 분류한다
-        var rawList = forms[i][C.labels] || String(vals[i][C.labels] || '') || forms[i][C.category] || String(vals[i][C.category] || '');
-        var decoded = mimeDecodeWords_(rawList, decodeCharsetGas_).replace(/#ERROR!/g, '');
-        var cls = classifyLabels_(decoded.split(/\s*,\s*/).filter(Boolean).join(','), String(vals[i][C.from] || ''), settings);
+      var suspectArchived = String(vals[i][C.category]) === '보관됨' && !String(vals[i][C.labels] || '').trim();
+      if (forms[i][C.category] || forms[i][C.labels] || repairBadCategory_(String(vals[i][C.category])) || suspectArchived) {
+        // 기준은 원본 .eml 의 X-Gmail-Labels 헤더 (읽을 수 있으면). 못 읽으면 라벨 셀(수식이면 수식 원문) → 카테고리 셀 순.
+        // Takeout은 목록 전체를 인코딩 단어 하나로 싸기도 하므로 먼저 풀고 나서 쉼표로 나눠 다시 분류한다
+        var decoded = null, fromHdr = String(vals[i][C.from] || '');
+        try { var hh = mimeParseHeaders_(headOf_(String(vals[i][C.fileId]))); if (hh['x-gmail-labels'] != null) { decoded = String(hh['x-gmail-labels']).split(',').map(function (x) { return mimeDecodeWords_(x.trim(), decodeCharsetGas_); }).filter(Boolean).join(','); fromHdr = mimeDecodeWords_(hh['from'] || fromHdr, decodeCharsetGas_); } } catch (eh) { /* 아래 폴백 */ }
+        if (decoded == null) { var rawList = forms[i][C.labels] || String(vals[i][C.labels] || '') || forms[i][C.category] || String(vals[i][C.category] || ''); decoded = mimeDecodeWords_(rawList, decodeCharsetGas_).replace(/#ERROR!/g, ''); }
+        var cls = classifyLabels_(decoded.split(/\s*,\s*/).filter(Boolean).join(','), fromHdr, settings);
         var moved = cls.category !== String(vals[i][C.category]);
-        vals[i][C.category] = cls.category; vals[i][C.labels] = cls.labelNames.join(', '); touched = true;
+        vals[i][C.category] = cls.category; vals[i][C.labels] = cls.labelNames.join(', ') || (cls.category === '보관됨' ? '(라벨 없음)' : ''); touched = true; // 라벨이 정말 없으면 표시를 남겨 다음부터 재확인하지 않음
         if (moved) { try { var f = DriveApp.getFileById(String(vals[i][C.fileId])); f.moveTo(ensureFolderPath_(buildFolderPath(cls.category, new Date(vals[i][C.date]), CONFIG.TIME_ZONE, settings.folderLayout))); } catch (e) { Logger.log('복구: 파일 이동 실패 %s', e.message); } }
       }
       if (String(vals[i][C.thread] || '').indexOf('src:') === 0) { // 원본 파일 ID로 묶여 있던 대화 → 메일 헤더에서 다시
         var key = '';
-        try { var head = u8ToBin(readFileRange_(String(vals[i][C.fileId]), 0, 16383)); var cut = head.search(/\r?\n\r?\n/); key = importThreadId_(mimeThreadHint_(mimeParseHeaders_(cut > 0 ? head.slice(0, cut) : head))); } catch (e2) { Logger.log('복구: 헤더 읽기 실패 %s', e2.message); }
+        try { key = importThreadId_(mimeThreadHint_(mimeParseHeaders_(headOf_(String(vals[i][C.fileId]))))); } catch (e2) { Logger.log('복구: 헤더 읽기 실패 %s', e2.message); }
         vals[i][C.thread] = key; touched = true;
       }
       if (touched) { changed = true; out.fixed += 1; }
@@ -224,6 +227,8 @@ function unmarkImportFiles_(sheet, fileIds) {
   if (n) rng.setValues(vals);
   return n;
 }
+/** 드라이브 파일의 헤더 부분(첫 32KB 중 빈 줄까지)을 바이너리 문자열로 */
+function headOf_(fileId) { var head = u8ToBin(readFileRange_(fileId, 0, 32767)), cut = head.search(/\r?\n\r?\n/); return cut > 0 ? head.slice(0, cut) : head; }
 function fmtRepair_(c) { return (c.repairRow ? (c.repairRow - 1) + '행' : '') + (c.repairFixed ? ' · ' + c.repairFixed + '건 수정' : ''); }
 function sheetSafeRowGas_(row) { return row.map(function (v) { return typeof v === 'string' && v.charAt(0) === '=' ? "'" + v : v; }); }
 

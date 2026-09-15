@@ -124,6 +124,22 @@ function searchMessages(f) {
 }
 
 /** 메일 1건의 본문 미리보기(인덱스에 저장된 plain text). */
+/** 가져온 메일(.eml)의 원본 X-Gmail-Labels 헤더와 그 해석 결과 (분류가 맞는지 확인용) */
+function getRawLabels(id) {
+  id = String(id || '');
+  if (id.indexOf('eml:') !== 0) return { error: '가져온 메일만 볼 수 있습니다' };
+  var sheet = sheetForId_(id), last = sheet.getLastRow();
+  var hit = last >= 2 ? sheet.getRange(2, 1, last - 1, 1).createTextFinder(id).matchEntireCell(true).findNext() : null;
+  if (!hit) return { error: '인덱스에 없습니다' };
+  var fileId = String(sheet.getRange(hit.getRow(), INDEX_HEADERS.indexOf('driveFileId') + 1).getValue() || '');
+  if (!fileId) return { error: '원본 파일 정보가 없습니다' };
+  var head = u8ToBin(readFileRange_(fileId, 0, 32767)), cut = head.search(/\r?\n\r?\n/);
+  var h = mimeParseHeaders_(cut > 0 ? head.slice(0, cut) : head);
+  var raw = String(h['x-gmail-labels'] || '');
+  var decoded = raw.split(',').map(function (x) { return mimeDecodeWords_(x.trim(), decodeCharsetGas_); }).filter(Boolean).join(',');
+  var g = gmailLabelsToIds(decoded);
+  return { raw: raw, decoded: decoded, ids: g.labelIds, thrid: String(h['x-gm-thrid'] || ''), category: categorize(g.labelIds, g.labelMap, { splitGmailTabs: getSettings_().splitGmailTabs }) };
+}
 function getMessageBody(id) {
   return { id: id, body: loadBodyPreview_(id) };
 }

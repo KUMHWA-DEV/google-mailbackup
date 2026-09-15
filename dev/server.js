@@ -73,6 +73,7 @@ let labelOrder = [];
 const api = {
   getDashboard: dashboard,
   getStatus: dashboard,
+  getRawLabels: (id) => ({ raw: '=?UTF-8?B?...?=', decoded: '받은편지함,중요편지함,열림,프로젝트A', ids: ['INBOX', 'IMPORTANT', 'user:프로젝트A'], thrid: '1811234567890123456', category: '프로젝트A' }),
   saveLabelOrder: (order) => { labelOrder = Array.isArray(order) ? order : []; return { ok: true, labelOrder }; },
   getExplorerData: () => ({ labelOrder, records: filterRecords(listRecords(), {}), total: listRecords().length, capped: false, summary: summarizeRecords(listRecords()), history }),
   getOauthClientJson: () => ({ json: oauthJson }),

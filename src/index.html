@@ -1545,6 +1545,7 @@
       '<details><summary>받는사람: ' + esc(nameOnly(r.to) || emailOf(r.to) || '-') + (r.cc ? ', 참조 ' + esc(nameOnly(r.cc)) : '') + ' ▾</summary><table>' +
       '<tr><td>보낸사람:</td><td>' + esc(r.from) + '</td></tr><tr><td>받는사람:</td><td>' + esc(r.to || '-') + '</td></tr>' + (r.cc ? '<tr><td>참조:</td><td>' + esc(r.cc) + '</td></tr>' : '') +
       '<tr><td>날짜:</td><td>' + gmDateLong(r.date) + '</td></tr><tr><td>Gmail 라벨:</td><td>' + esc(r.labels || '-') + '</td></tr><tr><td>Drive 폴더:</td><td>' + esc(r.category) + '</td></tr>' +
+      (String(r.id).indexOf('eml:') === 0 ? '<tr><td>원본 라벨:</td><td id="rdRawLabels"><a href="#" id="rdRawLoad">가져온 파일의 X-Gmail-Labels 보기</a></td></tr>' : '') +
       '<tr><td>백업:</td><td>' + fmtDate(r.backedUpAt) + ' · ' + fmtBytes(r.sizeBytes) + '</td></tr></table></details></div>' +
       '<div class="r">' + gmDateLong(r.date) + '</div></div>' +
       '<div class="gm-bd" id="readerBody">본문을 불러오는 중…</div>' +
@@ -1555,6 +1556,7 @@
     $('rdPrev').onclick = function () { if (idx > 0) openMessage(hits[idx - 1]); };
     $('rdNext').onclick = function () { if (idx < hits.length - 1) openMessage(hits[idx + 1]); };
     $('rdFrom').onclick = function () { setQuery('from:' + qv(emailOf(r.from) || nameOnly(r.from))); };
+    if ($('rdRawLoad')) $('rdRawLoad').onclick = function (e) { e.preventDefault(); $('rdRawLabels').textContent = '읽는 중…'; call('getRawLabels', r.id).then(function (x) { if (state.ex.selected !== r.id) return; $('rdRawLabels').innerHTML = x.error ? esc(x.error) : '<code>' + esc(x.decoded || '(헤더 없음)') + '</code><br><span style="color:var(--muted)">해석: ' + esc((x.ids || []).join(', ') || '(없음)') + ' → 폴더 <b>' + esc(x.category) + '</b>' + (x.category !== r.category ? ' <span style="color:var(--red-ink)">(현재 ' + esc(r.category) + ' · 오류 수정으로 옮겨집니다)</span>' : '') + '</span>'; }).catch(function (err) { $('rdRawLabels').textContent = '실패: ' + (err.message || err); }); };
     call('getMessageBody', r.id).then(function (res) { if (state.ex.selected !== r.id) return; var b = (res && res.body) ? res.body : (r.snippet || '(본문 미리보기 없음 — Drive의 원본을 열어 확인하세요)'); bodyCache[r.id] = b; $('readerBody').innerHTML = renderBody(b); })
       .catch(function () { $('readerBody').textContent = r.snippet || ''; });
   }
