@@ -360,17 +360,43 @@ function startImport() {
 function startImportRepair() {
   var st = importStatus_();
   if (/^(running|queued|stopping)$/.test(st.state || '') || importLeaseHeld_()) throw new Error('가져오기가 실행 중입니다. 끝나거나 중지한 뒤 눌러 주세요');
-  var failed = importFailedMap_();
-  if (!importRepairNeeded_() && !Object.keys(failed).length) return getImportState();
+  if (!importRepairNeeded_() && !Object.keys(importFailedMap_()).length) return getImportState();
+  armImportRepair_(st.state, 5 * 1000, '');
+  return getImportState();
+}
+/** 오류 수정 실행을 예약한다 (버튼·자동 공용). auto 는 상태 메시지에 표시할 접두어 */
+function armImportRepair_(prevState, delayMs, auto) {
   props_().deleteProperty(IMPORT_PROP.STOP);
   deleteImportTriggers_();
-  var c = importCursor_() || newImportCursor_(); c.repairOnly = true; c.repairPrevState = st.state === 'paused' || st.state === 'error' ? 'paused' : 'idle';
-  c.retryFiles = Object.keys(failed); // 실패한 메일이 있던 원본 파일: 복구 뒤 다시 훑는다
+  var c = importCursor_() || newImportCursor_(); c.repairOnly = true; c.repairPrevState = prevState === 'paused' || prevState === 'error' ? 'paused' : 'idle';
+  c.retryFiles = Object.keys(importFailedMap_()); // 실패한 메일이 있던 원본 파일: 복구 뒤 다시 훑는다
+  if (auto) c.autoRepair = true;
   saveImportCursor_(c);
   var err = '';
-  try { scheduleImport_(5 * 1000); } catch (e) { err = String(e && e.message || e); }
-  setImportStatus_({ state: 'queued', message: err ? '트리거 생성 실패: ' + err : '오류 수정(라벨·폴더·대화 묶음) 예약 · 곧 시작', cursor: c, queuedAt: new Date().toISOString() });
-  return getImportState();
+  try { scheduleImport_(delayMs); } catch (e) { err = String(e && e.message || e); }
+  setImportStatus_({ state: 'queued', message: err ? '트리거 생성 실패: ' + err : (auto ? auto + ' · ' : '') + '오류 수정(라벨·폴더·대화 묶음) 예약 · 곧 시작', cursor: c, queuedAt: new Date().toISOString() });
+}
+// ---------- 자동 오류 수정: 일반 가져오기가 "완료"된 직후 한 번만 (오류 수정 실행이 끝난 뒤에는 다시 걸지 않아 무한 반복이 없음) ----------
+var IMPORT_AUTO_PROP = 'IMPORT_AUTO_REPAIR', IMPORT_AUTO_LOG = 'IMPORT_AUTO_REPAIR_LOG', IMPORT_AUTO_MAX_PER_DAY = 3;
+function importAutoRepairOn_() { return getProp_(IMPORT_AUTO_PROP, '') === '1'; }
+function setImportAutoRepair(on) { if (on) props_().setProperty(IMPORT_AUTO_PROP, '1'); else props_().deleteProperty(IMPORT_AUTO_PROP); return getImportState(); }
+/** 오늘 자동 수정 횟수가 상한 미만이면 기록하고 true */
+function autoRepairAllowed_() {
+  var day = Utilities.formatDate(new Date(), CONFIG.TIME_ZONE, 'yyyy-MM-dd'), log = {};
+  try { log = JSON.parse(getProp_(IMPORT_AUTO_LOG, '{}')) || {}; } catch (e) { /* 무시 */ }
+  if (log.day !== day) log = { day: day, n: 0 };
+  if (log.n >= IMPORT_AUTO_MAX_PER_DAY) return false;
+  log.n += 1; props_().setProperty(IMPORT_AUTO_LOG, JSON.stringify(log));
+  return true;
+}
+/** 가져오기 완료 지점에서 호출: 자동 수정이 켜져 있고, 이번 실행이 오류 수정 실행이 아니었고, 고칠 것이 있으면 예약. @returns 예약했으면 메시지 */
+function maybeAutoRepair_(cursor) {
+  if (!importAutoRepairOn_() || cursor.wasRepair) return '';
+  var need = false; try { need = Object.keys(importFailedMap_()).length > 0 || importRepairNeeded_(); } catch (e) { return ''; }
+  if (!need) return '';
+  if (!autoRepairAllowed_()) return ' · 자동 오류 수정은 하루 ' + IMPORT_AUTO_MAX_PER_DAY + '회까지라 이번엔 건너뜀 (버튼으로 실행 가능)';
+  try { armImportRepair_('idle', 60 * 1000, '자동'); } catch (e) { return ''; }
+  return ' · 자동 오류 수정을 1분 뒤 시작합니다';
 }
 function stopImport() { props_().setProperty(IMPORT_PROP.STOP, '1'); deleteImportTriggers_(); if (!importLeaseHeld_()) { props_().deleteProperty(IMPORT_PROP.STOP); setImportStatus_({ state: importCursor_() ? 'paused' : 'idle', message: '중지됨' }); } else setImportStatus_({ state: 'stopping', message: '중지 중 · 현재 파일까지 저장 후 멈춥니다' }); return getImportState(); }
 function cancelImport() { props_().deleteProperty(IMPORT_PROP.STOP); deleteImportTriggers_(); var c = importCursor_(); props_().deleteProperty(IMPORT_PROP.CURSOR); if (c && c.cur && c.cur.id) { try { deleteImportSnapshot_(c.cur.id); } catch (e) { /* 무시 */ } } if (c && (c.processed || c.errors)) appendImportHistory_(Object.assign(c, { finishedAt: new Date().toISOString(), status: 'cancelled' })); setImportStatus_({ state: 'idle', message: '취소됨', cursor: {} }); return getImportState(); }
@@ -393,7 +419,7 @@ function getImportState() {
   return {
     state: st.state || 'idle', message: st.message || '', updatedAt: st.updatedAt || null,
     cursor: { startedAt: c.startedAt || null, processed: c.processed || 0, skipped: c.skipped || 0, errors: c.errors || 0, chunks: c.chunks || 0, bytes: c.bytes || 0, files: c.files || 0, lastError: c.lastError || null, activeSeconds: c.activeSeconds || 0, curFile: c.cur ? c.cur.name : null, curOffset: c.cur ? c.cur.offset : 0, curSize: c.cur ? c.cur.size : 0 },
-    progress: importProgress_(c), repairNeeded: repairNeeded, failedMsgs: failedMsgs,
+    progress: importProgress_(c), repairNeeded: repairNeeded, failedMsgs: failedMsgs, autoRepair: importAutoRepairOn_(),
     pending: pendingCount, pendingCapped: pendingCount != null && pendingCount >= 2000,
     folderExists: folderExists, folderUrl: folderExists ? importFolderUrl_() : '', folderPath: rootFolderPath_() + ' › ' + IMPORT_FOLDER_NAME,
     history: importHistory_(),
@@ -432,7 +458,7 @@ function runImport() {
     }
     if (cursor.repairOnly) { // 오류 수정 실행: 행 복구가 끝난 자리
       var prev = cursor.repairPrevState, fixedN = cursor.repairedTotal || 0, retry = cursor.retryFiles || [];
-      delete cursor.repairOnly; delete cursor.repairPrevState; delete cursor.repairedTotal; delete cursor.retryFiles;
+      delete cursor.repairOnly; delete cursor.repairPrevState; delete cursor.repairedTotal; delete cursor.retryFiles; cursor.wasRepair = true; // 이 실행은 오류 수정 실행: 끝나도 자동 수정을 다시 걸지 않음
       var doneMsg = (fixedN ? '오류 수정 완료: ' + fixedN + '건의 라벨·폴더·대화 묶음을 고쳤습니다' : '오류 수정 완료') + (cursor.movedFiles ? ' · 파일 ' + cursor.movedFiles + '개를 맞는 폴더로 옮김' : '') + (cursor.errors ? ' · 오류 ' + cursor.errors + '건 (마지막: ' + (cursor.lastError || '') + ')' : ''); delete cursor.movedFiles;
       if (retry.length) { // 실패한 메일이 있던 파일은 완료 표시를 풀어 다시 훑는다 (이미 저장된 메일은 건너뛰므로 실패분만 추가됨)
         var unmarked = unmarkImportFiles_(sheet, retry);
@@ -528,7 +554,9 @@ function runImport() {
     cursor.finishedAt = new Date().toISOString();
     if (cursor.processed || cursor.skipped || cursor.errors || cursor.files) appendImportHistory_(cursor);
     var nFailed = Object.keys(cursor.failed || {}).length;
-    setImportStatus_({ state: 'idle', message: (cursor.repairedTotal ? '복구 완료: ' + cursor.repairedTotal + '건의 라벨·폴더·대화 묶음 수정 · ' : '') + '완료: ' + cursor.processed + '건 저장, ' + cursor.skipped + '건 중복, 오류 ' + cursor.errors + '건 (파일 ' + cursor.files + '개)' + (nFailed ? ' · 실패한 파일 ' + nFailed + '개는 "가져오기 시작"을 다시 누르면 재시도합니다' : ''), cursor: cursor, finishedAt: cursor.finishedAt });
+    var autoMsg = maybeAutoRepair_(cursor);
+    setImportStatus_({ state: 'idle', message: (cursor.repairedTotal ? '복구 완료: ' + cursor.repairedTotal + '건의 라벨·폴더·대화 묶음 수정 · ' : '') + '완료: ' + cursor.processed + '건 저장, ' + cursor.skipped + '건 중복, 오류 ' + cursor.errors + '건 (파일 ' + cursor.files + '개)' + (nFailed ? ' · 실패한 파일 ' + nFailed + '개는 "가져오기 시작"을 다시 누르면 재시도합니다' : '') + autoMsg, cursor: cursor, finishedAt: cursor.finishedAt });
+    if (autoMsg && /시작합니다/.test(autoMsg)) { var stA = importStatus_(); setImportStatus_({ state: 'queued', message: stA.message, queuedAt: new Date().toISOString() }); } // 예약이 됐으면 대기열 상태로
     refreshSummary_();
   } catch (e) {
     try { flush(); } catch (e2) { /* 무시 */ }

@@ -656,7 +656,7 @@
         <p class="muted" style="margin:8px 0 0">지원: .eml(30MB까지) · .mbox · .mbox.gz · .zip(4GB까지, 안의 .mbox/.eml) — GB급도 4MB씩 스트리밍으로 읽고 풀면서 처리하고, 구간이 끝나면 압축 해제 상태를 저장해 다음 구간에서 그 자리부터 이어갑니다 · multipart · base64/quoted-printable · UTF-8/EUC-KR 등. 같은 메일(Message-ID)이 여러 파일에 있어도 한 번만 저장됩니다. Outlook .pst/.msg는 먼저 .eml이나 .mbox로 변환해야 합니다.</p>
       </div>
       <div class="card">
-        <div class="cardhead"><h3 id="impState">가져오기</h3><div style="display:flex;gap:8px"><button type="button" id="impRepair" hidden title="예전 버전이 잘못 기록한 행을 고칩니다: #ERROR! 라벨·폴더, 한 대화로 묶인 메일">🛠 오류 수정</button><button type="button" class="primary" id="impStart">▶ 가져오기 시작</button><button type="button" class="warn" id="impStop" hidden>⏹ 중지</button><button type="button" class="primary" id="impResume" hidden>▶ 이어서</button><button type="button" id="impCancel" hidden>✕ 취소</button></div></div>
+        <div class="cardhead"><h3 id="impState">가져오기</h3><div style="display:flex;gap:8px"><label class="sw" title="가져오기가 완료된 직후 고칠 것이 있으면 오류 수정을 자동으로 한 번 실행합니다 (하루 3회까지)"><input type="checkbox" id="impAutoRepair"><i></i>자동 오류 수정</label><button type="button" id="impRepair" hidden title="예전 버전이 잘못 기록한 행을 고칩니다: #ERROR! 라벨·폴더, 한 대화로 묶인 메일">🛠 오류 수정</button><button type="button" class="primary" id="impStart">▶ 가져오기 시작</button><button type="button" class="warn" id="impStop" hidden>⏹ 중지</button><button type="button" class="primary" id="impResume" hidden>▶ 이어서</button><button type="button" id="impCancel" hidden>✕ 취소</button></div></div>
         <div id="impSub" style="font-size:13px;color:var(--ink2);margin-bottom:10px"></div>
         <div id="impRepairNote" hidden class="note" style="margin:0 0 12px;padding:8px 12px">🛠 <span id="impRepairWhat">고칠 것이 있습니다.</span> 지금 작업이 끝난 뒤 <b>오류 수정</b>을 누르면 처리합니다. 백그라운드에서 돌며 몇 분 걸릴 수 있습니다. <span id="impRepairRun" hidden><b>지금은 가져오기가 실행 중이라 버튼이 잠겨 있습니다.</b></span></div>
         <div class="runbox" id="impBox" hidden style="margin:0 0 12px"></div>
@@ -1045,6 +1045,7 @@
     $('impLastErr').hidden = !c.lastError; $('impLastErr').textContent = c.lastError ? '마지막 오류: ' + c.lastError : '';
     $('impStart').hidden = running || paused || failed; $('impStart').disabled = !s.pending; $('impStart').title = s.pending ? '' : (s.pending == null ? '대기 파일 수를 세지 못했습니다' : '_import 폴더에 가져올 파일이 없습니다');
     $('impStop').hidden = !running || s.state === 'stopping'; $('impResume').hidden = !(paused || failed); $('impCancel').hidden = !(paused || failed || s.state === 'stopping');
+    $('impAutoRepair').checked = !!s.autoRepair;
     $('impRepair').hidden = !s.repairNeeded; $('impRepair').disabled = running; $('impRepair').title = running ? '가져오기가 끝나거나 중지된 뒤 누를 수 있습니다' : '예전 버전이 잘못 기록한 행을 고칩니다: #ERROR! 라벨·폴더, 한 대화로 묶인 메일'; // 고칠 행이 감지됐을 때만 보이고, 실행 중이면 눌리지 않음
     $('impRepairNote').hidden = !s.repairNeeded; $('impRepairRun').hidden = !running;
     var what = []; if (s.failedMsgs) what.push('저장에 실패한 메일 ' + fmtNum(s.failedMsgs) + '건을 다시 시도합니다 (원본 파일을 다시 훑되 이미 저장된 메일은 건너뜀)'); if (s.repairNeeded) what.push('예전 버전이 잘못 기록한 행이 있으면 라벨명 복원·파일 이동·대화 다시 묶기를 합니다');
@@ -1060,6 +1061,7 @@
   $('impStop').addEventListener('click', function () { impAction('stopImport'); });
   $('impCancel').addEventListener('click', function () { impAction('cancelImport', '취소됨'); });
   $('impRepair').addEventListener('click', function () { impAction('startImportRepair', '🛠 오류 수정을 예약했습니다 · 곧 시작'); });
+  $('impAutoRepair').addEventListener('change', function () { var on = this.checked; call('setImportAutoRepair', on).then(function (s) { renderImport(s); toast(on ? '🛠 가져오기가 끝나면 자동으로 오류 수정을 실행합니다' : '자동 오류 수정을 껐습니다'); }).catch(function (e) { toast('실패: ' + (e.message || e), true); loadImport(); }); });
 
   function scheduleDashPoll(active) {
     clearTimeout(state.pollTimer); state.pollTimer = null;
