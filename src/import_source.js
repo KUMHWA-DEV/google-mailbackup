@@ -63,7 +63,10 @@ function listImportFiles_(skipSet, limit) {
     while (files.hasNext() && out.length < limit) {
       var f = files.next(), kind = importKind_(f);
       if (!kind) continue;
-      if (skipSet && skipSet['src:' + f.getId()]) continue;
+      var mk = skipSet && skipSet['src:' + f.getId()];
+      if (mk === true) continue; // 예전 표시: 메타데이터 없음 → 처리된 것으로
+      if (mk && mk.size === (Number(f.getSize()) || 0) && mk.mtime === f.getLastUpdated().toISOString()) continue; // 크기·수정 시각이 그대로면 같은 파일
+      // (표시가 없거나, 있어도 파일이 바뀌었으면 다시 처리 — 이미 저장된 메일은 Message-ID 로 건너뛰므로 새로 추가된 메일만 들어온다)
       out.push({ file: f, kind: kind });
     }
     var subs = folder.getFolders();
@@ -306,8 +309,10 @@ function fmtRepair_(c) { return (c.repairRow ? (c.repairRow - 1) + '행' : '') +
 function sheetSafeRowGas_(row) { return row.map(function (v) { return typeof v === 'string' && v.charAt(0) === '=' ? "'" + v : v; }); }
 
 /** 파일 하나를 끝까지 처리했다는 표시 행 (목록에는 안 보임, 다음 실행에서 건너뜀). failed=true 면 'srcfail:' 기록만 남기고 다음 "시작" 때 다시 시도한다 */
-function importDoneRow_(fileId, note, failed) {
-  return buildIndexRow({ id: 'emldup:' + fileId, threadId: (failed ? 'srcfail:' : 'src:') + fileId, date: new Date(), category: failed ? '가져옴-실패' : '가져옴-처리됨', labelNames: [], headers: { subject: note || '' }, sizeEstimate: 0, backedUpAt: new Date() });
+function importDoneRow_(fileId, note, failed, file) {
+  var size = 0, mtime = new Date();
+  if (file) { try { size = Number(file.getSize()) || 0; mtime = file.getLastUpdated(); } catch (e) { /* 무시 */ } }
+  return buildIndexRow({ id: 'emldup:' + fileId, threadId: (failed ? 'srcfail:' : 'src:') + fileId, date: mtime, category: failed ? '가져옴-실패' : '가져옴-처리됨', labelNames: [], headers: { subject: note || '' }, sizeEstimate: size, backedUpAt: new Date() });
 }
 /** 예전 버전이 실패한 파일에도 'src:' 완료 표시를 남겨 다시 시도할 수 없던 문제 복구: 실패 표시 행을 'srcfail:'로 바꾼다 */
 function repairFailedImportMarkers_() {
@@ -452,6 +457,12 @@ function maybeAutoRepair_(cursor) {
   if (!autoRepairAllowed_()) return ' · 자동 오류 수정은 하루 ' + IMPORT_AUTO_MAX_PER_DAY + '회까지라 이번엔 건너뜀 (버튼으로 실행 가능)';
   try { armImportRepair_('idle', 60 * 1000, '자동'); } catch (e) { return ''; }
   return ' · 자동 오류 수정을 1분 뒤 시작합니다';
+}
+/** "재감지": 고칠 것 없음 캐시와 Gmail 라벨 목록 캐시를 지우고 다시 검사한다 */
+function redetectImport() {
+  props_().deleteProperty(IMPORT_REPAIR_PROP);
+  props_().deleteProperty(KNOWN_LABELS_PROP); knownLabelsMem_ = null;
+  return getImportState();
 }
 function stopImport() { props_().setProperty(IMPORT_PROP.STOP, '1'); deleteImportTriggers_(); if (!importLeaseHeld_()) { props_().deleteProperty(IMPORT_PROP.STOP); setImportStatus_({ state: importCursor_() ? 'paused' : 'idle', message: '중지됨' }); } else setImportStatus_({ state: 'stopping', message: '중지 중 · 현재 파일까지 저장 후 멈춥니다' }); return getImportState(); }
 function cancelImport() { props_().deleteProperty(IMPORT_PROP.STOP); deleteImportTriggers_(); var c = importCursor_(); props_().deleteProperty(IMPORT_PROP.CURSOR); if (c && c.cur && c.cur.id) { try { deleteImportSnapshot_(c.cur.id); } catch (e) { /* 무시 */ } } if (c && (c.processed || c.errors)) appendImportHistory_(Object.assign(c, { finishedAt: new Date().toISOString(), status: 'cancelled' })); setImportStatus_({ state: 'idle', message: '취소됨', cursor: {} }); return getImportState(); }
@@ -599,11 +610,11 @@ function runImport() {
           }
           if (brokeOut) break;
         }
-        pending.push(importDoneRow_(fid, file.getName())); backedUp['src:' + fid] = true; cursor.files += 1; cursor.fileBytes = (cursor.fileBytes || 0) + size; cursor.pendingFiles = Math.max(0, (cursor.pendingFiles || 1) - 1); cursor.cur = null; deleteImportSnapshot_(fid);
+        pending.push(importDoneRow_(fid, file.getName(), false, file)); backedUp['src:' + fid] = true; cursor.files += 1; cursor.fileBytes = (cursor.fileBytes || 0) + size; cursor.pendingFiles = Math.max(0, (cursor.pendingFiles || 1) - 1); cursor.cur = null; deleteImportSnapshot_(fid);
       } catch (e) {
         cursor.errors += 1; cursor.lastError = file.getName() + ': ' + e.message;
         Logger.log('가져오기 파일 실패 %s: %s', file.getName(), e.stack || e.message);
-        pending.push(importDoneRow_(fid, '실패: ' + e.message, true)); cursor.failed = cursor.failed || {}; cursor.failed[fid] = 1; cursor.fileBytes = (cursor.fileBytes || 0) + size; cursor.pendingFiles = Math.max(0, (cursor.pendingFiles || 1) - 1); cursor.cur = null; // 이번 실행에서는 다시 시도하지 않음 (다음 "시작" 때 재시도, 스냅샷은 남겨 이어감)
+        pending.push(importDoneRow_(fid, '실패: ' + e.message, true, file)); cursor.failed = cursor.failed || {}; cursor.failed[fid] = 1; cursor.fileBytes = (cursor.fileBytes || 0) + size; cursor.pendingFiles = Math.max(0, (cursor.pendingFiles || 1) - 1); cursor.cur = null; // 이번 실행에서는 다시 시도하지 않음 (다음 "시작" 때 재시도, 스냅샷은 남겨 이어감)
       }
       flush();
     }

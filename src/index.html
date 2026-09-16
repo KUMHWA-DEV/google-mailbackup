@@ -654,13 +654,13 @@
         <div class="steps">
           <div class="step"><div class="n">1</div><div class="b"><b>파일을 이 폴더에 넣기</b><div class="how"><span id="impFolderPath">내 드라이브 › Mail Backup › <b>_import</b></span> — <span id="impFolderCtl"></span><br>.eml, .mbox, 압축된 .mbox.gz, Google Takeout이 준 <b>.zip을 그대로</b> 넣으면 됩니다(압축을 풀 필요 없음). <b>mbox 여러 개와 eml 수천 개가 섞여 있어도 되고</b>, 하위 폴더에 나눠 넣어도 됩니다(폴더 이름은 분류에 쓰지 않습니다).</div></div></div>
           <div class="step"><div class="n">2</div><div class="b"><b>가져오기 시작</b><div class="how">오른쪽 ▶ 가져오기 시작을 누르면 서버가 메일을 한 통씩 해석해 <b>메일 자체의 속성</b>으로 분류합니다. Gmail 내보내기(mbox)의 라벨 정보가 있으면 백업과 똑같은 규칙(사용자 라벨 › 보낸편지함 › 받은편지함 › 보관됨)으로, 없으면 보낸사람이 나면 보낸편지함·아니면 받은편지함으로 넣어 같은 폴더에 저장합니다. 컴퓨터를 꺼도 계속되고, 백업과 동시에 돌아도 됩니다.</div></div></div>
-          <div class="step"><div class="n">3</div><div class="b"><b>끝나면</b><div class="how">메일함에서 다른 메일과 똑같이 검색·열람됩니다. 처리한 파일은 기록되어 다시 처리되지 않으니 <code>_import</code> 폴더는 비워도 되고, 파일을 더 넣고 다시 시작하면 새 것만 처리합니다.</div></div></div>
+          <div class="step"><div class="n">3</div><div class="b"><b>끝나면</b><div class="how">메일함에서 다른 메일과 똑같이 검색·열람됩니다. 처리한 파일은 기록되어 다시 처리되지 않으니 <code>_import</code> 폴더는 비워도 되고, 파일을 더 넣고 다시 시작하면 새 것만 처리합니다. 같은 파일을 덮어써서 크기나 수정 시각이 바뀌면 새 파일로 보고 다시 훑되, 이미 저장된 메일은 건너뜁니다.</div></div></div>
         </div>
         <p class="muted" style="margin:8px 0 0">라벨은 <b>이 계정의 Gmail에 실제로 있는 라벨만</b> 폴더로 만듭니다. 내보내기 파일에 섞여 있는 Gmail 내부 표시("열림", "수신확인 보냄", "…카테고리" 등)는 무시하고, 이미 지운 라벨의 메일은 받은편지함·보관됨으로 갑니다. 옛 라벨을 살리고 싶으면 Gmail에서 같은 이름의 라벨을 먼저 만든 뒤 가져오세요.</p>
         <p class="muted" style="margin:8px 0 0">지원: .eml(30MB까지) · .mbox · .mbox.gz · .zip(4GB까지, 안의 .mbox/.eml) — GB급도 4MB씩 스트리밍으로 읽고 풀면서 처리하고, 구간이 끝나면 압축 해제 상태를 저장해 다음 구간에서 그 자리부터 이어갑니다 · multipart · base64/quoted-printable · UTF-8/EUC-KR 등. 같은 메일(Message-ID)이 여러 파일에 있어도 한 번만 저장됩니다. Outlook .pst/.msg는 먼저 .eml이나 .mbox로 변환해야 합니다.</p>
       </div>
       <div class="card">
-        <div class="cardhead"><h3 id="impState">가져오기</h3><div style="display:flex;gap:8px"><label class="sw" title="가져오기가 완료된 직후 고칠 것이 있으면 오류 수정을 자동으로 한 번 실행합니다 (하루 3회까지)"><input type="checkbox" id="impAutoRepair"><i></i>자동 오류 수정</label><button type="button" id="impRepair" hidden title="예전 버전이 잘못 기록한 행을 고칩니다: #ERROR! 라벨·폴더, 한 대화로 묶인 메일">🛠 오류 수정</button><button type="button" class="primary" id="impStart">▶ 가져오기 시작</button><button type="button" class="warn" id="impStop" hidden>⏹ 중지</button><button type="button" class="primary" id="impResume" hidden>▶ 이어서</button><button type="button" id="impCancel" hidden>✕ 취소</button></div></div>
+        <div class="cardhead"><h3 id="impState">가져오기</h3><div style="display:flex;gap:8px"><button type="button" class="sm" id="impRedetect" title="고칠 것이 있는지, 대기 파일이 있는지 다시 검사합니다 (캐시 무시)">🔍 재감지</button><label class="sw" title="가져오기가 완료된 직후 고칠 것이 있으면 오류 수정을 자동으로 한 번 실행합니다 (하루 3회까지)"><input type="checkbox" id="impAutoRepair"><i></i>자동 오류 수정</label><button type="button" id="impRepair" hidden title="예전 버전이 잘못 기록한 행을 고칩니다: #ERROR! 라벨·폴더, 한 대화로 묶인 메일">🛠 오류 수정</button><button type="button" class="primary" id="impStart">▶ 가져오기 시작</button><button type="button" class="warn" id="impStop" hidden>⏹ 중지</button><button type="button" class="primary" id="impResume" hidden>▶ 이어서</button><button type="button" id="impCancel" hidden>✕ 취소</button></div></div>
         <div id="impSub" style="font-size:13px;color:var(--ink2);margin-bottom:10px"></div>
         <div id="impRepairNote" hidden class="note" style="margin:0 0 12px;padding:8px 12px">🛠 <span id="impRepairWhat">고칠 것이 있습니다.</span> 지금 작업이 끝난 뒤 <b>오류 수정</b>을 누르면 처리합니다. 백그라운드에서 돌며 몇 분 걸릴 수 있습니다. <span id="impRepairRun" hidden><b>지금은 가져오기가 실행 중이라 버튼이 잠겨 있습니다.</b></span></div>
         <div class="runbox" id="impBox" hidden style="margin:0 0 12px"></div>
@@ -717,7 +717,7 @@
     if (on) { if (b.hidden) return; if (!b.dataset.busy) b.dataset.busy = b.innerHTML; b.disabled = true; b.innerHTML = '<span class="spin' + (/\b(primary|warn)\b/.test(b.className) ? '' : ' dark') + '"></span>' + (label ? ' ' + label : ''); }
     else if (b.dataset.busy != null) { b.innerHTML = b.dataset.busy; delete b.dataset.busy; b.disabled = false; }
   }
-  var DASH_BTNS = ['btnRun', 'btnStop', 'btnResume', 'btnCancel'], IMP_BTNS = ['impStart', 'impStop', 'impResume', 'impCancel', 'impRepair'];
+  var DASH_BTNS = ['btnRun', 'btnStop', 'btnResume', 'btnCancel'], IMP_BTNS = ['impStart', 'impStop', 'impResume', 'impCancel', 'impRepair', 'impRedetect'];
   function busyAll(ids, on, label) { ids.forEach(function (id) { busy(id, on, label); }); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function fmtBytes(n) { n = Number(n) || 0; var u = ['B', 'KB', 'MB', 'GB', 'TB'], i = 0; while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; } return (i === 0 ? n : n.toFixed(n >= 100 ? 0 : 1)) + ' ' + u[i]; }
@@ -1083,6 +1083,7 @@
   $('impStop').addEventListener('click', function () { impAction('stopImport'); });
   $('impCancel').addEventListener('click', function () { impAction('cancelImport', '취소됨'); });
   $('impRepair').addEventListener('click', function () { impAction('startImportRepair', '🛠 오류 수정을 예약했습니다 · 곧 시작'); });
+  $('impRedetect').addEventListener('click', function () { busyAll(IMP_BTNS, true); call('redetectImport').then(function (s) { renderImport(s); toast(s.repairNeeded ? '🔍 고칠 것을 찾았습니다' : '🔍 고칠 것이 없습니다 · 대기 파일 ' + fmtNum(s.pending || 0) + '개'); }).catch(function (e) { busyAll(IMP_BTNS, false); toast('실패: ' + (e.message || e), true); }); });
   $('impAutoRepair').addEventListener('change', function () { var on = this.checked; call('setImportAutoRepair', on).then(function (s) { renderImport(s); toast(on ? '🛠 가져오기가 끝나면 자동으로 오류 수정을 실행합니다' : '자동 오류 수정을 껐습니다'); }).catch(function (e) { toast('실패: ' + (e.message || e), true); loadImport(); }); });
 
   function scheduleDashPoll(active) {
