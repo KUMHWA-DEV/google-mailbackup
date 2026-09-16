@@ -142,14 +142,15 @@ function loadBackedUpIds_() {
   indexSheets_().forEach(function (sheet) {
     var last = sheet.getLastRow();
     if (last < 2) return;
-    var sizeCol = INDEX_HEADERS.indexOf('sizeBytes') + 1, dateCol = INDEX_HEADERS.indexOf('date') + 1;
-    var vals = sheet.getRange(2, 1, last - 1, sizeCol).getValues(); // A: id, B: threadId 또는 가져온 원본 'src:<fileId>'
+    var sizeCol = INDEX_HEADERS.indexOf('sizeBytes') + 1, dateCol = INDEX_HEADERS.indexOf('date') + 1, atCol = INDEX_HEADERS.indexOf('backedUpAt') + 1;
+    var vals = sheet.getRange(2, 1, last - 1, Math.max(sizeCol, atCol)).getValues(); // A: id, B: threadId 또는 가져온 원본 'src:<fileId>'
     for (var i = 0; i < vals.length; i++) {
       if (vals[i][0]) set[String(vals[i][0])] = true;
       if (vals[i][1] && String(vals[i][1]).indexOf('src:') === 0) {
         // 완료 표시에 파일 크기·수정 시각이 있으면 같이 기억 → 같은 파일이 나중에 바뀌면(크기·수정 시각 변화) 새 파일로 다시 처리. 예전 표시(크기 0)는 그냥 건너뜀
-        var sz = Number(vals[i][sizeCol - 1]) || 0, dt = vals[i][dateCol - 1];
-        set[String(vals[i][1])] = sz > 0 ? { size: sz, mtime: dt instanceof Date ? dt.toISOString() : String(dt || '') } : true;
+        var sz = Number(vals[i][sizeCol - 1]) || 0, dt = vals[i][dateCol - 1], at = vals[i][atCol - 1];
+        set[String(vals[i][1])] = sz > 0 ? { size: sz, mtime: dt instanceof Date ? dt.toISOString() : String(dt || '') }
+          : { size: 0, at: at instanceof Date ? at.toISOString() : String(at || '') }; // 예전 표시(크기 기록 없음): 처리 시각만 안다 → 그 뒤에 수정된 파일이면 바뀐 것
       }
     }
   });

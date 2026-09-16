@@ -64,8 +64,11 @@ function listImportFiles_(skipSet, limit, report) {
       var f = files.next(), kind = importKind_(f);
       if (!kind) { if (report && report.unsupported.length < 10) report.unsupported.push(f.getName()); continue; }
       var mk = skipSet && skipSet['src:' + f.getId()];
-      if (mk === true) { if (report && report.done.length < 10) report.done.push(f.getName()); continue; } // 예전 표시: 메타데이터 없음 → 처리된 것으로
-      if (mk && mk.size === (Number(f.getSize()) || 0) && mk.mtime === f.getLastUpdated().toISOString()) { if (report && report.done.length < 10) report.done.push(f.getName()); continue; } // 크기·수정 시각이 그대로면 같은 파일
+      var same = false;
+      if (mk === true) same = true;
+      else if (mk && mk.size > 0) same = mk.size === (Number(f.getSize()) || 0) && mk.mtime === f.getLastUpdated().toISOString(); // 크기·수정 시각이 그대로면 같은 파일
+      else if (mk) same = !(mk.at && f.getLastUpdated().getTime() > new Date(mk.at).getTime() + 60 * 1000); // 예전 표시: 처리된 뒤에 수정(덮어쓰기)됐으면 새 파일
+      if (same) { if (report && report.done.length < 10) report.done.push(f.getName()); continue; }
       // (표시가 없거나, 있어도 파일이 바뀌었으면 다시 처리 — 이미 저장된 메일은 Message-ID 로 건너뛰므로 새로 추가된 메일만 들어온다)
       out.push({ file: f, kind: kind });
       if (report && report.pending.length < 20) report.pending.push({ name: f.getName(), kind: kind, size: Number(f.getSize()) || 0, changed: !!mk });
