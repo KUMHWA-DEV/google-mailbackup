@@ -28,6 +28,39 @@ var IMPORT_LEASE_MS = 7 * 60 * 1000;
 
 // ---------- 폴더 ----------
 /** _import 폴더: 기억된 ID → 루트 안의 같은 이름 폴더(사용자가 직접 만든 것도 인정, 읽기만 하므로) → 새로 생성 */
+var IMPORT_DONE_FOLDER = '처리됨', IMPORT_DONE_TAG = 'mailbackup-import-done:';
+/** _import/처리됨 폴더 (가져오기가 끝난 원본을 옮겨 두는 곳) */
+function importDoneFolder_(createIfMissing) {
+  var top = importFolder_(createIfMissing); if (!top) return null;
+  var it = top.getFoldersByName(IMPORT_DONE_FOLDER);
+  return it.hasNext() ? it.next() : (createIfMissing ? top.createFolder(IMPORT_DONE_FOLDER) : null);
+}
+/** 처리가 끝난 원본 파일을 처리됨 폴더로 옮기고 처리 시각을 설명에 남긴다 (파일 ID 는 그대로라 오류 수정의 재시도에 영향 없음) */
+function archiveImportedFile_(file, settings) {
+  if (!settings || !(settings.importKeepDays > 0)) return false;
+  try {
+    var done = importDoneFolder_(true);
+    var ps = file.getParents(); if (ps.hasNext() && ps.next().getId() === done.getId()) return false;
+    file.setDescription(IMPORT_DONE_TAG + new Date().toISOString());
+    file.moveTo(done);
+    return true;
+  } catch (e) { Logger.log('처리됨 폴더로 이동 실패 %s: %s', file.getName(), e.message); return false; }
+}
+/** 처리됨 폴더에서 보관 일수가 지난 파일을 휴지통으로. 6시간에 한 번만 실제로 훑는다 */
+function cleanupImportDone_(settings, force) {
+  var days = settings && settings.importKeepDays; if (!(days > 0)) return 0;
+  var lastAt = Number(getProp_('IMPORT_DONE_CLEANUP_AT', '0')) || 0;
+  if (!force && Date.now() - lastAt < 6 * 3600 * 1000) return 0;
+  props_().setProperty('IMPORT_DONE_CLEANUP_AT', String(Date.now()));
+  var done = importDoneFolder_(false); if (!done) return 0;
+  var cutoff = Date.now() - days * 86400 * 1000, n = 0, it = done.getFiles();
+  while (it.hasNext()) {
+    var f = it.next(), d = String(f.getDescription() || '');
+    var at = d.indexOf(IMPORT_DONE_TAG) === 0 ? new Date(d.slice(IMPORT_DONE_TAG.length)).getTime() : f.getLastUpdated().getTime();
+    if (at && at < cutoff) { try { f.setTrashed(true); n += 1; } catch (e) { /* 무시 */ } }
+  }
+  return n;
+}
 function importFolder_(createIfMissing) {
   var id = getProp_('IMPORT_FOLDER_ID', '');
   if (id) { try { var f0 = DriveApp.getFolderById(id); if (!f0.isTrashed()) return f0; } catch (e) { /* 지워졌으면 아래로 */ } }
@@ -74,7 +107,7 @@ function listImportFiles_(skipSet, limit, report) {
       if (report && report.pending.length < 20) report.pending.push({ name: f.getName(), kind: kind, size: Number(f.getSize()) || 0, changed: !!mk });
     }
     var subs = folder.getFolders();
-    while (subs.hasNext() && out.length < limit) walk(subs.next(), depth + 1);
+    while (subs.hasNext() && out.length < limit) { var sub = subs.next(); if (depth === 0 && sub.getName() === IMPORT_DONE_FOLDER) continue; walk(sub, depth + 1); } // 처리됨 폴더는 대상 아님
   };
   walk(top, 0);
   return out;
@@ -481,6 +514,7 @@ function getImportState() {
   var moveFailed = moveFailedIds_().length, retryRepair = repairRetryNeeded_();
   var repairNeeded = failedMsgs > 0 || moveFailed > 0 || retryRepair; try { repairNeeded = repairNeeded || importRepairNeeded_(); } catch (e) { /* 무시 */ } // 실행 중에도 감지 (버튼은 실행 중이면 비활성), 실행은 사용자가 버튼으로
   var pendingCount = null, folderExists = false;
+  try { cleanupImportDone_(getSettings_(), false); } catch (e0) { /* 무시 */ }
   try {
     folderExists = !!importFolder_(false);
     var rep = { pending: [], unsupported: [], done: [] };
@@ -616,7 +650,7 @@ function runImport() {
           }
           if (brokeOut) break;
         }
-        pending.push(importDoneRow_(fid, file.getName(), false, file)); backedUp['src:' + fid] = true; cursor.files += 1; cursor.fileBytes = (cursor.fileBytes || 0) + size; cursor.pendingFiles = Math.max(0, (cursor.pendingFiles || 1) - 1); cursor.cur = null; deleteImportSnapshot_(fid);
+        pending.push(importDoneRow_(fid, file.getName(), false, file)); backedUp['src:' + fid] = true; if (archiveImportedFile_(file, settings)) cursor.archived = (cursor.archived || 0) + 1; cursor.files += 1; cursor.fileBytes = (cursor.fileBytes || 0) + size; cursor.pendingFiles = Math.max(0, (cursor.pendingFiles || 1) - 1); cursor.cur = null; deleteImportSnapshot_(fid);
       } catch (e) {
         cursor.errors += 1; cursor.lastError = file.getName() + ': ' + e.message;
         Logger.log('가져오기 파일 실패 %s: %s', file.getName(), e.stack || e.message);
@@ -633,7 +667,8 @@ function runImport() {
     cursor.finishedAt = new Date().toISOString();
     if (cursor.processed || cursor.skipped || cursor.errors || cursor.files) appendImportHistory_(cursor);
     var nFailed = Object.keys(cursor.failed || {}).length;
-    var autoMsg = maybeAutoRepair_(cursor);
+    var trashed = 0; try { trashed = cleanupImportDone_(settings, true); } catch (e6) { /* 무시 */ }
+    var autoMsg = maybeAutoRepair_(cursor) + (cursor.archived ? ' · 원본 ' + cursor.archived + '개를 처리됨 폴더로 옮김 (' + settings.importKeepDays + '일 보관)' : '') + (trashed ? ' · 보관 기간이 지난 원본 ' + trashed + '개 휴지통' : '');
     setImportStatus_({ state: 'idle', message: (cursor.repairedTotal ? '복구 완료: ' + cursor.repairedTotal + '건의 라벨·폴더·대화 묶음 수정 · ' : '') + '완료: ' + cursor.processed + '건 저장, ' + cursor.skipped + '건 중복, 오류 ' + cursor.errors + '건 (파일 ' + cursor.files + '개)' + (nFailed ? ' · 실패한 파일 ' + nFailed + '개는 "가져오기 시작"을 다시 누르면 재시도합니다' : '') + autoMsg, cursor: cursor, finishedAt: cursor.finishedAt });
     if (autoMsg && /시작합니다/.test(autoMsg)) { var stA = importStatus_(); setImportStatus_({ state: 'queued', message: stA.message, queuedAt: new Date().toISOString() }); } // 예약이 됐으면 대기열 상태로
     refreshSummary_();

@@ -15,6 +15,7 @@ var SETTINGS_DEFAULTS = {
   notifyOnComplete: true,   // 완료 시 알림 메일 발송
   syncLabels: true,         // 이미 백업된 메일의 라벨 변경을 Gmail 변경 이력으로 따라감 (폴더 이동 포함)
   ignoreLabels: '',         // 폴더로 만들지 않을 라벨 이름 (쉼표 구분) — 메일 클라이언트가 만든 숨은 라벨 등
+  importKeepDays: 30,       // 가져오기가 끝난 원본 파일을 _import/처리됨 으로 옮겨 보관하는 일수 (0 = 옮기지 않음, 지나면 휴지통)
 };
 
 var SETTINGS_PROP_KEYS = {
@@ -31,6 +32,7 @@ var SETTINGS_PROP_KEYS = {
   notifyOnComplete: 'NOTIFY_ON_COMPLETE',
   syncLabels: 'SYNC_LABELS',
   ignoreLabels: 'IGNORE_LABELS',
+  importKeepDays: 'IMPORT_KEEP_DAYS',
 };
 
 function toBool_(v, d) {
@@ -66,6 +68,7 @@ function normalizeSettings(input) {
     notifyOnComplete: toBool_(i.notifyOnComplete, SETTINGS_DEFAULTS.notifyOnComplete),
     syncLabels: toBool_(i.syncLabels, SETTINGS_DEFAULTS.syncLabels),
     ignoreLabels: str_(i.ignoreLabels).split(',').map(function (x) { return x.trim(); }).filter(Boolean).join(', '),
+    importKeepDays: toInt_(i.importKeepDays, SETTINGS_DEFAULTS.importKeepDays, 0, 3650),
   };
 }
 /** 설정의 무시 라벨 목록 → 소문자 키 집합 */

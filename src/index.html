@@ -569,6 +569,7 @@
       <div class="grid2" style="margin-top:12px">
         <div class="field"><label class="t">📨 알림 받을 주소</label><input type="email" name="notifyEmail" id="notifyEmail" placeholder="비우면 내 계정"></div>
         <div class="field"><label class="t">🔎 추가 검색 조건</label><input type="text" name="filterQuery" class="mono" placeholder="Gmail 검색 문법 · 예: from:partner.co.kr"></div>
+        <div class="field"><label class="t" title="가져오기가 끝난 원본(.eml/.mbox/.zip)은 _import/처리됨 폴더로 옮겨 이 일수만큼 보관한 뒤 휴지통으로 보냅니다. 보관 중에는 오류 수정이 실패한 메일을 재시도할 수 있습니다. 0이면 옮기지 않습니다">📦 가져온 원본 보관</label><div class="row"><input type="number" name="importKeepDays" min="0" max="3650"><span class="unit">일 · _import/처리됨 → 휴지통</span></div></div>
         <div class="field"><label class="t" title="여기 적은 라벨은 백업·가져오기·라벨 동기화 모두에서 라벨로 치지 않아 폴더가 되지 않습니다. 메일 프로그램이 몰래 만든 숨은 라벨(예: 수신확인 보냄)을 적으세요. 이미 그 폴더로 들어간 가져온 메일은 가져오기 탭의 오류 수정으로 다시 분류됩니다">🚫 폴더로 만들지 않을 라벨</label><input type="text" name="ignoreLabels" placeholder="쉼표로 구분 · 예: 수신확인 보냄, Notes"></div>
       </div>
       <div class="divider"></div>
@@ -654,7 +655,7 @@
         <div class="steps">
           <div class="step"><div class="n">1</div><div class="b"><b>파일을 이 폴더에 넣기</b><div class="how"><span id="impFolderPath">내 드라이브 › Mail Backup › <b>_import</b></span> — <span id="impFolderCtl"></span><br>.eml, .mbox, 압축된 .mbox.gz, Google Takeout이 준 <b>.zip을 그대로</b> 넣으면 됩니다(압축을 풀 필요 없음). <b>mbox 여러 개와 eml 수천 개가 섞여 있어도 되고</b>, 하위 폴더에 나눠 넣어도 됩니다(폴더 이름은 분류에 쓰지 않습니다).</div></div></div>
           <div class="step"><div class="n">2</div><div class="b"><b>가져오기 시작</b><div class="how">오른쪽 ▶ 가져오기 시작을 누르면 서버가 메일을 한 통씩 해석해 <b>메일 자체의 속성</b>으로 분류합니다. Gmail 내보내기(mbox)의 라벨 정보가 있으면 백업과 똑같은 규칙(사용자 라벨 › 보낸편지함 › 받은편지함 › 보관됨)으로, 없으면 보낸사람이 나면 보낸편지함·아니면 받은편지함으로 넣어 같은 폴더에 저장합니다. 컴퓨터를 꺼도 계속되고, 백업과 동시에 돌아도 됩니다.</div></div></div>
-          <div class="step"><div class="n">3</div><div class="b"><b>끝나면</b><div class="how">메일함에서 다른 메일과 똑같이 검색·열람됩니다. 처리한 파일은 기록되어 다시 처리되지 않으니 <code>_import</code> 폴더는 비워도 되고, 파일을 더 넣고 다시 시작하면 새 것만 처리합니다. 같은 파일을 덮어써서 크기나 수정 시각이 바뀌면 새 파일로 보고 다시 훑되, 이미 저장된 메일은 건너뜁니다.</div></div></div>
+          <div class="step"><div class="n">3</div><div class="b"><b>끝나면</b><div class="how">메일함에서 다른 메일과 똑같이 검색·열람됩니다. 처리가 끝난 원본은 <code>_import/처리됨</code> 폴더로 옮겨 30일(설정에서 변경) 보관한 뒤 휴지통으로 보냅니다. 보관 중에는 오류 수정이 실패한 메일을 재시도할 수 있습니다. 파일을 더 넣고 다시 시작하면 새 것만 처리합니다. 같은 파일을 덮어써서 크기나 수정 시각이 바뀌면 새 파일로 보고 다시 훑되, 이미 저장된 메일은 건너뜁니다.</div></div></div>
         </div>
         <p class="muted" style="margin:8px 0 0">라벨은 <b>이 계정의 Gmail에 실제로 있는 라벨만</b> 폴더로 만듭니다. 내보내기 파일에 섞여 있는 Gmail 내부 표시("열림", "수신확인 보냄", "…카테고리" 등)는 무시하고, 이미 지운 라벨의 메일은 받은편지함·보관됨으로 갑니다. 옛 라벨을 살리고 싶으면 Gmail에서 같은 이름의 라벨을 먼저 만든 뒤 가져오세요.</p>
         <p class="muted" style="margin:8px 0 0">지원: .eml(30MB까지) · .mbox · .mbox.gz · .zip(4GB까지, 안의 .mbox/.eml) — GB급도 4MB씩 스트리밍으로 읽고 풀면서 처리하고, 구간이 끝나면 압축 해제 상태를 저장해 다음 구간에서 그 자리부터 이어갑니다 · multipart · base64/quoted-printable · UTF-8/EUC-KR 등. 같은 메일(Message-ID)이 여러 파일에 있어도 한 번만 저장됩니다. Outlook .pst/.msg는 먼저 .eml이나 .mbox로 변환해야 합니다.</p>
@@ -1194,7 +1195,7 @@
   // ---------- settings ----------
   var form = $('settingsForm');
   function fillSettings(s) {
-    ['initialStartDate', 'notifyEmail', 'intervalDays', 'maxPerRun', 'folderId', 'filterQuery', 'ignoreLabels'].forEach(function (k) { form.elements[k].value = s[k] == null ? '' : s[k]; });
+    ['initialStartDate', 'notifyEmail', 'intervalDays', 'maxPerRun', 'folderId', 'filterQuery', 'ignoreLabels', 'importKeepDays'].forEach(function (k) { form.elements[k].value = s[k] == null ? '' : s[k]; });
     ['notifyOnComplete', 'includeSent', 'saveAttachments', 'splitGmailTabs', 'syncLabels'].forEach(function (k) { form.elements[k].checked = !!s[k]; });
     setRadio('layoutRadios', s.folderLayout);
     $('folderLink').hidden = !(state.dash && state.dash.folderUrl); if (state.dash && state.dash.folderUrl) $('folderLink').href = state.dash.folderUrl;
@@ -1206,7 +1207,7 @@
   form.addEventListener('submit', function (e) {
     e.preventDefault();
     var s = {};
-    ['initialStartDate', 'notifyEmail', 'intervalDays', 'maxPerRun', 'folderId', 'filterQuery', 'ignoreLabels'].forEach(function (k) { s[k] = form.elements[k].value; });
+    ['initialStartDate', 'notifyEmail', 'intervalDays', 'maxPerRun', 'folderId', 'filterQuery', 'ignoreLabels', 'importKeepDays'].forEach(function (k) { s[k] = form.elements[k].value; });
     ['notifyOnComplete', 'includeSent', 'saveAttachments', 'splitGmailTabs', 'syncLabels'].forEach(function (k) { s[k] = form.elements[k].checked; });
     s.folderLayout = $('layoutRadios').dataset.value;
     $('btnSave').disabled = true; $('btnSave').innerHTML = '<span class="spin"></span>';
