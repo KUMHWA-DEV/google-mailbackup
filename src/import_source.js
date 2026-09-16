@@ -53,7 +53,7 @@ function importKind_(file) {
  * _import 아래의 가져올 파일(하위 폴더 포함). skipSet에 'src:<id>'가 있으면 제외.
  * @returns {{file:GoogleAppsScript.Drive.File, kind:string}[]}
  */
-function listImportFiles_(skipSet, limit) {
+function listImportFiles_(skipSet, limit, report) {
   var out = [];
   var top = importFolder_(false);
   if (!top) return out;
@@ -62,12 +62,13 @@ function listImportFiles_(skipSet, limit) {
     var files = folder.getFiles();
     while (files.hasNext() && out.length < limit) {
       var f = files.next(), kind = importKind_(f);
-      if (!kind) continue;
+      if (!kind) { if (report && report.unsupported.length < 10) report.unsupported.push(f.getName()); continue; }
       var mk = skipSet && skipSet['src:' + f.getId()];
-      if (mk === true) continue; // 예전 표시: 메타데이터 없음 → 처리된 것으로
-      if (mk && mk.size === (Number(f.getSize()) || 0) && mk.mtime === f.getLastUpdated().toISOString()) continue; // 크기·수정 시각이 그대로면 같은 파일
+      if (mk === true) { if (report && report.done.length < 10) report.done.push(f.getName()); continue; } // 예전 표시: 메타데이터 없음 → 처리된 것으로
+      if (mk && mk.size === (Number(f.getSize()) || 0) && mk.mtime === f.getLastUpdated().toISOString()) { if (report && report.done.length < 10) report.done.push(f.getName()); continue; } // 크기·수정 시각이 그대로면 같은 파일
       // (표시가 없거나, 있어도 파일이 바뀌었으면 다시 처리 — 이미 저장된 메일은 Message-ID 로 건너뛰므로 새로 추가된 메일만 들어온다)
       out.push({ file: f, kind: kind });
+      if (report && report.pending.length < 20) report.pending.push({ name: f.getName(), kind: kind, size: Number(f.getSize()) || 0, changed: !!mk });
     }
     var subs = folder.getFolders();
     while (subs.hasNext() && out.length < limit) walk(subs.next(), depth + 1);
@@ -479,15 +480,17 @@ function getImportState() {
   var pendingCount = null, folderExists = false;
   try {
     folderExists = !!importFolder_(false);
-    pendingCount = folderExists ? countImportPending_(loadBackedUpIds_(), 2000) : 0;
+    var rep = { pending: [], unsupported: [], done: [] };
+    pendingCount = folderExists ? listImportFiles_(loadBackedUpIds_(), 2000, rep).length : 0;
+    var files = rep;
     // 대기 0인데 예전 버전이 실패한 파일에 남긴 완료 표시가 있으면 여기서 복구 (시작 버튼은 대기 0이면 눌리지 않으므로)
-    if (folderExists && !pendingCount && !/^(running|queued|stopping)$/.test(st.state || '') && repairFailedImportMarkers_() > 0) pendingCount = countImportPending_(loadBackedUpIds_(), 2000);
+    if (folderExists && !pendingCount && !/^(running|queued|stopping)$/.test(st.state || '') && repairFailedImportMarkers_() > 0) { rep = { pending: [], unsupported: [], done: [] }; pendingCount = listImportFiles_(loadBackedUpIds_(), 2000, rep).length; files = rep; }
   } catch (e) { pendingCount = null; }
   return {
     state: st.state || 'idle', message: st.message || '', updatedAt: st.updatedAt || null,
     cursor: { startedAt: c.startedAt || null, processed: c.processed || 0, skipped: c.skipped || 0, errors: c.errors || 0, chunks: c.chunks || 0, bytes: c.bytes || 0, files: c.files || 0, lastError: c.lastError || null, activeSeconds: c.activeSeconds || 0, curFile: c.cur ? c.cur.name : null, curOffset: c.cur ? c.cur.offset : 0, curSize: c.cur ? c.cur.size : 0 },
     progress: importProgress_(c), repair: importRepairInfo_(c), repairNeeded: repairNeeded, failedMsgs: failedMsgs, moveFailed: moveFailed, retryRepair: retryRepair, autoRepair: importAutoRepairOn_(),
-    pending: pendingCount, pendingCapped: pendingCount != null && pendingCount >= 2000,
+    pending: pendingCount, pendingCapped: pendingCount != null && pendingCount >= 2000, files: typeof files !== 'undefined' ? files : null,
     folderExists: folderExists, folderUrl: folderExists ? importFolderUrl_() : '', folderPath: rootFolderPath_() + ' › ' + IMPORT_FOLDER_NAME,
     history: importHistory_(),
   };
