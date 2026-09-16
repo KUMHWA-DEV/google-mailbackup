@@ -316,9 +316,7 @@ var IMPORT_MOVE_FAILED_PROP = 'IMPORT_MOVE_FAILED_JSON';
 /** 지난 오류 수정이 오류를 남기고 끝났으면(파일 이동 실패 등) 다음 오류 수정을 다시 제안한다. 깨끗이 끝나면 해제 */
 var IMPORT_REPAIR_RETRY_PROP = 'IMPORT_REPAIR_RETRY';
 function repairRetryNeeded_() {
-  var v = getProp_(IMPORT_REPAIR_RETRY_PROP, '');
-  if (v === '1') return true; if (v === '0') return false;
-  var h = importHistory_(); for (var i = 0; i < h.length; i++) if (h[i].kind === 'repair') return (h[i].errors || 0) > 0; // 예전 버전 기록: 마지막 오류 수정이 오류로 끝났는지
+  // 이동 실패 파일·저장 실패 메일은 각각 목록으로 기록되므로, 그 목록이 비어 있으면 지난 실행의 오류 수 자체는 다시 제안할 이유가 아니다
   return false;
 }
 function moveFailedIds_() { try { return JSON.parse(getProp_(IMPORT_MOVE_FAILED_PROP, '[]')) || []; } catch (e) { return []; } }
