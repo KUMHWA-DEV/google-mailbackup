@@ -169,6 +169,15 @@ async function runScript(ctx, fn, args) {
 }
 const slimDashboard = (d) => d && ({ state: d.state, message: d.message, user: d.user, lastSyncAt: d.lastSyncAt, schedule: d.schedule, currentRun: d.currentRun, triggerInstalled: d.triggerInstalled, settings: d.settings, summary: d.summary, folderUrl: d.folderUrl, indexSheetUrl: d.indexSheetUrl, webAppUrl: d.webAppUrl, lastError: d.lastError });
 const err = (msg) => ({ content: [{ type: 'text', text: `오류: ${msg}` }], isError: true });
+// 로그인이 풀렸을 때(토큰 만료·철회, 세션 정책, 권한 범위 변경): 실패만 돌려주지 않고 저장된 토큰을 지우고 브라우저 로그인 창을 다시 연다
+let reauth = null; // main() 이 채운다: () => 안내 문구
+const AUTH_ERR = /invalid_grant|invalid_token|invalid credentials|unauthorized_client|no refresh token|expired or revoked|reauth|insufficient (authentication )?scopes?|insufficientpermissions|login required|\b401\b/i;
+function isAuthError(e) {
+  const msg = String((e && e.message) || e || ''), code = e && (e.code || (e.response && e.response.status));
+  const body = e && e.response && e.response.data ? JSON.stringify(e.response.data) : '';
+  return code === 401 || AUTH_ERR.test(msg) || AUTH_ERR.test(body);
+}
+const fail = (e) => (reauth && isAuthError(e)) ? err(reauth(e)) : err((e && e.message) || String(e));
 
 // ---------- server ----------
 async function main() {
@@ -182,19 +191,29 @@ async function main() {
   } else {
     // 토큰이 이미 있으면 바로 연결. 없으면 서버는 즉시 뜨고(앱이 타임아웃되지 않게), 첫 도구 호출 때 브라우저 로그인을 시작한다.
     const build = (auth) => ({ drive: google.drive({ version: 'v3', auth }), sheets: google.sheets({ version: 'v4', auth }), script: SCRIPT_ID ? google.script({ version: 'v1', auth }) : null });
-    if (fs.existsSync(TOKEN_PATH)) {
-      ctx = build(await getAuth());
-    } else {
-      const st = { real: null, pending: null, url: null, error: null };
-      const need = () => {
-        if (st.real) return st.real;
-        if (st.error) { const msg = st.error; st.error = null; throw new Error('로그인을 시작하지 못했습니다: ' + msg + '\n웹앱 AI 연결 탭의 한 줄 설치 명령을 다시 실행하면 OAuth 파일이 만들어집니다.'); }
-        // 실패해도 프로세스가 죽지 않게: 오류는 st.error에 담아 다음 호출 때 메시지로 돌려준다 (rethrow 하면 unhandled rejection으로 서버가 종료됨)
-        if (!st.pending) st.pending = getAuth(u => { st.url = u; }).then(a => { st.real = build(a); log('로그인 완료'); return st.real; }).catch(e => { st.pending = null; st.error = e.message; log('로그인 실패:', e.message); return null; });
-        throw new Error('로그인이 필요합니다. 브라우저에 열린 Google 로그인 창에서 회사 계정으로 로그인한 뒤 다시 질문하세요.' + (st.url ? ' 창이 안 열렸으면 이 주소를 여세요: ' + st.url : ' (로그인 창을 여는 중입니다. 잠시 후 다시 시도하세요)'));
-      };
-      ctx = { get drive() { return need().drive; }, get sheets() { return need().sheets; }, get script() { return need().script; } };
-    }
+    // 항상 지연 연결: 토큰이 있으면 바로 쓰고, 없거나 나중에 무효가 되면 도구 호출 시점에 브라우저 로그인을 (다시) 시작한다.
+    const st = { real: null, pending: null, url: null, error: null };
+    const startLogin = () => {
+      // 실패해도 프로세스가 죽지 않게: 오류는 st.error에 담아 다음 호출 때 메시지로 돌려준다 (rethrow 하면 unhandled rejection으로 서버가 종료됨)
+      if (!st.pending) st.pending = getAuth(u => { st.url = u; }).then(a => { st.real = build(a); st.pending = null; st.url = null; log('로그인 완료'); return st.real; }).catch(e => { st.pending = null; st.error = e.message; log('로그인 실패:', e.message); return null; });
+    };
+    const need = () => {
+      if (st.real) return st.real;
+      if (st.error) { const msg = st.error; st.error = null; throw new Error('로그인을 시작하지 못했습니다: ' + msg + '\n웹앱 AI 연결 탭의 한 줄 설치 명령을 다시 실행하면 OAuth 파일이 만들어집니다.'); }
+      startLogin();
+      throw new Error('로그인이 필요합니다. 브라우저에 열린 Google 로그인 창에서 회사 계정으로 로그인한 뒤 다시 질문하세요.' + (st.url ? ' 창이 안 열렸으면 이 주소를 여세요: ' + st.url : ' (로그인 창을 여는 중입니다. 잠시 후 다시 시도하세요)'));
+    };
+    if (fs.existsSync(TOKEN_PATH)) { try { st.real = build(await getAuth()); } catch (e) { log('저장된 토큰으로 연결 실패 → 첫 호출 때 다시 로그인:', e.message); } }
+    ctx = { get drive() { return need().drive; }, get sheets() { return need().sheets; }, get script() { return need().script; } };
+    reauth = (e) => {
+      log('인증 오류 → 재로그인:', (e && e.message) || e);
+      if (!st.pending) { // 이미 로그인 창을 띄워 둔 상태면 또 띄우지 않는다
+        try { fs.unlinkSync(TOKEN_PATH); } catch (e2) { /* 없으면 무시 */ }
+        st.real = null; st.url = null; st.error = null; cache.at = 0;
+        startLogin();
+      }
+      return 'Google 로그인이 풀렸습니다 (토큰 만료·철회 또는 권한 변경). 브라우저에 로그인 창을 다시 열었으니 회사 계정으로 로그인한 뒤 같은 질문을 다시 해 주세요.' + (st.url ? ' 창이 안 열렸으면 이 주소를 여세요: ' + st.url : ' 창이 안 보이면 잠시 후 다시 질문하면 로그인 주소를 알려드립니다.');
+    };
   }
   const server = new McpServer({ name: 'mail-backup', version: '1.0.0' });
 
@@ -202,14 +221,14 @@ async function main() {
     title: '백업 메일 검색',
     description: `백업된 메일을 검색한다. query는 Gmail식 문법: 자유 단어(AND), "구문", -제외, from: to: cc: subject: label: filename: has:attachment in:inbox|sent|drafts is:starred after:YYYY-MM-DD before:YYYY-MM-DD larger:1M smaller:500K. 예: 'from:partner.co.kr 계약서 has:attachment after:2026-08-01'. 결과는 최신순, 본문은 get_mail로.`,
     inputSchema: { query: z.string().default(''), folder: z.enum(['all', 'inbox', 'sent', 'attachments', 'starred']).default('all'), category: z.string().optional().describe('라벨/Drive 폴더명으로 한정'), limit: z.number().int().min(1).max(200).default(20), offset: z.number().int().min(0).default(0) },
-  }, async (a) => { try { return j(searchRecords(await loadRecords(ctx), a)); } catch (e) { return err(e.message); } });
+  }, async (a) => { try { return j(searchRecords(await loadRecords(ctx), a)); } catch (e) { return fail(e); } });
 
   server.registerTool('get_mail', {
     title: '메일 상세',
     description: '메일 1건의 메타데이터, 본문 미리보기(저장 시 최대 20,000자), 첨부 목록(fileId 포함)을 돌려준다. 전체 원문은 get_mail_raw.',
     inputSchema: { id: z.string().describe('search_mail 결과의 id'), maxBodyChars: z.number().int().min(100).max(20000).default(8000) },
   }, async ({ id, maxBodyChars }) => {
-    try { const r = await findRecord(ctx, id); if (!r) return err('해당 id의 메일이 인덱스에 없습니다: ' + id); if (r.bodyPreview == null && r._row) { try { const b = await ctx.sheets.spreadsheets.values.get({ spreadsheetId: cache.sheetId, range: (r._sheet || '') + 'R' + r._row }); r.bodyPreview = String(((b.data.values || [])[0] || [])[0] || ''); } catch (e) { r.bodyPreview = ''; } } const body = truncateText(r.bodyPreview, maxBodyChars); return j({ ...compactRecord(r), body: body.text, bodyTruncated: body.truncated }); } catch (e) { return err(e.message); }
+    try { const r = await findRecord(ctx, id); if (!r) return err('해당 id의 메일이 인덱스에 없습니다: ' + id); if (r.bodyPreview == null && r._row) { try { const b = await ctx.sheets.spreadsheets.values.get({ spreadsheetId: cache.sheetId, range: (r._sheet || '') + 'R' + r._row }); r.bodyPreview = String(((b.data.values || [])[0] || [])[0] || ''); } catch (e) { r.bodyPreview = ''; } } const body = truncateText(r.bodyPreview, maxBodyChars); return j({ ...compactRecord(r), body: body.text, bodyTruncated: body.truncated }); } catch (e) { return fail(e); }
   });
 
   server.registerTool('get_mail_raw', {
@@ -217,7 +236,7 @@ async function main() {
     description: 'Drive에 저장된 .eml 원문(헤더+본문+HTML+첨부 인코딩 포함)을 텍스트로 돌려준다. 크면 잘린다.',
     inputSchema: { id: z.string(), maxChars: z.number().int().min(1000).max(200000).default(60000) },
   }, async ({ id, maxChars }) => {
-    try { const r = await findRecord(ctx, id); if (!r || !r.driveFileId) return err('원문 파일 ID가 없습니다'); const buf = await downloadBuffer(ctx, r.driveFileId); const t = truncateText(buf.toString('utf8'), maxChars); return j({ id, driveUrl: r.driveUrl, ...t }); } catch (e) { return err(e.message); }
+    try { const r = await findRecord(ctx, id); if (!r || !r.driveFileId) return err('원문 파일 ID가 없습니다'); const buf = await downloadBuffer(ctx, r.driveFileId); const t = truncateText(buf.toString('utf8'), maxChars); return j({ id, driveUrl: r.driveUrl, ...t }); } catch (e) { return fail(e); }
   });
 
   server.registerTool('get_attachment_text', {
@@ -231,7 +250,7 @@ async function main() {
       if (kind === 'binary') return j({ fileId, name: meta.name, mimeType: meta.mimeType, size: Number(meta.size) || 0, text: null, note: '텍스트로 변환할 수 없는 형식입니다. download_attachment로 받으세요.', driveUrl: meta.webViewLink });
       const text = kind === 'text' ? (await downloadBuffer(ctx, fileId)).toString('utf8') : await convertToText(ctx, fileId, kind);
       return j({ fileId, name: meta.name, mimeType: meta.mimeType, size: Number(meta.size) || 0, method: kind, ...truncateText(text, maxChars) });
-    } catch (e) { return err(e.message); }
+    } catch (e) { return fail(e); }
   });
 
   server.registerTool('download_attachment', {
@@ -239,14 +258,14 @@ async function main() {
     description: `첨부파일(또는 .eml)을 로컬에 저장하고 경로를 돌려준다. 기본 폴더: ${DOWNLOAD_DIR}`,
     inputSchema: { fileId: z.string() },
   }, async ({ fileId }) => {
-    try { const meta = await driveMeta(ctx, fileId); const buf = await downloadBuffer(ctx, fileId); const d = DOWNLOAD_DIR; fs.mkdirSync(d, { recursive: true }); const safe = path.basename(String(meta.name || 'file')).replace(/[\\/:*?"<>|]/g, '_').replace(/^\.+/, '_') || 'file'; const p = path.join(d, safe); fs.writeFileSync(p, buf); return j({ path: p, name: meta.name, mimeType: meta.mimeType, size: buf.length }); } catch (e) { return err(e.message); }
+    try { const meta = await driveMeta(ctx, fileId); const buf = await downloadBuffer(ctx, fileId); const d = DOWNLOAD_DIR; fs.mkdirSync(d, { recursive: true }); const safe = path.basename(String(meta.name || 'file')).replace(/[\\/:*?"<>|]/g, '_').replace(/^\.+/, '_') || 'file'; const p = path.join(d, safe); fs.writeFileSync(p, buf); return j({ path: p, name: meta.name, mimeType: meta.mimeType, size: buf.length }); } catch (e) { return fail(e); }
   });
 
   server.registerTool('backup_stats', {
     title: '백업 현황',
     description: '보관 메일 수, 용량, 기간, 라벨별 건수.',
     inputSchema: { refresh: z.boolean().default(false) },
-  }, async ({ refresh }) => { try { return j(summarizeRecords(await loadRecords(ctx, refresh))); } catch (e) { return err(e.message); } });
+  }, async ({ refresh }) => { try { return j(summarizeRecords(await loadRecords(ctx, refresh))); } catch (e) { return fail(e); } });
 
   server.registerTool('list_labels', {
     title: '라벨·보낸사람 목록',
@@ -257,34 +276,34 @@ async function main() {
       const recs = await loadRecords(ctx); const s = summarizeRecords(recs); const senders = {};
       recs.forEach(r => { const k = String(r.from || '').replace(/<.*>/, '').trim() || r.from; if (k) senders[k] = (senders[k] || 0) + 1; });
       return j({ labels: s.categories, senders: Object.entries(senders).sort((a, b) => b[1] - a[1]).slice(0, 30).map(([name, count]) => ({ name, count })) });
-    } catch (e) { return err(e.message); }
+    } catch (e) { return fail(e); }
   });
 
   // ---- 백업 실행·설정 (Apps Script API, MAIL_BACKUP_SCRIPT_ID 필요) ----
   server.registerTool('backup_status', {
     title: '백업 상태', description: '상태(최신/백업 필요/진행 중 n/m), 마지막·다음 백업, 자동 백업 여부, 설정, 보관 현황. 진행 중이면 processed/expectedTotal/progress.',
     inputSchema: {},
-  }, async () => { try { return j(slimDashboard(await runScript(ctx, 'getDashboard'))); } catch (e) { return err(e.message); } });
+  }, async () => { try { return j(slimDashboard(await runScript(ctx, 'getDashboard'))); } catch (e) { return fail(e); } });
   server.registerTool('backup_history', {
     title: '백업 실행 이력', description: '최근 12회 실행: 시작/종료, 감지/신규/중복/오류, 용량, 메일 기간, 라벨별 분포, 수동/자동, 알림.',
     inputSchema: {},
-  }, async () => { try { const d = await runScript(ctx, 'getDashboard'); return j({ running: d.state === 'running' || d.state === 'queued' ? d.currentRun : null, history: d.history || [] }); } catch (e) { return err(e.message); } });
+  }, async () => { try { const d = await runScript(ctx, 'getDashboard'); return j({ running: d.state === 'running' || d.state === 'queued' ? d.currentRun : null, history: d.history || [] }); } catch (e) { return fail(e); } });
   server.registerTool('backup_preview', {
     title: '백업 감지', description: '저장 전에 대상 메일을 감지한다: 새 메일 수, 용량, 기간, 라벨별·보낸사람별. scope: incremental(마지막 이후) | all(전체) | since(sinceDate부터).',
     inputSchema: { scope: z.enum(['incremental', 'all', 'since']).optional(), sinceDate: z.string().optional().describe('YYYY-MM-DD') },
-  }, async (a) => { try { return j(await runScript(ctx, 'previewBackup', [{ scope: a.scope, sinceDate: a.sinceDate }])); } catch (e) { return err(e.message); } });
+  }, async (a) => { try { return j(await runScript(ctx, 'previewBackup', [{ scope: a.scope, sinceDate: a.sinceDate }])); } catch (e) { return fail(e); } });
   server.registerTool('backup_run', {
     title: '백업 실행', description: '감지 후 백그라운드 백업을 시작한다(5초 뒤 트리거, 창 없이 진행). 진행 상황은 backup_status로. scope 생략 시 마지막 백업 이후(첫 백업이면 전체).',
     inputSchema: { scope: z.enum(['incremental', 'all', 'since']).optional(), sinceDate: z.string().optional() },
-  }, async (a) => { try { const p = await runScript(ctx, 'previewBackup', [{ scope: a.scope, sinceDate: a.sinceDate }]); const d = await runScript(ctx, 'runBackupNow'); cache.at = 0; return j({ queued: true, expected: p.newCount, bytes: p.bytes, estimatedSeconds: p.estimatedSeconds, state: d.state, message: d.message }); } catch (e) { return err(e.message); } });
+  }, async (a) => { try { const p = await runScript(ctx, 'previewBackup', [{ scope: a.scope, sinceDate: a.sinceDate }]); const d = await runScript(ctx, 'runBackupNow'); cache.at = 0; return j({ queued: true, expected: p.newCount, bytes: p.bytes, estimatedSeconds: p.estimatedSeconds, state: d.state, message: d.message }); } catch (e) { return fail(e); } });
   server.registerTool('backup_settings_get', { title: '설정 조회', description: '주기, 시작일, 보낸편지함 포함, 첨부 저장, 회당 최대, 추가 검색 조건, 폴더, 폴더 기준, 하위 폴더, 알림.', inputSchema: {} },
-    async () => { try { return j(await runScript(ctx, 'getSettings')); } catch (e) { return err(e.message); } });
+    async () => { try { return j(await runScript(ctx, 'getSettings')); } catch (e) { return fail(e); } });
   server.registerTool('backup_settings_set', {
     title: '설정 변경', description: '지정한 항목만 바꾼다. 주기를 바꾸면 자동 백업이 켜져 있을 때 일정이 갱신된다.',
     inputSchema: { intervalDays: z.number().int().min(1).optional(), initialStartDate: z.string().optional().describe('YYYY-MM-DD 또는 빈 문자열'), includeSent: z.boolean().optional(), saveAttachments: z.boolean().optional(), maxPerRun: z.number().int().min(0).optional(), filterQuery: z.string().optional(), folderLayout: z.enum(['flat', 'yearly', 'monthly']).optional(), splitGmailTabs: z.boolean().optional().describe('Gmail 탭(프로모션·소셜 등)을 별도 폴더로'), notifyOnComplete: z.boolean().optional() },
-  }, async (a) => { try { const cur = await runScript(ctx, 'getSettings'); const d = await runScript(ctx, 'saveSettings', [Object.assign({}, cur, a)]); return j(d.settings); } catch (e) { return err(e.message); } });
+  }, async (a) => { try { const cur = await runScript(ctx, 'getSettings'); const d = await runScript(ctx, 'saveSettings', [Object.assign({}, cur, a)]); return j(d.settings); } catch (e) { return fail(e); } });
   server.registerTool('backup_auto', { title: '자동 백업 켜기/끄기', description: '설정한 주기마다 새벽 3시 자동 실행 트리거를 설치하거나 제거한다.', inputSchema: { enabled: z.boolean() } },
-    async ({ enabled }) => { try { const d = await runScript(ctx, enabled ? 'installScheduledTrigger' : 'uninstallScheduledTrigger'); return j({ triggerInstalled: d.triggerInstalled, schedule: d.schedule }); } catch (e) { return err(e.message); } });
+    async ({ enabled }) => { try { const d = await runScript(ctx, enabled ? 'installScheduledTrigger' : 'uninstallScheduledTrigger'); return j({ triggerInstalled: d.triggerInstalled, schedule: d.schedule }); } catch (e) { return fail(e); } });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
